@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 // Importe o arquivo de opções do Firebase, se gerado
 // import 'firebase_options.dart';
 
@@ -14,7 +15,9 @@ void main() async {
   );
 
   runApp(const MyApp());
-}
+} catch (e) {
+    print('Exceção ao rodar o app: $e');
+  }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

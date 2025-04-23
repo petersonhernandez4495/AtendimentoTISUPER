@@ -8,6 +8,49 @@ import 'novo_chamado_screen.dart';
 class ListaChamadosScreen extends StatelessWidget {
   const ListaChamadosScreen({super.key});
 
+   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
+    // Exibe um diálogo de confirmação antes de excluir
+    bool confirmarExclusao = await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Confirmar Exclusão'),
+              content: const Text('Tem certeza de que deseja excluir este chamado? Esta ação não pode ser desfeita.'),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancelar'),
+                  onPressed: () {
+                    Navigator.of(context).pop(false); // Retorna false para não excluir
+                  },
+                ),
+                TextButton(
+                  child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+                  onPressed: () {
+                     Navigator.of(context).pop(true); // Retorna true para confirmar a exclusão
+                  },
+                ),
+              ],
+            );
+          },
+        ) ?? false; // Garante que se o diálogo for fechado sem clicar, retorne false
+
+    if (!confirmarExclusao) {
+      return; // Não faz nada se o usuário cancelou
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('chamados').doc(chamadoId).delete();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chamado excluído com sucesso!')),
+      );
+    } catch (error) {
+      print('Erro ao excluir chamado: $error');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao excluir o chamado. Tente novamente.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,6 +100,16 @@ class ListaChamadosScreen extends StatelessWidget {
                       Text('Criado em: $dataFormatada'),
                     ],
                   ),
+                  // --- ADICIONAR O BOTÃO DE EXCLUSÃO AQUI ---
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    tooltip: 'Excluir Chamado', // Boa prática para acessibilidade
+                    onPressed: () {
+                      // Chama a função de exclusão passando o ID do documento
+                      _excluirChamado(context, document.id);
+                    },
+                  ),
+                  // -------------------------------------------
                   onTap: () {
                     Navigator.push(
                       context,

@@ -2,39 +2,34 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:intl/date_symbol_data_local.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 // Seus imports de tela
 import 'login_screen.dart';
 import 'cadastro_screen.dart';
 import 'lista_chamados_screen.dart';
-import 'home_page.dart'; 
-import 'auth_gate.dart'; 
-import 'novo_chamado_screen.dart';
+// import 'home_page.dart'; // Comentado no seu código original
+// import 'auth_gate.dart'; // Comentado no seu código original
+// import 'novo_chamado_screen.dart'; // Comentado no seu código original
+
+// --- Importe a nova tela de navegação principal ---
+// (Certifique-se de criar este arquivo depois, como discutimos)
+import 'main_navigation_screen.dart'; // <--- ADICIONAR IMPORT
 
 // Importe o arquivo de opções do Firebase
 import 'firebase_options.dart';
 
-Future<void> main() async { // Precisa ser async
-  WidgetsFlutterBinding.ensureInitialized(); // Garante inicialização do Flutter
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp( // Inicializa Firebase
+    await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // --- ADICIONE ESTA LINHA AQUI ---
-    // Inicializa os dados de formatação para Português do Brasil
     await initializeDateFormatting('pt_BR', null);
-    // ---------------------------------
-
-    runApp(const MyApp()); // Chama o app DEPOIS de inicializar tudo
-
+    runApp(const MyApp());
   } catch (e) {
-    // É uma boa prática ter um tratamento de erro aqui
     print('Erro ao inicializar o app: $e');
-    // Poderia exibir uma tela de erro simples aqui se a inicialização falhar
-    // runApp(ErrorScreen(errorMessage: e.toString()));
   }
 }
 
@@ -49,23 +44,31 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      // Definir o locale padrão da aplicação (opcional, mas recomendado)
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [
          Locale('pt', 'BR'),
-         Locale('en', 'US'), // Adicione outros se suportar mais línguas
+         Locale('en', 'US'),
       ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // ------------------------------------------------------------
-      home: const LoginScreen(), // Sua tela inicial
+
+      // --- PONTO DE ENTRADA PRINCIPAL ALTERADO ---
+      // Define a tela com a BottomNavigationBar como inicial.
+      // OBS: Isso vai pular a tela de login. O ideal é manter
+      // LoginScreen como home e navegar para MainNavigationScreen APÓS o login.
+      home: const MainNavigationScreen(), // <--- ALTERADO DE LoginScreen
+      // ---------------------------------------------
+
+      // Rotas nomeadas podem ainda ser úteis para navegação específica,
+      // mas a navegação principal será controlada pela BottomNavBar.
       routes: {
-        // Suas rotas nomeadas
         '/login': (context) => const LoginScreen(),
         '/cadastro': (context) => const CadastroScreen(),
+        // A rota '/lista_chamados' pode não ser mais necessária se
+        // ListaChamadosScreen for apenas uma das abas da MainNavigationScreen.
         '/lista_chamados': (context) => const ListaChamadosScreen(),
         // '/home': (context) => const HomePage(),
       },
@@ -73,6 +76,4 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// A classe MyHomePage e _MyHomePageState parecem ser código padrão não utilizado,
-// já que sua 'home' está definida como LoginScreen.
-// Você pode remover MyHomePage e _MyHomePageState se não estiverem sendo usados.
+// Pode remover MyHomePage e _MyHomePageState se não estiverem sendo usados.

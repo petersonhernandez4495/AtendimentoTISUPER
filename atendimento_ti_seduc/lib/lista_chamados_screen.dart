@@ -1,18 +1,23 @@
 // lib/lista_chamados_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Certifique-se que está importado
+import 'package:intl/intl.dart';
 import 'detalhes_chamado_screen.dart';
 import 'novo_chamado_screen.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'login_screen.dart'; // Para o logout no (removido) drawer
+
+//FirebaseAuth pode não ser mais necessário aqui se o drawer foi removido
+// import 'package:firebase_auth/firebase_auth.dart';
 
 class ListaChamadosScreen extends StatelessWidget {
+  // Adicionando construtor const
   const ListaChamadosScreen({super.key});
 
-  // --- Função helper para obter a cor baseada na prioridade ---
+  // Função helper para cor (mantida)
   Color? _getCorPrioridade(String prioridade) {
-    switch (prioridade.toLowerCase()) { // Usar toLowerCase para ser flexível
+     switch (prioridade.toLowerCase()) {
       case 'urgente':
+      case 'crítica':
         return Colors.red[100];
       case 'alta':
         return Colors.orange[100];
@@ -22,15 +27,15 @@ class ListaChamadosScreen extends StatelessWidget {
       case 'baixa':
         return Colors.blue[50];
       default:
-        return null; // Cor padrão do Card
+        return null;
     }
   }
 
+  // Função de exclusão (mantida)
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
-    // (Código do diálogo de confirmação e exclusão - está correto)
     bool confirmarExclusao = await showDialog(
-          context: context,
-          builder: (BuildContext context) {
+        context: context,
+        builder: (BuildContext context) { /* ... diálogo de confirmação ... */
             return AlertDialog(
               title: const Text('Confirmar Exclusão'),
               content: const Text(
@@ -38,151 +43,148 @@ class ListaChamadosScreen extends StatelessWidget {
               actions: <Widget>[
                 TextButton(
                   child: const Text('Cancelar'),
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
+                  onPressed: () { Navigator.of(context).pop(false); },
                 ),
                 TextButton(
                   child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-                  onPressed: () {
-                    Navigator.of(context).pop(true);
-                  },
+                  onPressed: () { Navigator.of(context).pop(true); },
                 ),
               ],
             );
-          },
-        ) ?? false;
+        }
+      ) ?? false;
 
-    if (!confirmarExclusao) {
-      return;
-    }
+    if (!confirmarExclusao) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('chamados')
-          .doc(chamadoId)
-          .delete();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chamado excluído com sucesso!')),
-      );
+      await FirebaseFirestore.instance.collection('chamados').doc(chamadoId).delete();
+      // Verifica se o widget ainda está montado antes de usar o context
+       if (ScaffoldMessenger.of(context).mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Chamado excluído com sucesso!')),
+         );
+       }
     } catch (error) {
       print('Erro ao excluir chamado: $error');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Erro ao excluir o chamado. Tente novamente.')),
-      );
+       if (ScaffoldMessenger.of(context).mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar( content: Text('Erro ao excluir o chamado. Tente novamente.')),
+         );
+       }
     }
   }
+
+  // Função de logout removida daqui (foi movida para ProfileScreen no exemplo anterior)
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // AppBar sem botão de voltar/menu automático
       appBar: AppBar(
         title: const Text('Lista de Chamados'),
+        automaticallyImplyLeading: false, // Remove o botão de voltar/menu
       ),
+      // Drawer foi removido para usar BottomNavigationBar na tela principal
+      // drawer: Drawer( ... ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('chamados')
             .orderBy('data_criacao', descending: true)
             .snapshots(),
         builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          // (Tratamento de erro, loading, lista vazia - está correto)
-          if (snapshot.hasError) {
-            print('Erro no StreamBuilder: ${snapshot.error}'); // Log mais detalhado
-            return const Center(
-                child: Text('Algo deu errado ao carregar os chamados'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('Nenhum chamado aberto ainda.'));
-          }
+          // Tratamento de erro, loading, lista vazia (mantido)
+          if (snapshot.hasError) { /* ... */ return const Center(child: Text('Algo deu errado...'));}
+          if (snapshot.connectionState == ConnectionState.waiting) { /* ... */ return const Center(child: CircularProgressIndicator());}
+          if (snapshot.data!.docs.isEmpty) { /* ... */ return const Center(child: Text('Nenhum chamado...'));}
 
-          // --- Construção da Lista ---
-          return ListView(
-            children: snapshot.data!.docs.map((DocumentSnapshot document) {
-              final Map<String, dynamic> data =
-                  document.data()! as Map<String, dynamic>;
+          // --- GridView.builder ---
+          return GridView.builder(
+            padding: const EdgeInsets.all(8.0),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8.0,
+              mainAxisSpacing: 8.0,
+              childAspectRatio: (1 / 0.5), // <-- AJUSTE CONFORME NECESSÁRIO
+            ),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (BuildContext context, int index) {
+              final DocumentSnapshot document = snapshot.data!.docs[index];
+              final Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
 
-              // Extração de dados (mantida)
-              final String titulo = data['titulo'] as String? ?? 'Sem Título';
-              final String categoria = data['categoria'] as String? ?? 'Sem Categoria';
-              final String status = data['status'] as String? ?? 'Desconhecido';
-              final String departamento = data['departamento'] as String? ?? 'Sem Departamento';
-              final String equipamento = data['equipamento'] as String? ?? 'Sem Equipamento';
-              final String prioridade = data['prioridade'] as String? ?? 'Sem Prioridade';
-
-              // --- Tratamento mais seguro para data_criacao ---
+              // Extração de dados
+              final String titulo = data['titulo'] as String? ?? 'S/ Título';
+              final String prioridade = data['prioridade'] as String? ?? 'S/P';
+              final String status = data['status'] as String? ?? 'S/S';
+              // --- Extrair nome do criador ---
+              final String creatorName = data['creatorName'] as String? ?? 'Anônimo'; // <--- NOVO
+              // --------------------------------
               final Timestamp? dataCriacaoTimestamp = data['data_criacao'] is Timestamp
-                  ? data['data_criacao'] as Timestamp
-                  : null;
-              final String dataFormatada;
-              if (dataCriacaoTimestamp != null) {
-                final DateTime dataCriacao = dataCriacaoTimestamp.toDate();
-                // Aplica formatação com locale pt_BR (requer init no main.dart)
-                dataFormatada = DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(dataCriacao);
-              } else {
-                dataFormatada = 'Data indisponível'; // Fallback se data for nula/inválida
-              }
-              // ---------------------------------------------
-
-              // --- Obter a cor baseada na prioridade ---
+                  ? data['data_criacao'] as Timestamp : null;
+              final String dataFormatada = dataCriacaoTimestamp != null
+                  ? DateFormat('dd/MM', 'pt_BR').format(dataCriacaoTimestamp.toDate())
+                  : '--/--';
               final Color? corDoCard = _getCorPrioridade(prioridade);
-              // -----------------------------------------
 
+              // --- Card Menor para o Grid (com nome do criador) ---
               return Card(
-                // --- Propriedades do Card atualizadas ---
-                margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
-                elevation: 3,
-                color: corDoCard, // Aplica a cor dinâmica
-                // ---------------------------------------
-                child: ListTile(
-                  title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)), // Título em negrito
-                  subtitle: Padding( // Padding para organizar subtítulo
-                    padding: const EdgeInsets.only(top: 4.0),
+                color: corDoCard,
+                elevation: 2,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () { /* Navegação para detalhes */
+                     Navigator.push( context, MaterialPageRoute( builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),),);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0), // Padding ajustado
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Reordenado para melhor leitura
-                        Text('Prioridade: $prioridade'),
-                        Text('Status: $status'),
-                        Text('Categoria: $categoria'),
-                        Text('Departamento: $departamento'),
-                        // Text('Equipamento: $equipamento'), // Descomente se quiser mostrar
-                        Text('Criado em: $dataFormatada'),
+                        // Linha superior: Título e Botão Excluir
+                        Row( /* ... Título e Ícone Excluir ... */
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             Expanded(
+                               child: Text( titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14,), maxLines: 2, overflow: TextOverflow.ellipsis, ), // Fonte ajustada
+                             ),
+                             InkWell(
+                                onTap: () => _excluirChamado(context, document.id),
+                                child: const Padding( padding: EdgeInsets.only(left: 4.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 19),)
+                             )
+                           ],
+                        ),
+                        const Spacer(), // Empurra para baixo
+                        // Informações inferiores
+                        Text('Prior: $prioridade', style: const TextStyle(fontSize: 23)), // Fonte ajustada
+                        const SizedBox(height: 2),
+                        Text('Status: $status', style: const TextStyle(fontSize: 23)), // Fonte ajustada
+                        const SizedBox(height: 2),
+                        // --- Exibir nome do criador ---
+                        Text(
+                          'Por: $creatorName',
+                          style: TextStyle(fontSize: 23, fontStyle: FontStyle.italic, color: Colors.grey[800]), // Fonte ajustada
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        // ------------------------------
+                        const SizedBox(height: 2),
+                        Text( dataFormatada, style: TextStyle(fontSize: 23, color: Colors.grey[700]),), // Fonte ajustada
                       ],
                     ),
                   ),
-                  trailing: IconButton( // Botão excluir (está correto)
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    tooltip: 'Excluir Chamado',
-                    onPressed: () {
-                      _excluirChamado(context, document.id);
-                    },
-                  ),
-                  onTap: () { // Navegação para detalhes (está correto)
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            DetalhesChamadoScreen(chamadoId: document.id),
-                      ),
-                    );
-                  },
                 ),
               );
-            }).toList(),
+            },
           );
         },
       ),
-      floatingActionButton: FloatingActionButton( // Botão adicionar (está correto)
+      floatingActionButton: FloatingActionButton( // Botão Adicionar (mantido)
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const NovoChamadoScreen()), // Se NovoChamadoScreen foi adaptada para edição, remova 'const'
+            MaterialPageRoute(builder: (context) => const NovoChamadoScreen()),
           );
         },
+        tooltip: 'Abrir Novo Chamado',
         child: const Icon(Icons.add),
       ),
     );

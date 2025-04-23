@@ -4,18 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'detalhes_chamado_screen.dart';
 import 'novo_chamado_screen.dart';
-import 'login_screen.dart'; // Para o logout no (removido) drawer
-
-//FirebaseAuth pode não ser mais necessário aqui se o drawer foi removido
-// import 'package:firebase_auth/firebase_auth.dart';
+// import 'login_screen.dart'; // Import não necessário aqui diretamente
 
 class ListaChamadosScreen extends StatelessWidget {
-  // Adicionando construtor const
   const ListaChamadosScreen({super.key});
 
-  // Função helper para cor (mantida)
+  // --- Função helper para cor de PRIORIDADE (Fundo do Card) ---
   Color? _getCorPrioridade(String prioridade) {
-     switch (prioridade.toLowerCase()) {
+    switch (prioridade.toLowerCase()) {
       case 'urgente':
       case 'crítica':
         return Colors.red[100];
@@ -27,38 +23,43 @@ class ListaChamadosScreen extends StatelessWidget {
       case 'baixa':
         return Colors.blue[50];
       default:
-        return null;
+        return null; // Cor padrão do tema
     }
   }
 
-  // Função de exclusão (mantida)
+  // --- Função helper para cor de STATUS (Barra Vertical) ---
+  // <<< MOVIDA PARA DENTRO DA CLASSE >>>
+  Color? _getCorStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'aberto':
+        return Colors.blue[700]; // Usando cores mais fortes para a barra
+      case 'em andamento':
+        return Colors.orange[700];
+      case 'pendente':
+        return Colors.deepPurple[500];
+      case 'resolvido':
+        return Colors.green[700];
+      case 'fechado':
+        return Colors.grey[800];
+      default:
+        return Colors.grey[500];
+    }
+  }
+  // -------------------------------------------------------
+
+  // --- Função de exclusão (mantida) ---
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
     bool confirmarExclusao = await showDialog(
-        context: context,
-        builder: (BuildContext context) { /* ... diálogo de confirmação ... */
-            return AlertDialog(
-              title: const Text('Confirmar Exclusão'),
-              content: const Text(
-                  'Tem certeza de que deseja excluir este chamado? Esta ação não pode ser desfeita.'),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('Cancelar'),
-                  onPressed: () { Navigator.of(context).pop(false); },
-                ),
-                TextButton(
-                  child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-                  onPressed: () { Navigator.of(context).pop(true); },
-                ),
-              ],
-            );
-        }
-      ) ?? false;
+          context: context,
+          builder: (BuildContext context) { /* ... diálogo ... */
+             return AlertDialog( /* ... conteúdo diálogo ... */ );
+          }
+        ) ?? false;
 
     if (!confirmarExclusao) return;
 
     try {
       await FirebaseFirestore.instance.collection('chamados').doc(chamadoId).delete();
-      // Verifica se o widget ainda está montado antes de usar o context
        if (ScaffoldMessenger.of(context).mounted) {
          ScaffoldMessenger.of(context).showSnackBar(
            const SnackBar(content: Text('Chamado excluído com sucesso!')),
@@ -73,29 +74,25 @@ class ListaChamadosScreen extends StatelessWidget {
        }
     }
   }
-
-  // Função de logout removida daqui (foi movida para ProfileScreen no exemplo anterior)
+  // -------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar sem botão de voltar/menu automático
       appBar: AppBar(
         title: const Text('Lista de Chamados'),
-        automaticallyImplyLeading: false, // Remove o botão de voltar/menu
+        automaticallyImplyLeading: false, // Mantido: Remove botão voltar/menu
       ),
-      // Drawer foi removido para usar BottomNavigationBar na tela principal
-      // drawer: Drawer( ... ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('chamados')
             .orderBy('data_criacao', descending: true)
             .snapshots(),
         builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          // Tratamento de erro, loading, lista vazia (mantido)
-          if (snapshot.hasError) { /* ... */ return const Center(child: Text('Algo deu errado...'));}
-          if (snapshot.connectionState == ConnectionState.waiting) { /* ... */ return const Center(child: CircularProgressIndicator());}
-          if (snapshot.data!.docs.isEmpty) { /* ... */ return const Center(child: Text('Nenhum chamado...'));}
+          // Tratamentos de erro/loading/vazio (mantidos)
+          if (snapshot.hasError) { return const Center(child: Text('Algo deu errado...'));}
+          if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator());}
+          if (snapshot.data!.docs.isEmpty) { return const Center(child: Text('Nenhum chamado...'));}
 
           // --- GridView.builder ---
           return GridView.builder(
@@ -104,7 +101,10 @@ class ListaChamadosScreen extends StatelessWidget {
               crossAxisCount: 3,
               crossAxisSpacing: 8.0,
               mainAxisSpacing: 8.0,
-              childAspectRatio: (1 / 0.5), // <-- AJUSTE CONFORME NECESSÁRIO
+              // --- childAspectRatio CORRIGIDO ---
+              // Valor < 1.0 faz ser mais alto que largo. Ajuste se necessário.
+              childAspectRatio: (1 / 0.6), // Ex: 1 de largura para 1.6 de altura
+              // ----------------------------------
             ),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (BuildContext context, int index) {
@@ -115,64 +115,81 @@ class ListaChamadosScreen extends StatelessWidget {
               final String titulo = data['titulo'] as String? ?? 'S/ Título';
               final String prioridade = data['prioridade'] as String? ?? 'S/P';
               final String status = data['status'] as String? ?? 'S/S';
-              // --- Extrair nome do criador ---
-              final String creatorName = data['creatorName'] as String? ?? 'Anônimo'; // <--- NOVO
-              // --------------------------------
+              final String creatorName = data['creatorName'] as String? ?? 'Anônimo';
               final Timestamp? dataCriacaoTimestamp = data['data_criacao'] is Timestamp
                   ? data['data_criacao'] as Timestamp : null;
               final String dataFormatada = dataCriacaoTimestamp != null
                   ? DateFormat('dd/MM', 'pt_BR').format(dataCriacaoTimestamp.toDate())
                   : '--/--';
-              final Color? corDoCard = _getCorPrioridade(prioridade);
 
-              // --- Card Menor para o Grid (com nome do criador) ---
+              // Obter cores
+              final Color? corDeFundoCard = _getCorPrioridade(prioridade);
+              final Color? corDaBarraStatus = _getCorStatus(status); // <<< Usa a função de status
+
+              // --- Card com Barra Vertical de Status ---
               return Card(
-                color: corDoCard,
+                color: corDeFundoCard, // Cor de fundo (Prioridade)
                 elevation: 2,
-                clipBehavior: Clip.antiAlias,
+                clipBehavior: Clip.antiAlias, // Importante para a barra ficar contida
                 child: InkWell(
-                  onTap: () { /* Navegação para detalhes */
+                  onTap: () {
                      Navigator.push( context, MaterialPageRoute( builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),),);
                   },
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0), // Padding ajustado
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  child: IntrinsicHeight( // <<< Adicionado
+                    child: Row( // <<< Adicionado
+                      crossAxisAlignment: CrossAxisAlignment.stretch, // <<< Adicionado
                       children: [
-                        // Linha superior: Título e Botão Excluir
-                        Row( /* ... Título e Ícone Excluir ... */
-                           crossAxisAlignment: CrossAxisAlignment.start,
-                           children: [
-                             Expanded(
-                               child: Text( titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14,), maxLines: 2, overflow: TextOverflow.ellipsis, ), // Fonte ajustada
-                             ),
-                             InkWell(
-                                onTap: () => _excluirChamado(context, document.id),
-                                child: const Padding( padding: EdgeInsets.only(left: 4.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 19),)
-                             )
-                           ],
-                        ),
-                        const Spacer(), // Empurra para baixo
-                        // Informações inferiores
-                        Text('Prior: $prioridade', style: const TextStyle(fontSize: 23)), // Fonte ajustada
-                        const SizedBox(height: 2),
-                        Text('Status: $status', style: const TextStyle(fontSize: 23)), // Fonte ajustada
-                        const SizedBox(height: 2),
-                        // --- Exibir nome do criador ---
-                        Text(
-                          'Por: $creatorName',
-                          style: TextStyle(fontSize: 23, fontStyle: FontStyle.italic, color: Colors.grey[800]), // Fonte ajustada
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        // --- Barra Vertical de Status ---
+                        Container( // <<< Adicionado
+                          width: 7.0, // Largura da barra
+                          color: corDaBarraStatus ?? Colors.transparent, // Cor (Status)
                         ),
                         // ------------------------------
-                        const SizedBox(height: 2),
-                        Text( dataFormatada, style: TextStyle(fontSize: 23, color: Colors.grey[700]),), // Fonte ajustada
+                        const SizedBox(width: 8.0), // Espaçamento
+                        // --- Conteúdo Principal ---
+                        Expanded( // <<< Adicionado
+                          // Removido Padding externo, adicionado padding interno
+                          child: Padding( // <<< Padding movido para cá
+                             padding: const EdgeInsets.only(top: 6.0, right: 6.0, bottom: 6.0), // Sem padding esquerdo aqui
+                            child: Column( // Coluna original do conteúdo
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Linha Título e Excluir
+                                Row(
+                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                   children: [
+                                     Expanded(
+                                       child: Text(
+                                         titulo,
+                                         // --- Fontes (Ajuste se quiser maiores/menores) ---
+                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                         maxLines: 2, overflow: TextOverflow.ellipsis,
+                                        ),
+                                     ),
+                                     InkWell( onTap: () => _excluirChamado(context, document.id), child: const Padding( padding: EdgeInsets.only(left: 4.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 19),))
+                                   ],
+                                ),
+                                const Spacer(), // Empurra para baixo
+                                // Textos inferiores
+                                Text('Prior: $prioridade', style: const TextStyle(fontSize: 25)),
+                                const SizedBox(height: 2),
+                                Text('Status: $status', style: const TextStyle(fontSize: 25)),
+                                const SizedBox(height: 2),
+                                Text( 'Por: $creatorName', style: TextStyle(fontSize: 25, fontStyle: FontStyle.italic, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis,),
+                                const SizedBox(height: 2),
+                                Text( dataFormatada, style: TextStyle(fontSize: 25, color: Colors.grey[700]),),
+                                // ---------------------------------------------------
+                              ],
+                            ),
+                          ),
+                        ),
+                        // --------------------------
                       ],
                     ),
                   ),
                 ),
               );
+              // --------------------------------------
             },
           );
         },
@@ -189,4 +206,4 @@ class ListaChamadosScreen extends StatelessWidget {
       ),
     );
   }
-}
+} // Fim da classe ListaChamadosScreen

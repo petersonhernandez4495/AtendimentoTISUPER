@@ -1,8 +1,9 @@
 // lib/lista_chamados_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore_desktop/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Para formatar a data
-import 'detalhes_chamado_screen.dart'; // Importe a tela de detalhes
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'detalhes_chamado_screen.dart';
+import 'novo_chamado_screen.dart';
 
 class ListaChamadosScreen extends StatelessWidget {
   const ListaChamadosScreen({super.key});
@@ -37,6 +38,9 @@ class ListaChamadosScreen extends StatelessWidget {
               final Timestamp dataCriacaoTimestamp = data['data_criacao'] as Timestamp;
               final DateTime dataCriacao = dataCriacaoTimestamp.toDate();
               final String dataFormatada = DateFormat('dd/MM/yyyy HH:mm').format(dataCriacao);
+              final String departamento = data['departamento'] as String? ?? 'Sem Departamento';
+              final String equipamento = data['equipamento'] as String? ?? 'Sem Equipamento';
+              final String prioridade = data['prioridade'] as String? ?? 'Sem Prioridade';
 
               return Card(
                 margin: const EdgeInsets.all(8.0),
@@ -46,6 +50,9 @@ class ListaChamadosScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Categoria: $categoria'),
+                      Text('Departamento: $departamento'),
+                      Text('Equipamento: $equipamento'),
+                      Text('Prioridade: $prioridade'),
                       Text('Status: $status'),
                       Text('Criado em: $dataFormatada'),
                     ],
@@ -63,6 +70,15 @@ class ListaChamadosScreen extends StatelessWidget {
             }).toList(),
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const NovoChamadoScreen()),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
     );
   }

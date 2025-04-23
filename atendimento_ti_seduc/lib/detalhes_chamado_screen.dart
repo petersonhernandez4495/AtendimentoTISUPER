@@ -1,7 +1,8 @@
 // lib/detalhes_chamado_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore_desktop/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Para formatar a data
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DetalhesChamadoScreen extends StatelessWidget {
   final String chamadoId;

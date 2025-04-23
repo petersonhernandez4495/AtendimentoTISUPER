@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'login_screen.dart';
+import 'cadastro_screen.dart';
+import 'lista_chamados_screen.dart';
+import 'home_page.dart';
+import 'auth_gate.dart';
+import 'novo_chamado_screen.dart';
 
 // Importe o arquivo de opções do Firebase, se gerado
-// import 'firebase_options.dart';
+import 'firebase_options.dart';
 
 void main() async {
-  // Garante que os widgets do Flutter estejam inicializados
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Inicializa o Firebase
-  await Firebase.initializeApp(
-    // Se você tiver o arquivo firebase_options.dart, use esta linha:
-    // options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  runApp(const MyApp());
-} catch (e) {
+  try {
+    await Firebase.initializeApp(
+       options: DefaultFirebaseOptions.currentPlatform, // Se tiver o firebase_options.dart
+    );
+    runApp(const MyApp());
+  } catch (e) {
     print('Exceção ao rodar o app: $e');
   }
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -31,7 +34,13 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue), // Mudei a cor de exemplo
         useMaterial3: true, // Opcional: para usar a versão mais recente do Material Design
       ),
-      home: const MyHomePage(title: 'Página Inicial'), // Atualizei o título da página inicial
+       home: const LoginScreen(),
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/cadastro': (context) => const CadastroScreen(),
+        '/lista_chamados': (context) => const ListaChamadosScreen(),
+      //  '/home': (context) => const HomePage(), // Adicione a rota para a HomePage
+      },
     );
   }
 }

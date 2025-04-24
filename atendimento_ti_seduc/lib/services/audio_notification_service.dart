@@ -84,7 +84,7 @@ class AudioNotificationService {
     print("AudioService: Tocando som...");
     try {
       // <<< Use o nome exato do seu arquivo de som >>>
-      await _audioPlayer!.play(AssetSource('sounds/notification.mp3'));
+      await _audioPlayer!.play(AssetSource('sounds/notification.ogg'));
       print("AudioService: Som tocado.");
     } catch (e) {
       print("AudioService: Erro ao tocar som: $e");

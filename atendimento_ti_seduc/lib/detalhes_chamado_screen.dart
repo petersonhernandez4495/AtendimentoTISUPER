@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; // Para formatar datas
-
+import 'pdf_generator.dart';
 class DetalhesChamadoScreen extends StatefulWidget {
   final String chamadoId;
   const DetalhesChamadoScreen({super.key, required this.chamadoId});

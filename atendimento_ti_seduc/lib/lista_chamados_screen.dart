@@ -8,9 +8,8 @@ import 'novo_chamado_screen.dart';
 class ListaChamadosScreen extends StatelessWidget {
   const ListaChamadosScreen({super.key});
 
-  // Função helper para cor de PRIORIDADE (Fundo do Card)
   Color? _getCorPrioridade(String prioridade) {
-    switch (prioridade.toLowerCase()) {
+     switch (prioridade.toLowerCase()) {
       case 'urgente': case 'crítica': return Colors.red[100];
       case 'alta': return Colors.orange[100];
       case 'média': case 'media': return Colors.yellow[100];
@@ -18,10 +17,8 @@ class ListaChamadosScreen extends StatelessWidget {
       default: return null;
     }
   }
-
-  // Função helper para cor de STATUS (Barra Vertical)
   Color? _getCorStatus(String status) {
-    switch (status.toLowerCase()) {
+     switch (status.toLowerCase()) {
       case 'aberto': return Colors.blue[700];
       case 'em andamento': return Colors.orange[700];
       case 'pendente': return Colors.deepPurple[500];
@@ -30,8 +27,6 @@ class ListaChamadosScreen extends StatelessWidget {
       default: return Colors.grey[500];
     }
   }
-
-  // Função de exclusão
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
     bool confirmarExclusao = await showDialog( context: context, builder: (BuildContext context) { return AlertDialog( title: const Text('Confirmar Exclusão'), content: const Text( 'Tem certeza de que deseja excluir este chamado? Esta ação não pode ser desfeita.'), actions: <Widget>[ TextButton( child: const Text('Cancelar'), onPressed: () { Navigator.of(context).pop(false); }, ), TextButton( child: const Text('Excluir', style: TextStyle(color: Colors.red)), onPressed: () { Navigator.of(context).pop(true); }, ), ], ); } ) ?? false;
     if (!confirmarExclusao) return;
@@ -46,32 +41,23 @@ class ListaChamadosScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Se esta tela for usada dentro da MainNavigationScreen, o Scaffold/AppBar não são necessários aqui.
-    // Mas mantendo por enquanto, caso contrário, remova Scaffold e AppBar.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lista de Chamados'),
-        automaticallyImplyLeading: false, // Remove botão voltar/menu
+        automaticallyImplyLeading: false,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('chamados')
-            .orderBy('data_criacao', descending: true)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('chamados').orderBy('data_criacao', descending: true).snapshots(),
         builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
           if (snapshot.hasError) { return const Center(child: Text('Algo deu errado...'));}
           if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator());}
-          if (snapshot.data!.docs.isEmpty) { return const Center(child: Text('Nenhum chamado aberto.'));}
+          if (snapshot.data!.docs.isEmpty) { return const Center(child: Text('Nenhum chamado...'));}
 
           return GridView.builder(
-            padding: const EdgeInsets.all(10.0), // Aumentei um pouco o padding geral
+            padding: const EdgeInsets.all(8.0),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // Mantém 3 colunas
-              crossAxisSpacing: 10.0, // Aumentei espaçamento horizontal
-              mainAxisSpacing: 10.0,  // Aumentei espaçamento vertical
-              // --- childAspectRatio CORRIGIDO ---
-              childAspectRatio: (1 / 0.6), // <<< CORRIGIDO: Torna o card mais alto (1 largura para 1.8 altura). AJUSTE SE NECESSÁRIO
-              // ---------------------------------
+              crossAxisCount: 3, crossAxisSpacing: 8.0, mainAxisSpacing: 8.0,
+              childAspectRatio: (1 / 0.6), // Ajuste a altura aqui conforme necessário
             ),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (BuildContext context, int index) {
@@ -83,72 +69,62 @@ class ListaChamadosScreen extends StatelessWidget {
               final String prioridade = data['prioridade'] as String? ?? 'S/P';
               final String status = data['status'] as String? ?? 'S/S';
               final String creatorName = data['creatorName'] as String? ?? 'Anônimo';
-              final String creatorPhone = data['creatorPhone'] as String? ?? 'N/I'; // <<< Telefone lido
+              // --- Pega o telefone DIRETAMENTE do chamado ---
+              final String creatorPhone = data['creatorPhone'] as String? ?? 'N/I'; // <<< LENDO AQUI
+              // ---------------------------------------------
               final Timestamp? dataCriacaoTimestamp = data['data_criacao'] is Timestamp ? data['data_criacao'] as Timestamp : null;
-              final String dataFormatada = dataCriacaoTimestamp != null ? DateFormat('dd/MM/yy', 'pt_BR').format(dataCriacaoTimestamp.toDate()) : '--/--'; // Formato dd/MM/yy
+              final String dataFormatada = dataCriacaoTimestamp != null ? DateFormat('dd/MM', 'pt_BR').format(dataCriacaoTimestamp.toDate()) : '--/--';
               final Color? corDeFundoCard = _getCorPrioridade(prioridade);
               final Color? corDaBarraStatus = _getCorStatus(status);
 
-              // --- Card com Barra Vertical e Telefone ---
-              return Card(
-                color: corDeFundoCard,
-                elevation: 2,
-                clipBehavior: Clip.antiAlias,
+              return Card( // Card com Barra Vertical de Status
+                color: corDeFundoCard, elevation: 2, clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: () { Navigator.push( context, MaterialPageRoute( builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),),); },
                   child: IntrinsicHeight(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container( width: 6.0, color: corDaBarraStatus ?? Colors.transparent ), // Barra Status (largura 6)
-                        const SizedBox(width: 6.0), // Espaçamento menor
+                        Container( width: 7.0, color: corDaBarraStatus ?? Colors.transparent ), // Barra Status
+                        const SizedBox(width: 8.0),
                         Expanded( // Conteúdo Principal
                           child: Padding(
-                             padding: const EdgeInsets.only(top: 5.0, right: 5.0, bottom: 5.0), // Padding interno menor
+                             padding: const EdgeInsets.only(top: 6.0, right: 6.0, bottom: 6.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // --- Título e Excluir ---
-                                Row(
+                                Row( /* Título e Ícone Excluir */
                                    crossAxisAlignment: CrossAxisAlignment.start,
                                    children: [
-                                     Expanded(
-                                       child: Text(
-                                         titulo,
-                                         // --- Fontes REDUZIDAS ---
-                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 23), // Era 30
-                                         maxLines: 2, overflow: TextOverflow.ellipsis,
-                                        ),
-                                     ),
-                                     InkWell( onTap: () => _excluirChamado(context, document.id), child: const Padding( padding: EdgeInsets.only(left: 3.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),)) // Ícone menor
+                                     Expanded( child: Text( titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 30), maxLines: 2, overflow: TextOverflow.ellipsis, ),),
+                                     InkWell( onTap: () => _excluirChamado(context, document.id), child: const Padding( padding: EdgeInsets.only(left: 4.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 19),))
                                    ],
                                 ),
-                                const Spacer(), // Empurra para baixo
-                                // --- Informações Inferiores ---
-                                Text('Prior: $prioridade', style: const TextStyle(fontSize: 23)), // Era 23/25
-                                const SizedBox(height: 1),
-                                Text('Status: $status', style: const TextStyle(fontSize: 23)), // Era 23/25
-                                const SizedBox(height: 1),
-                                Text( 'Por: $creatorName', style: TextStyle(fontSize: 23, fontStyle: FontStyle.italic, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis,), // Era 23/25
-                                const SizedBox(height: 1),
-                                // --- Linha do Telefone (RE-ADICIONADA) ---
-                                Row(
+                                const Spacer(),
+                                Text('Prior: $prioridade', style: const TextStyle(fontSize: 23)),
+                                const SizedBox(height: 2),
+                                Text('Status: $status', style: const TextStyle(fontSize: 23)),
+                                const SizedBox(height: 2),
+                                Text( 'Por: $creatorName', style: TextStyle(fontSize: 23, fontStyle: FontStyle.italic, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis,),
+                                const SizedBox(height: 2),
+                                
+                                Row( 
                                   children: [
-                                     Icon(Icons.phone_outlined, size: 23, color: Colors.grey[700]), // Ícone menor
-                                     const SizedBox(width: 2),
+                                     Icon(Icons.phone_outlined, size: 23, color: Colors.grey[700]),
+                                     const SizedBox(width: 3),
                                      Expanded(
                                        child: Text(
-                                         creatorPhone, // Exibe o telefone
-                                         style: TextStyle(fontSize: 23, color: Colors.grey[800]), // Era 23
-                                         maxLines: 1, overflow: TextOverflow.ellipsis,
+                                         creatorPhone, 
+                                         style: TextStyle(fontSize: 23, color: Colors.grey[800]),
+                                         maxLines: 1,
+                                         overflow: TextOverflow.ellipsis,
                                        ),
                                      ),
                                   ],
                                 ),
-                                // ------------------------------------
-                                const SizedBox(height: 1),
-                                Text( dataFormatada, style: TextStyle(fontSize: 23, color: Colors.grey[700]),), // Era 27
-                                // ------------------------------------
+                                // ------------------------------------------
+                                const SizedBox(height: 2),
+                                Text( dataFormatada, style: TextStyle(fontSize: 27, color: Colors.grey[700]),),
                               ],
                             ),
                           ),

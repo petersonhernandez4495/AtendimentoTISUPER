@@ -27,6 +27,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ProfileScreen(),              // Índice 2
   ];
 
+  
   // Títulos para a AppBar (opcional)
   static const List<String> _titles = <String>[
     'Chamados', // Título mais curto para AppBar

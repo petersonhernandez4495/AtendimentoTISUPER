@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-
+import 'services/audio_notification_service.dart';
 // Seus imports de tela
 import 'login_screen.dart';
 import 'cadastro_screen.dart';
@@ -31,6 +31,8 @@ Future<void> main() async {
   } catch (e) {
     print('Erro ao inicializar o app: $e');
   }
+
+  AudioNotificationService.startListening();
 }
 
 class MyApp extends StatelessWidget {

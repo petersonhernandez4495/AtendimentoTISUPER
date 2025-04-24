@@ -3,97 +3,14 @@
 import 'package:flutter/material.dart';
 
 // Importe as telas que serão exibidas pela BottomNavBar
-import 'lista_chamados_screen.dart';
-import 'novo_chamado_screen.dart';
+// !!! GARANTA QUE OS NOMES E CAMINHOS DOS ARQUIVOS ESTÃO CORRETOS !!!
+import 'lista_chamados_screen.dart'; 
+import 'novo_chamado_screen.dart';           
+import 'profile_screen.dart';            
 
-// Importe a tela de login para a função de logout no perfil
-import 'login_screen.dart';
-
-// Importe o Firebase Auth se estiver usando para logout (exemplo)
-// import 'package:firebase_auth/firebase_auth.dart';
-
-// --- Tela Placeholder para o Perfil ---
-// (Você pode mover isso para um arquivo separado 'profile_screen.dart' depois)
-class ProfileScreenPlaceholder extends StatelessWidget {
-  const ProfileScreenPlaceholder({super.key});
-
-  // Função de Logout (movida para cá)
-  Future<void> _fazerLogout(BuildContext context) async {
-    try {
-      // Exemplo: Descomente e use se estiver usando Firebase Auth
-      // await FirebaseAuth.instance.signOut();
-
-      // Navega para a tela de login e remove todas as telas anteriores
-      // Garante que o context está válido antes de usar
-      if (Navigator.of(context).mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    } catch (e) {
-      print("Erro ao fazer logout: $e");
-      // Garante que o context está válido antes de usar
-      if (Navigator.of(context).mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao fazer logout: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Exemplo de dados do usuário (substitua pela lógica real de auth)
-    const userName = "Nome do Usuário";
-    const userEmail = "usuario@email.com";
-
-    return Scaffold(
-      // Cada tela dentro da BottomNav pode ter seu próprio AppBar se necessário
-      // Ou pode haver um AppBar genérico na MainNavigationScreen
-      appBar: AppBar(
-         // O Título pode mudar baseado na aba selecionada, ou ser fixo.
-         // Exemplo: Define o título baseado na aba atual se o AppBar estiver aqui.
-        title: const Text('Perfil'),
-         // Removendo o botão de voltar automático se esta tela não deve ter um
-         automaticallyImplyLeading: false,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Exibir informações do usuário (exemplo)
-              CircleAvatar(
-                radius: 50,
-                // backgroundImage: NetworkImage(user?.photoURL ?? ''), // Se tiver foto
-                child: const Icon(Icons.person, size: 50), // Ícone padrão
-              ),
-              const SizedBox(height: 16),
-              Text(userName, style: Theme.of(context).textTheme.headlineSmall),
-              Text(userEmail, style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 30),
-              const Text('Mais conteúdo do perfil aqui...'),
-              const SizedBox(height: 30),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-                onPressed: () => _fazerLogout(context), // Chama a função de logout
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent, // Cor para logout
-                  foregroundColor: Colors.white, // Cor do texto/ícone
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-// -----------------------------------------
-
+// O import do login_screen não é mais necessário aqui, pois a lógica de logout
+// foi movida para dentro da ProfileScreen.
+// O import do firebase_auth não é necessário aqui diretamente.
 
 // --- Widget Principal da Navegação ---
 class MainNavigationScreen extends StatefulWidget {
@@ -104,15 +21,20 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _selectedIndex = 0; // Índice da tela/aba ativa
+  int _selectedIndex = 0; // Índice da tela/aba ativa que começa em 'Chamados'
 
-  // Lista estática das telas que serão gerenciadas pela BottomNavBar
-  // A ordem aqui DEVE corresponder à ordem dos itens na BottomNavigationBar
+  // Lista estática das telas (widgets) que serão exibidas no corpo (body)
+  // A ordem aqui DEVE corresponder à ordem dos itens na BottomNavigationBar abaixo.
+  // Estes widgets NÃO devem ter Scaffold/AppBar próprios se você quiser um AppBar único aqui.
   static const List<Widget> _widgetOptions = <Widget>[
-    ListaChamadosScreen(),        // Índice 0
-    NovoChamadoScreen(),          // Índice 1
-    ProfileScreenPlaceholder(),   // Índice 2
+    // Use o nome correto do widget que contém o StreamBuilder/GridView da lista
+    ListaChamadosScreen(),   // Índice 0
+    NovoChamadoScreen(),            // Índice 1 (Verificar se precisa de Scaffold próprio)
+    ProfileScreen(),                // Índice 2 (Tela de Perfil REAL)
   ];
+
+  // Títulos correspondentes para um AppBar dinâmico (opcional)
+  // static const List<String> _titles = <String>['Chamados', 'Novo Chamado', 'Meu Perfil'];
 
   // Função chamada quando um item da barra inferior é tocado
   void _onItemTapped(int index) {
@@ -124,39 +46,54 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // O body agora exibe o widget da lista '_widgetOptions'
-      // que corresponde ao índice selecionado (_selectedIndex)
-      body: IndexedStack( // Usar IndexedStack preserva o estado de cada tela/aba
+      // --- AppBar (Opcional) ---
+      // Se você descomentar este AppBar, as telas em _widgetOptions NÃO devem ter AppBar.
+      // Se preferir que cada tela tenha seu AppBar, comente/remova este.
+      // appBar: AppBar(
+      //   title: Text(_titles[_selectedIndex]), // Título muda conforme a aba
+      //   automaticallyImplyLeading: false, // Remove botão 'voltar' automático
+      // ),
+      // ------------------------
+
+      // O body exibe o widget da lista '_widgetOptions'
+      // que corresponde ao índice selecionado (_selectedIndex).
+      // IndexedStack preserva o estado de cada tela ao trocar de aba.
+      body: IndexedStack(
         index: _selectedIndex,
         children: _widgetOptions,
       ),
 
-      // A Barra de Navegação Inferior
+      // --- Barra de Navegação Inferior ---
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed, // Garante que todos os itens apareçam
+        type: BottomNavigationBarType.fixed, // Para que todos os itens apareçam sempre
+        backgroundColor: Theme.of(context).colorScheme.surface, // Cor de fundo da barra
         items: const <BottomNavigationBarItem>[
           // Item 0: Lista de Chamados
           BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
+            icon: Icon(Icons.list_alt_outlined),      // Ícone padrão
+            activeIcon: Icon(Icons.list_alt),        // Ícone quando selecionado
             label: 'Chamados',
           ),
           // Item 1: Novo Chamado
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle_outline),
+            icon: Icon(Icons.add_circle_outline),    // Ícone padrão
+            activeIcon: Icon(Icons.add_circle),      // Ícone quando selecionado
             label: 'Novo',
           ),
           // Item 2: Perfil
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
+            icon: Icon(Icons.person_outline),       // Ícone padrão
+            activeIcon: Icon(Icons.person),         // Ícone quando selecionado
             label: 'Perfil',
           ),
         ],
-        currentIndex: _selectedIndex, // Define qual item está ativo
-        // Cores (opcional, pode usar o tema padrão)
-        // selectedItemColor: Theme.of(context).colorScheme.primary,
-        // unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped, // Função a ser chamada ao tocar
+        currentIndex: _selectedIndex, // Índice do item ativo
+        selectedItemColor: Theme.of(context).colorScheme.primary, // Cor do ícone/label ativo
+        unselectedItemColor: Colors.grey[600], // Cor do ícone/label inativo
+        showUnselectedLabels: true, // Mostrar labels mesmo quando inativos
+        onTap: _onItemTapped, // Função chamada ao tocar em um item
       ),
+      // ---------------------------------
     );
   }
 }

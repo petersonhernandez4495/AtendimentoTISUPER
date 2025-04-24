@@ -1,25 +1,23 @@
-// lib/lista_chamados_screen.dart
+// lib/lista_chamados_screen_content.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';         
+import 'dart:io';          // Para PDF/Share
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'pdf_generator.dart';
+import 'pdf_generator.dart'; // Importa funções do PDF
 import 'detalhes_chamado_screen.dart';
 
-// --- Alterado para StatefulWidget ---
+// --- Convertido para StatefulWidget para Filtros/Ordenação ---
 class ListaChamadosScreen extends StatefulWidget {
-  // Removido const por ser StatefulWidget agora
-  // Se não precisar de parâmetros, pode manter const se preferir, mas o State não será const.
   const ListaChamadosScreen({super.key});
 
   @override
-  State<ListaChamadosScreen> createState() => _ListaChamadosScreen();
+  State<ListaChamadosScreen> createState() => _ListaChamadosScreenState();
 }
 
-class _ListaChamadosScreen extends State<ListaChamadosScreen> {
+class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   // Guarda a lista atual de documentos para a função de PDF da lista
   List<QueryDocumentSnapshot>? _currentDocs;
 
@@ -28,11 +26,12 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
   String _sortField = 'data_criacao'; // Campo padrão para ordenar
   bool _sortDescending = true;       // Direção padrão (true = mais recente primeiro)
 
-  // --- Opções para os Dropdowns ---
+  // Opções para os Dropdowns
   final List<String> _statusOptions = ['Todos', 'aberto', 'em andamento', 'pendente', 'resolvido', 'fechado'];
   final List<Map<String, dynamic>> _sortOptions = [
     {'label': 'Mais Recentes', 'field': 'data_criacao', 'descending': true},
     {'label': 'Mais Antigos', 'field': 'data_criacao', 'descending': false},
+    // Adicionar outras opções de ordenação aqui depois, se necessário
   ];
   late Map<String, dynamic> _selectedSortOption; // Guarda a opção de sort selecionada
 
@@ -64,7 +63,7 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
   }
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
      bool confirmarExclusao = await showDialog( context: context, builder: (BuildContext context) { return AlertDialog( title: const Text('Confirmar Exclusão'), content: const Text( 'Tem certeza?'), actions: <Widget>[ TextButton( child: const Text('Cancelar'), onPressed: () { Navigator.of(context).pop(false); }, ), TextButton( child: const Text('Excluir', style: TextStyle(color: Colors.red)), onPressed: () { Navigator.of(context).pop(true); }, ), ], ); } ) ?? false;
-     if (!confirmarExclusao || !mounted) return; // Adicionado !mounted check
+     if (!confirmarExclusao || !mounted) return;
      try {
        await FirebaseFirestore.instance.collection('chamados').doc(chamadoId).delete();
         if (mounted) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Chamado excluído!')), ); }
@@ -79,19 +78,19 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
        if(mounted) ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Nenhum chamado para gerar PDF.')));
       return;
     }
-    // Mostra loading
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
-       final Uint8List pdfBytes = await generateTicketListPdf(_currentDocs!); 
+       // Chama a função CORRETA do pdf_generator.dart
+       final Uint8List pdfBytes = await generateTicketListPdf(_currentDocs!);
        final tempDir = await getTemporaryDirectory();
        final filePath = '${tempDir.path}/lista_chamados_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
        final file = File(filePath); await file.writeAsBytes(pdfBytes);
        if (!mounted) return; Navigator.of(context, rootNavigator: true).pop(); // Fecha loading
        final result = await Share.shareXFiles( [XFile(filePath)], text: 'Lista de Chamados ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}' );
-       if (result.status == ShareResultStatus.success && mounted) { /* ... */ }
+       if (result.status == ShareResultStatus.success && mounted) { print("Compartilhamento iniciado."); }
     } catch (e) {
        if(mounted) Navigator.of(context, rootNavigator: true).pop(); print("Erro PDF Lista: $e");
-       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF: $e')));
+       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF da lista: ${e.toString()}'))); // Mostrar erro
     }
   }
   // -------------------------------------------------------
@@ -105,9 +104,9 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
     }
     // Aplica Ordenação
     query = query.orderBy(_sortField, descending: _sortDescending);
-    // Adicionar ordenação secundária se necessário (e criar índice no Firestore)
+    // Ordenação secundária para desempate (importante se ordenar por campo não único)
     if (_sortField != 'data_criacao') {
-       query = query.orderBy('data_criacao', descending: true);
+       query = query.orderBy('data_criacao', descending: true); // Precisa de índice composto!
     }
     return query;
   }
@@ -116,7 +115,6 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
   @override
   Widget build(BuildContext context) {
     // --- Retorna DIRETAMENTE o CONTEÚDO (Column com Filtros + Lista) ---
-    // --- SEM Scaffold ou AppBar AQUI ---
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -127,61 +125,68 @@ class _ListaChamadosScreen extends State<ListaChamadosScreen> {
            child: Row(
             children: [
               // Dropdown Filtro Status
-              Expanded( flex: 3, child: DropdownButtonFormField<String>( /* ... Configuração Dropdown Status ... */ value: _selectedStatusFilter ?? 'Todos', items: _statusOptions.map((String status) { return DropdownMenuItem<String>( value: status, child: Text(status, style: const TextStyle(fontSize: 13)), ); }).toList(), onChanged: (String? newValue) { setState(() { _selectedStatusFilter = (newValue == 'Todos') ? null : newValue; }); }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.filter_list, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), ), ),
+              Expanded( flex: 3, child: DropdownButtonFormField<String>( value: _selectedStatusFilter ?? 'Todos', items: _statusOptions.map((String status) => DropdownMenuItem<String>( value: status, child: Text(status, style: const TextStyle(fontSize: 12)), )).toList(), onChanged: (String? newValue) { setState(() { _selectedStatusFilter = (newValue == 'Todos') ? null : newValue; }); }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( /* ... estilo ... */ filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.filter_list, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), ), ),
               const SizedBox(width: 10),
               // Dropdown Ordenação
-              Expanded( flex: 4, child: DropdownButtonFormField<Map<String, dynamic>>( /* ... Configuração Dropdown Sort ... */ value: _selectedSortOption, items: _sortOptions.map((Map<String, dynamic> option) { return DropdownMenuItem<Map<String, dynamic>>( value: option, child: Text(option['label'] as String, overflow: TextOverflow.ellipsis), ); }).toList(), onChanged: (Map<String, dynamic>? newValue) { if (newValue != null) { setState(() { _selectedSortOption = newValue; _sortField = newValue['field'] as String; _sortDescending = newValue['descending'] as bool; }); } }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.sort, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), isExpanded: true, ), ),
+              Expanded( flex: 4, child: DropdownButtonFormField<Map<String, dynamic>>( value: _selectedSortOption, items: _sortOptions.map((Map<String, dynamic> option) => DropdownMenuItem<Map<String, dynamic>>( value: option, child: Text(option['label'] as String, overflow: TextOverflow.ellipsis), )).toList(), onChanged: (Map<String, dynamic>? newValue) { if (newValue != null) { setState(() { _selectedSortOption = newValue; _sortField = newValue['field'] as String; _sortDescending = newValue['descending'] as bool; }); } }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( /* ... estilo ... */ filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.sort, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), isExpanded: true, ), ),
               // Botão PDF Lista
-               IconButton( icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: _gerarECompartilharPdfLista, tooltip: 'Gerar PDF da Lista', iconSize: 20, visualDensity: VisualDensity.compact, ),
+              IconButton( icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: _gerarECompartilharPdfLista, tooltip: 'Gerar PDF da Lista', iconSize: 20, visualDensity: VisualDensity.compact, ),
             ],
           ),
         ),
-        // const Divider(height: 1, thickness: 1), // Divisor opcional
-
         // --- Lista/Grade de Chamados ---
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: _buildFirestoreQuery().snapshots(), // Usa query dinâmica
             builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
               // Tratamento de erro/loading
-              if (snapshot.hasError) { return Center(child: Text('Erro ao carregar chamados: ${snapshot.error}'));}
+              if (snapshot.hasError) { return Center(child: Text('Erro: ${snapshot.error}'));}
               if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator());}
 
-              // Atualiza a lista de documentos para o botão PDF usar
+              // Atualiza a lista de documentos
               _currentDocs = snapshot.data?.docs;
 
-              // Tratamento de lista vazia
-              if (_currentDocs == null || _currentDocs!.isEmpty) { /* ... Mensagem lista vazia ... */ }
+              // Tratamento de lista vazia (considerando filtros)
+              if (_currentDocs == null || _currentDocs!.isEmpty) {
+                 bool filtroEstaAtivo = (_selectedStatusFilter != null && _selectedStatusFilter != 'Todos');
+                 if (filtroEstaAtivo) {
+                   return Center(child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.filter_alt_off_outlined, size: 50, color: Colors.grey[400]), const SizedBox(height: 16), const Text( 'Nenhum chamado encontrado com os filtros atuais.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey), ), ] ), ),);
+                 } else {
+                   return Center( child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.inbox_outlined, size: 50, color: Colors.grey[400]), const SizedBox(height: 16), const Text( 'Nenhum chamado aberto no momento.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey), ), ] ), ) );
+                 }
+              }
 
-              // GridView
+              // --- GridView com Delegate e Layout Corrigidos ---
               return GridView.builder(
                  padding: const EdgeInsets.all(12.0),
                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 190.0, mainAxisSpacing: 12.0,
-                      crossAxisSpacing: 12.0, childAspectRatio: (1 / 1.8), // Ajuste
+                      maxCrossAxisExtent: 190.0, // Largura máx.
+                      mainAxisSpacing: 12.0,
+                      crossAxisSpacing: 12.0,
+                      childAspectRatio: (1 / 1.8), // <<< Altura (Ajuste se precisar)
                     ),
                  itemCount: _currentDocs!.length,
                  itemBuilder: (BuildContext context, int index) {
                     final DocumentSnapshot document = _currentDocs![index];
                     final Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
-                    // ... (extração de dados, cores) ...
-                    final String titulo = data['titulo'] ?? 'S/ Título';
-                    final String prioridade = data['prioridade'] ?? 'S/P';
-                    final String status = data['status'] ?? 'S/S';
-                    final String creatorName = data['creatorName'] ?? 'Anônimo';
-                    final String creatorPhone = data['creatorPhone'] ?? 'N/I';
-                    final Timestamp? dataCriacaoTimestamp = data['data_criacao'] as Timestamp?;
-                    final String dataFormatada = dataCriacaoTimestamp != null ? DateFormat('dd/MM/yy', 'pt_BR').format(dataCriacaoTimestamp.toDate()) : '--';
-                    final Color? corDeFundoCard = _getCorPrioridade(prioridade);
-                    final Color? corDaBarraStatus = _getCorStatus(status);
+                    // --- Extração de dados ---
+                     final String titulo = data['titulo'] ?? 'S/ Título';
+                     final String prioridade = data['prioridade'] ?? 'S/P';
+                     final String status = data['status'] ?? 'S/S';
+                     final String creatorName = data['creatorName'] ?? 'Anônimo';
+                     final String creatorPhone = data['creatorPhone'] ?? 'N/I';
+                     final Timestamp? dataCriacaoTimestamp = data['data_criacao'] as Timestamp?;
+                     final String dataFormatada = dataCriacaoTimestamp != null ? DateFormat('dd/MM/yy', 'pt_BR').format(dataCriacaoTimestamp.toDate()) : '--';
+                     final Color? corDeFundoCard = _getCorPrioridade(prioridade);
+                     final Color? corDaBarraStatus = _getCorStatus(status);
 
-                    // --- Cria o CARD ---
+                    // --- CARD CORRIGIDO ---
                     return Card(
                        color: corDeFundoCard, elevation: 2, clipBehavior: Clip.antiAlias,
                        child: InkWell(
                          onTap: () { Navigator.push( context, MaterialPageRoute( builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),),); },
                          child: IntrinsicHeight( child: Row( crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                             Container( width: 6.0, color: corDaBarraStatus ?? Colors.transparent ), // Barra Status
+                             Container( width: 6.0, color: corDaBarraStatus ?? Colors.transparent ),
                              const SizedBox(width: 8.0),
                              Expanded( child: Padding( padding: const EdgeInsets.only(top: 6.0, right: 6.0, bottom: 6.0), child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [
                                   Row( crossAxisAlignment: CrossAxisAlignment.start, children: [ Expanded( child: Text( titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 3, overflow: TextOverflow.ellipsis, ),), InkWell( onTap: () => _excluirChamado(context, document.id), child: const Padding( padding: EdgeInsets.only(left: 3.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),)) ], ),

@@ -1,17 +1,20 @@
 // lib/main_navigation_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Para autenticação e logout
 
-// Importe os WIDGETS DE CONTEÚDO (sem Scaffold/AppBar próprios)
-// !!! Ajuste os nomes/caminhos se forem diferentes no seu projeto !!!
-import 'lista_chamados_screen.dart'; // <<< Widget SÓ com o conteúdo da lista
-import 'novo_chamado_screen.dart';          // <<< Verifique se esta precisa ou não de Scaffold/AppBar
-import 'agenda_screen.dart';                // <<< Widget placeholder da Agenda
-import 'profile_screen.dart';             // <<< Widget real do Perfil
+// Importa classes de configuração e widgets reutilizáveis
+import 'config/theme/app_theme.dart'; // Para usar cores do tema (ex: kErrorColor)
+import 'widgets/gradient_background_container.dart'; // Widget para o fundo com gradiente
+import 'widgets/side_menu.dart'; // Widget para o menu lateral (NavigationRail)
 
-// Imports para Logout
-import 'login_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// Importa as telas que serão exibidas como conteúdo principal
+import 'lista_chamados_screen.dart';
+import 'novo_chamado_screen.dart';
+import 'agenda_screen.dart';
+import 'profile_screen.dart';
+import 'login_screen.dart'; // Importa a tela de login para redirecionar após logout
 
+// Widget principal da tela de navegação
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -19,93 +22,135 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
+// Estado do widget MainNavigationScreen
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _selectedIndex = 0; // Índice do item selecionado no Rail
+  int _selectedIndex = 0; // Mantém o índice do item selecionado no menu
 
-  // Lista das telas (Widgets de CONTEÚDO) - CORRIGIDA
+  // Lista estática dos widgets que representam o conteúdo de cada aba/seção
+  // Estes widgets devem ser apenas o CONTEÚDO da tela (sem Scaffold/AppBar próprios)
   static const List<Widget> _widgetOptions = <Widget>[
-    ListaChamadosScreen(), // Índice 0 (Conteúdo da Lista)
-    NovoChamadoScreen(),          // Índice 1
-    AgendaScreen(),               // Índice 2 (Tela da Agenda) <<< CORRIGIDO
-    ProfileScreen(),              // Índice 3 (Tela de Perfil)
+    ListaChamadosScreen(), // Conteúdo da tela de Chamados (Índice 0)
+    NovoChamadoScreen(),   // Conteúdo da tela de Novo Chamado (Índice 1)
+    AgendaScreen(),        // Conteúdo da tela de Agenda (Índice 2)
+    ProfileScreen(),       // Conteúdo da tela de Perfil (Índice 3)
   ];
 
-  // Títulos para a AppBar (opcional) - CORRIGIDO
+  // Lista estática dos títulos correspondentes para a AppBar de cada seção
   static const List<String> _titles = <String>[
     'Chamados',
     'Novo Chamado',
-    'Agenda', // <<< Título correto
+    'Agenda',
     'Meu Perfil',
   ];
 
-  // Função chamada quando um destino no Rail é selecionado
+  // Callback chamado quando um item no SideMenu (NavigationRail) é selecionado
+  // Atualiza o estado para reconstruir a tela com o novo índice selecionado
   void _onDestinationSelected(int index) {
-    setState(() { _selectedIndex = index; });
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
-  // Função de Logout (mantida)
+  // Função assíncrona para realizar o logout do usuário
   Future<void> _fazerLogout(BuildContext context) async {
-     bool confirmar = await showDialog<bool>( context: context, builder: (BuildContext context) { return AlertDialog( title: const Text('Confirmar Logout'), content: const Text('Tem certeza?'), actions: <Widget>[ TextButton( onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar'), ), TextButton( onPressed: () => Navigator.of(context).pop(true), child: const Text('Sair', style: TextStyle(color: Colors.red)), ), ], ); }, ) ?? false;
-     if (!confirmar || !mounted) return;
+    // Exibe um diálogo de confirmação antes de prosseguir
+    bool confirmar = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        // Usa o AlertDialog padrão, que pegará estilos do tema
+        return AlertDialog(
+          title: const Text('Confirmar Logout'),
+          content: const Text('Tem certeza que deseja sair?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false), // Fecha o diálogo retornando false
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true), // Fecha o diálogo retornando true
+              // Aplica a cor de erro definida no tema ao texto "Sair"
+              child: Text('Sair', style: TextStyle(color: AppTheme.kErrorColor)),
+            ),
+          ],
+        );
+      },
+    ) ?? false; // Garante que, se o diálogo for dispensado, retorne false
+
+    // Interrompe se o usuário não confirmou ou se o widget foi desmontado
+    if (!confirmar || !mounted) return;
+
+    // Bloco try-catch para lidar com possíveis erros durante o logout
     try {
+      // Efetua o logout no Firebase Authentication
       await FirebaseAuth.instance.signOut();
-      Navigator.of(context).pushAndRemoveUntil( MaterialPageRoute(builder: (context) => const LoginScreen()), (Route<dynamic> route) => false, );
-    } catch (e) { print("Erro logout: $e"); if(mounted) ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text('Erro ao fazer logout: ${e.toString()}')),); }
+      // Se o logout for bem-sucedido e o widget ainda estiver montado,
+      // navega para a tela de Login e remove todas as telas anteriores da pilha
+      if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (Route<dynamic> route) => false, // Remove todas as rotas anteriores
+        );
+      }
+    } catch (e) {
+      // Imprime o erro no console (para debug)
+      print("Erro ao fazer logout: $e");
+      // Se o widget ainda estiver montado, mostra uma SnackBar com o erro
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao fazer logout: ${e.toString()}')),
+        );
+      }
+    }
   }
 
 
   @override
   Widget build(BuildContext context) {
+    // O Scaffold é a estrutura base da tela (AppBar, Body)
     return Scaffold(
-      // AppBar única com título dinâmico
+      // A AppBar é configurada aqui, mas seu estilo visual (cor, elevação, etc.)
+      // é definido globalmente no appBarTheme dentro de AppTheme.darkTheme
       appBar: AppBar(
-        title: Text(_titles[_selectedIndex]), // Usa o título da lista corrigida
+        // O título muda dinamicamente com base no índice selecionado
+        title: Text(_titles[_selectedIndex]),
+        // Impede que um botão "voltar" seja adicionado automaticamente
         automaticallyImplyLeading: false,
       ),
-      // Corpo com Row: NavigationRail | Divisor | Conteúdo
-      body: Row(
-        children: <Widget>[
-          // --- O Menu Lateral Estático (NavigationRail) ---
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onDestinationSelected,
-            labelType: NavigationRailLabelType.selected,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            indicatorColor: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-            selectedIconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
-            unselectedIconTheme: IconThemeData(color: Colors.grey[600]),
-            selectedLabelTextStyle: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
-            unselectedLabelTextStyle: TextStyle(color: Colors.grey[600]),
 
-            // --- Itens do Menu - CORRIGIDO e com Agenda ---
-            destinations: const <NavigationRailDestination>[
-              // Item 0: Chamados
-              NavigationRailDestination( icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: Text('Chamados'), ),
-              // Item 1: Novo
-              NavigationRailDestination( icon: Icon(Icons.add_circle_outline), selectedIcon: Icon(Icons.add_circle), label: Text('Novo'), ),
-              // Item 2: Agenda
-              NavigationRailDestination( icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: Text('Agenda'), ),
-              // Item 3: Perfil
-              NavigationRailDestination( icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: Text('Perfil'), ),
-            ],
-            // -----------------------------------------
-
-            // --- Item de Logout (mantido) ---
-            trailing: Expanded( child: Align( alignment: Alignment.bottomCenter, child: Padding( padding: const EdgeInsets.only(bottom: 20.0), child: IconButton( icon: const Icon(Icons.logout, color: Colors.redAccent), tooltip: 'Logout', onPressed: () => _fazerLogout(context), ), ), ), ),
-            // -----------------------------------
-          ),
-          const VerticalDivider(thickness: 1, width: 1), // Divisor
-
-          // --- Conteúdo Principal (Tela Selecionada) ---
-          Expanded(
-            child: IndexedStack( // Mantém o estado das telas
-               index: _selectedIndex,
-               children: _widgetOptions, // <<< USA A LISTA CORRIGIDA
+      // O body do Scaffold usa o widget GradientBackgroundContainer
+      // para aplicar o fundo com gradiente definido no tema.
+      body: GradientBackgroundContainer(
+        // O child do GradientBackgroundContainer é a Row principal do layout
+        child: Row(
+          children: <Widget>[
+            // --- WIDGET DO MENU LATERAL ---
+            // Instancia o widget SideMenu que criamos, passando o estado
+            // e os callbacks necessários. Toda a lógica de aparência
+            // do menu lateral está encapsulada dentro de SideMenu.
+            SideMenu(
+              selectedIndex: _selectedIndex,        // Informa qual item está ativo
+              onDestinationSelected: _onDestinationSelected, // Função a ser chamada ao clicar num item
+              onLogout: () => _fazerLogout(context), // Função a ser chamada ao clicar no botão de logout
             ),
-          ),
-          // -----------------------------------------
-        ],
-      ),
-    );
-  }
-}
+            // -----------------------------
+
+            // Linha vertical fina para separar o menu do conteúdo
+            const VerticalDivider(thickness: 1, width: 1),
+
+            // --- ÁREA DE CONTEÚDO PRINCIPAL ---
+            // Expanded faz com que esta parte ocupe todo o espaço restante na Row
+            Expanded(
+              // IndexedStack é usado para manter o estado das diferentes telas
+              // de conteúdo (_widgetOptions) mesmo quando não estão visíveis.
+              // Ele só exibe o widget no índice correspondente a _selectedIndex.
+              child: IndexedStack(
+                index: _selectedIndex, // Mostra o widget da lista correspondente ao índice
+                children: _widgetOptions, // A lista de widgets das telas de conteúdo
+              ),
+            ),
+          ],
+        ),
+      ), // Fim do GradientBackgroundContainer
+    ); // Fim do Scaffold
+  } // Fim do método build
+} // Fim da classe _MainNavigationScreenState

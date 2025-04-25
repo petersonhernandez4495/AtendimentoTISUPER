@@ -1,15 +1,16 @@
-// lib/lista_chamados_screen_content.dart
+// lib/lista_chamados_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';          // Para PDF/Share
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'pdf_generator.dart'; // Importa funções do PDF
+import 'pdf_generator.dart';
 import 'detalhes_chamado_screen.dart';
+import 'config/theme/app_theme.dart';
+import 'widgets/ticket_card.dart'; // <<< IMPORTA O NOVO WIDGET
 
-// --- Convertido para StatefulWidget para Filtros/Ordenação ---
 class ListaChamadosScreen extends StatefulWidget {
   const ListaChamadosScreen({super.key});
 
@@ -18,191 +19,163 @@ class ListaChamadosScreen extends StatefulWidget {
 }
 
 class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
-  // Guarda a lista atual de documentos para a função de PDF da lista
-  List<QueryDocumentSnapshot>? _currentDocs;
-
-  // --- Variáveis de Estado para Filtro e Ordenação ---
-  String? _selectedStatusFilter; // null significa 'Todos'
-  String _sortField = 'data_criacao'; // Campo padrão para ordenar
-  bool _sortDescending = true;       // Direção padrão (true = mais recente primeiro)
-
-  // Opções para os Dropdowns
+  // ... (Variáveis de estado, initState, _excluirChamado, _gerarECompartilharPdfLista,
+  //      _buildFirestoreQuery - MANTIDAS IGUAIS) ...
+    List<QueryDocumentSnapshot>? _currentDocs;
+  String? _selectedStatusFilter;
+  String _sortField = 'data_criacao';
+  bool _sortDescending = true;
   final List<String> _statusOptions = ['Todos', 'aberto', 'em andamento', 'pendente', 'resolvido', 'fechado'];
   final List<Map<String, dynamic>> _sortOptions = [
     {'label': 'Mais Recentes', 'field': 'data_criacao', 'descending': true},
     {'label': 'Mais Antigos', 'field': 'data_criacao', 'descending': false},
-    // Adicionar outras opções de ordenação aqui depois, se necessário
   ];
-  late Map<String, dynamic> _selectedSortOption; // Guarda a opção de sort selecionada
+  late Map<String, dynamic> _selectedSortOption;
 
   @override
   void initState() {
     super.initState();
-    _selectedSortOption = _sortOptions[0]; // Define sort inicial
+    _selectedSortOption = _sortOptions[0];
   }
 
-  // --- Funções Helper de Cor e Exclusão ---
-  Color? _getCorPrioridade(String prioridade) {
-     switch (prioridade.toLowerCase()) {
-      case 'urgente': case 'crítica': return Colors.red[100];
-      case 'alta': return Colors.orange[100];
-      case 'média': case 'media': return Colors.yellow[100];
-      case 'baixa': return Colors.blue[50];
-      default: return null;
-    }
-  }
-  Color? _getCorStatus(String status) {
-     switch (status.toLowerCase()) {
-      case 'aberto': return Colors.blue[700];
-      case 'em andamento': return Colors.orange[700];
-      case 'pendente': return Colors.deepPurple[500];
-      case 'resolvido': return Colors.green[700];
-      case 'fechado': return Colors.grey[800];
-      default: return Colors.grey[500];
-    }
-  }
-  Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
-     bool confirmarExclusao = await showDialog( context: context, builder: (BuildContext context) { return AlertDialog( title: const Text('Confirmar Exclusão'), content: const Text( 'Tem certeza?'), actions: <Widget>[ TextButton( child: const Text('Cancelar'), onPressed: () { Navigator.of(context).pop(false); }, ), TextButton( child: const Text('Excluir', style: TextStyle(color: Colors.red)), onPressed: () { Navigator.of(context).pop(true); }, ), ], ); } ) ?? false;
+   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
+     bool confirmarExclusao = await showDialog<bool>( context: context, builder: (BuildContext context) { return AlertDialog( title: const Text('Confirmar Exclusão'), content: const Text( 'Tem certeza que deseja excluir este chamado?\nEsta ação não pode ser desfeita.'), actions: <Widget>[ TextButton( child: const Text('Cancelar'), onPressed: () { Navigator.of(context).pop(false); }, ), TextButton( child: Text('Excluir', style: TextStyle(color: AppTheme.kErrorColor)), onPressed: () { Navigator.of(context).pop(true); }, ), ], ); } ) ?? false;
      if (!confirmarExclusao || !mounted) return;
      try {
        await FirebaseFirestore.instance.collection('chamados').doc(chamadoId).delete();
-        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Chamado excluído!')), ); }
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Chamado excluído com sucesso!')), ); }
      } catch (error) {
-       print('Erro ao excluir: $error');
-        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar( content: Text('Erro ao excluir.')), ); }
+       print('Erro ao excluir chamado: $error');
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text('Erro ao excluir chamado: ${error.toString()}')), ); }
      }
-  }
-  // --- Função para Gerar/Compartilhar PDF da Lista ---
-  Future<void> _gerarECompartilharPdfLista() async {
-    if (_currentDocs == null || _currentDocs!.isEmpty) {
-       if(mounted) ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Nenhum chamado para gerar PDF.')));
-      return;
-    }
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-    try {
-       // Chama a função CORRETA do pdf_generator.dart
-       final Uint8List pdfBytes = await generateTicketListPdf(_currentDocs!);
-       final tempDir = await getTemporaryDirectory();
-       final filePath = '${tempDir.path}/lista_chamados_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
-       final file = File(filePath); await file.writeAsBytes(pdfBytes);
-       if (!mounted) return; Navigator.of(context, rootNavigator: true).pop(); // Fecha loading
-       final result = await Share.shareXFiles( [XFile(filePath)], text: 'Lista de Chamados ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}' );
-       if (result.status == ShareResultStatus.success && mounted) { print("Compartilhamento iniciado."); }
-    } catch (e) {
-       if(mounted) Navigator.of(context, rootNavigator: true).pop(); print("Erro PDF Lista: $e");
-       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao gerar PDF da lista: ${e.toString()}'))); // Mostrar erro
-    }
-  }
-  // -------------------------------------------------------
+   }
 
-  // --- Função para construir a Query Dinâmica ---
-  Query _buildFirestoreQuery() {
-    Query query = FirebaseFirestore.instance.collection('chamados');
-    // Aplica Filtro de Status
+   Future<void> _gerarECompartilharPdfLista() async {
+         if (_currentDocs == null || _currentDocs!.isEmpty) {
+       if(mounted) ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Nenhum chamado na lista atual para gerar PDF.')) );
+     return;
+   }
+   showDialog( context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()) );
+   try {
+       final Uint8List pdfBytes = await generateTicketListPdf(_currentDocs!);
+       final Directory tempDir = await getTemporaryDirectory();
+       final String filePath = '${tempDir.path}/lista_chamados_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+       final File file = File(filePath);
+       await file.writeAsBytes(pdfBytes);
+       if (!mounted) return;
+       Navigator.of(context, rootNavigator: true).pop(); // Fecha o loading
+       final result = await Share.shareXFiles( [XFile(filePath)], text: 'Lista de Chamados - ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}' );
+       if (result.status == ShareResultStatus.success && mounted) { print("Compartilhamento da lista de chamados iniciado com sucesso.");
+       } else if (mounted) { print("Compartilhamento cancelado ou falhou: ${result.status}"); }
+   } catch (e) {
+       if(mounted) Navigator.of(context, rootNavigator: true).pop();
+       print("Erro ao gerar/compartilhar PDF da lista: $e");
+       if(mounted) ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text('Erro ao gerar PDF da lista: ${e.toString()}')) );
+   }
+   }
+
+   Query _buildFirestoreQuery() {
+        Query query = FirebaseFirestore.instance.collection('chamados');
     if (_selectedStatusFilter != null && _selectedStatusFilter != 'Todos') {
-      query = query.where('status', isEqualTo: _selectedStatusFilter);
+     query = query.where('status', isEqualTo: _selectedStatusFilter);
     }
-    // Aplica Ordenação
     query = query.orderBy(_sortField, descending: _sortDescending);
-    // Ordenação secundária para desempate (importante se ordenar por campo não único)
-    if (_sortField != 'data_criacao') {
-       query = query.orderBy('data_criacao', descending: true); // Precisa de índice composto!
-    }
+    if (_sortField != 'data_criacao') { query = query.orderBy('data_criacao', descending: true); }
     return query;
-  }
-  // -----------------------------------------
+   }
 
   @override
   Widget build(BuildContext context) {
-    // --- Retorna DIRETAMENTE o CONTEÚDO (Column com Filtros + Lista) ---
+    // ... (Obtenção de theme, colorScheme, textTheme mantida igual) ...
+      final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final TextTheme textTheme = theme.textTheme;
+    // final Color? textoSecundarioCor = textTheme.bodyMedium?.color; // Não precisa mais aqui
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // --- Barra de Filtros e Ordenação ---
+        // --- Barra de Filtros e Ordenação (Mantida Igual) ---
         Container(
-           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-           color: Theme.of(context).colorScheme.surfaceContainerLowest,
-           child: Row(
-            children: [
-              // Dropdown Filtro Status
-              Expanded( flex: 3, child: DropdownButtonFormField<String>( value: _selectedStatusFilter ?? 'Todos', items: _statusOptions.map((String status) => DropdownMenuItem<String>( value: status, child: Text(status, style: const TextStyle(fontSize: 12)), )).toList(), onChanged: (String? newValue) { setState(() { _selectedStatusFilter = (newValue == 'Todos') ? null : newValue; }); }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( /* ... estilo ... */ filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.filter_list, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), ), ),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          color: theme.colorScheme.surfaceVariant,
+          child: Row( /* ... Conteúdo da barra de filtros ... */
+                   children: [
+              Expanded( flex: 3, child: DropdownButtonFormField<String>( value: _selectedStatusFilter ?? 'Todos', items: _statusOptions.map((String status) => DropdownMenuItem<String>( value: status, child: Text(status, style: const TextStyle(fontSize: 12)), )).toList(), onChanged: (String? newValue) { setState(() { _selectedStatusFilter = (newValue == 'Todos') ? null : newValue; }); }, style: textTheme.bodySmall, decoration: InputDecoration( filled: true, fillColor: colorScheme.surface, prefixIcon: const Icon(Icons.filter_list, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), ), ),
               const SizedBox(width: 10),
-              // Dropdown Ordenação
-              Expanded( flex: 4, child: DropdownButtonFormField<Map<String, dynamic>>( value: _selectedSortOption, items: _sortOptions.map((Map<String, dynamic> option) => DropdownMenuItem<Map<String, dynamic>>( value: option, child: Text(option['label'] as String, overflow: TextOverflow.ellipsis), )).toList(), onChanged: (Map<String, dynamic>? newValue) { if (newValue != null) { setState(() { _selectedSortOption = newValue; _sortField = newValue['field'] as String; _sortDescending = newValue['descending'] as bool; }); } }, style: Theme.of(context).textTheme.bodySmall, decoration: InputDecoration( /* ... estilo ... */ filled: true, fillColor: Theme.of(context).colorScheme.surface, prefixIcon: const Icon(Icons.sort, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), isExpanded: true, ), ),
-              // Botão PDF Lista
-              IconButton( icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: _gerarECompartilharPdfLista, tooltip: 'Gerar PDF da Lista', iconSize: 20, visualDensity: VisualDensity.compact, ),
+              Expanded( flex: 4, child: DropdownButtonFormField<Map<String, dynamic>>( value: _selectedSortOption, items: _sortOptions.map((Map<String, dynamic> option) => DropdownMenuItem<Map<String, dynamic>>( value: option, child: Text(option['label'] as String, overflow: TextOverflow.ellipsis), )).toList(), onChanged: (Map<String, dynamic>? newValue) { if (newValue != null) { setState(() { _selectedSortOption = newValue; _sortField = newValue['field'] as String; _sortDescending = newValue['descending'] as bool; }); } }, style: textTheme.bodySmall, decoration: InputDecoration( filled: true, fillColor: colorScheme.surface, prefixIcon: const Icon(Icons.sort, size: 16), contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), isDense: true, ), isExpanded: true, ), ),
+              IconButton( icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: _gerarECompartilharPdfLista, tooltip: 'Gerar PDF da Lista', iconSize: 20, visualDensity: VisualDensity.compact, color: theme.iconTheme.color ),
             ],
-          ),
+           )
         ),
         // --- Lista/Grade de Chamados ---
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: _buildFirestoreQuery().snapshots(), // Usa query dinâmica
+            stream: _buildFirestoreQuery().snapshots(),
             builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-              // Tratamento de erro/loading
-              if (snapshot.hasError) { return Center(child: Text('Erro: ${snapshot.error}'));}
-              if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator());}
-
-              // Atualiza a lista de documentos
-              _currentDocs = snapshot.data?.docs;
-
-              // Tratamento de lista vazia (considerando filtros)
-              if (_currentDocs == null || _currentDocs!.isEmpty) {
-                 bool filtroEstaAtivo = (_selectedStatusFilter != null && _selectedStatusFilter != 'Todos');
-                 if (filtroEstaAtivo) {
-                   return Center(child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.filter_alt_off_outlined, size: 50, color: Colors.grey[400]), const SizedBox(height: 16), const Text( 'Nenhum chamado encontrado com os filtros atuais.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey), ), ] ), ),);
-                 } else {
-                   return Center( child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.inbox_outlined, size: 50, color: Colors.grey[400]), const SizedBox(height: 16), const Text( 'Nenhum chamado aberto no momento.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey), ), ] ), ) );
+              // ... (Tratamento de erro/loading/lista vazia - MANTIDO IGUAL) ...
+                 if (snapshot.hasError) { return Center(child: Text('Erro ao carregar chamados: ${snapshot.error}'));}
+                 if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator());}
+                 _currentDocs = snapshot.data?.docs;
+                  if (_currentDocs == null || _currentDocs!.isEmpty) { /* ... Mensagem lista vazia ... */
+                     bool filtroEstaAtivo = (_selectedStatusFilter != null && _selectedStatusFilter != 'Todos');
+                     String mensagem = filtroEstaAtivo ? 'Nenhum chamado encontrado com os filtros atuais.' : 'Nenhum chamado registrado no momento.';
+                     IconData icone = filtroEstaAtivo ? Icons.filter_alt_off_outlined : Icons.inbox_outlined;
+                     return Center( child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(icone, size: 50, color: Colors.grey[500]), const SizedBox(height: 16), Text( mensagem, textAlign: TextAlign.center, style: textTheme.titleMedium?.copyWith(color: Colors.grey[600]), ), ] ), ), );
                  }
-              }
 
-              // --- GridView com Delegate e Layout Corrigidos ---
+
+              // --- GridView com itemBuilder SIMPLIFICADO ---
               return GridView.builder(
-                 padding: const EdgeInsets.all(12.0),
-                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 190.0, // Largura máx.
-                      mainAxisSpacing: 12.0,
-                      crossAxisSpacing: 12.0,
-                      childAspectRatio: (1 / 1.8), // <<< Altura (Ajuste se precisar)
-                    ),
-                 itemCount: _currentDocs!.length,
-                 itemBuilder: (BuildContext context, int index) {
-                    final DocumentSnapshot document = _currentDocs![index];
-                    final Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
-                    // --- Extração de dados ---
-                     final String titulo = data['titulo'] ?? 'S/ Título';
-                     final String prioridade = data['prioridade'] ?? 'S/P';
-                     final String status = data['status'] ?? 'S/S';
-                     final String creatorName = data['creatorName'] ?? 'Anônimo';
-                     final String creatorPhone = data['creatorPhone'] ?? 'N/I';
-                     final Timestamp? dataCriacaoTimestamp = data['data_criacao'] as Timestamp?;
-                     final String dataFormatada = dataCriacaoTimestamp != null ? DateFormat('dd/MM/yy', 'pt_BR').format(dataCriacaoTimestamp.toDate()) : '--';
-                     final Color? corDeFundoCard = _getCorPrioridade(prioridade);
-                     final Color? corDaBarraStatus = _getCorStatus(status);
+                padding: const EdgeInsets.all(12.0),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 200.0,
+                  mainAxisSpacing: 12.0,
+                  crossAxisSpacing: 12.0,
+                  childAspectRatio: (1 / 1.5), // Mantido ajuste da altura
+                ),
+                itemCount: _currentDocs!.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final DocumentSnapshot document = _currentDocs![index];
+                  final Map<String, dynamic> data = document.data()! as Map<String, dynamic>;
 
-                    // --- CARD CORRIGIDO ---
-                    return Card(
-                       color: corDeFundoCard, elevation: 2, clipBehavior: Clip.antiAlias,
-                       child: InkWell(
-                         onTap: () { Navigator.push( context, MaterialPageRoute( builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),),); },
-                         child: IntrinsicHeight( child: Row( crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                             Container( width: 6.0, color: corDaBarraStatus ?? Colors.transparent ),
-                             const SizedBox(width: 8.0),
-                             Expanded( child: Padding( padding: const EdgeInsets.only(top: 6.0, right: 6.0, bottom: 6.0), child: Column( crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Row( crossAxisAlignment: CrossAxisAlignment.start, children: [ Expanded( child: Text( titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 3, overflow: TextOverflow.ellipsis, ),), InkWell( onTap: () => _excluirChamado(context, document.id), child: const Padding( padding: EdgeInsets.only(left: 3.0), child: Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),)) ], ),
-                                  const Spacer(),
-                                  Text('Prior: $prioridade', style: const TextStyle(fontSize: 11)), const SizedBox(height: 1),
-                                  Text('Status: $status', style: const TextStyle(fontSize: 11)), const SizedBox(height: 1),
-                                  Text( 'Por: $creatorName', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis,), const SizedBox(height: 1),
-                                  Row( children: [ Icon(Icons.phone_outlined, size: 10, color: Colors.grey[700]), const SizedBox(width: 2), Expanded( child: Text( creatorPhone, style: TextStyle(fontSize: 10, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis, ), ), ], ), const SizedBox(height: 1),
-                                  Text( dataFormatada, style: TextStyle(fontSize: 10, color: Colors.grey[700]),),
-                             ],),),),
-                         ],),),
-                       ),
-                    ); // Fim do Card
-                 } // Fim do itemBuilder
+                  // Extrai os dados
+                  final String titulo = data['titulo'] ?? 'S/ Título';
+                  final String prioridade = data['prioridade'] ?? 'S/P';
+                  final String status = data['status'] ?? 'S/S';
+                  final String creatorName = data['creatorName'] ?? 'Anônimo';
+                  final Timestamp? dataCriacaoTimestamp = data['data_criacao'] as Timestamp?;
+                  final String dataFormatada = dataCriacaoTimestamp != null
+                      ? DateFormat('dd/MM/yy', 'pt_BR').format(dataCriacaoTimestamp.toDate())
+                      : '--';
+
+                  // --- CRIA O WIDGET TicketCard ---
+                  // Passa os dados e os callbacks necessários
+                  return TicketCard(
+                    key: ValueKey(document.id), // Usa ID como chave para otimizações do Flutter
+                    chamadoId: document.id,
+                    titulo: titulo,
+                    prioridade: prioridade,
+                    status: status,
+                    creatorName: creatorName,
+                    dataFormatada: dataFormatada,
+                    onTap: () { // Define a ação de clique aqui
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => DetalhesChamadoScreen(chamadoId: document.id),
+                        ),
+                      );
+                    },
+                    onDelete: () { // Define a ação de exclusão aqui
+                      _excluirChamado(context, document.id);
+                    },
+                  );
+                  // ---------------------------------
+
+                }, // Fim do itemBuilder
               ); // Fim GridView.builder
-            } // Fim builder StreamBuilder
+            }, // Fim builder StreamBuilder
           ), // Fim StreamBuilder
         ), // Fim Expanded
       ], // Fim Column principal

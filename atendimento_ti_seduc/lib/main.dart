@@ -4,78 +4,93 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+
+// --- Importe a classe AppTheme ---
+// Certifique-se que o caminho está correto para o seu projeto
+import 'config/theme/app_theme.dart'; // <--- USA A CLASSE AppTheme
+
+// Imports das telas e serviços (verifique os caminhos se necessário)
 import 'services/audio_notification_service.dart';
-// Seus imports de tela
 import 'login_screen.dart';
 import 'cadastro_screen.dart';
-import 'lista_chamados_screen.dart';
-// import 'home_page.dart'; // Comentado no seu código original
-// import 'auth_gate.dart'; // Comentado no seu código original
-// import 'novo_chamado_screen.dart'; // Comentado no seu código original
-
-// --- Importe a nova tela de navegação principal ---
-// (Certifique-se de criar este arquivo depois, como discutimos)
-import 'main_navigation_screen.dart'; // <--- ADICIONAR IMPORT
-
-// Importe o arquivo de opções do Firebase
-import 'firebase_options.dart';
+import 'lista_chamados_screen.dart'; // Importa a tela (embora seja usada dentro da navegação)
+import 'main_navigation_screen.dart'; // Tela principal com a navegação
+import 'firebase_options.dart';     // Arquivo gerado pelo FlutterFire CLI
 
 Future<void> main() async {
+  // Garante inicialização do Flutter
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    // Inicializa Firebase
     await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
+      options: DefaultFirebaseOptions.currentPlatform,
     );
+    // Inicializa formatação de datas para Português (Brasil)
     await initializeDateFormatting('pt_BR', null);
+    // Roda o aplicativo
     runApp(const MyApp());
   } catch (e) {
+    // Tratamento básico de erro durante inicialização
     print('Erro ao inicializar o app: $e');
+    // Em um app de produção, considere mostrar uma mensagem mais amigável
+    // ou ter um mecanismo de fallback.
   }
 
+  // Inicia serviço de notificação de áudio (se aplicável ao seu projeto)
   AudioNotificationService.startListening();
 }
 
 class MyApp extends StatelessWidget {
+  // Construtor padrão para StatelessWidget
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      // Título que aparece na gestão de apps do sistema operacional
       title: 'Cadastro de Atendimento',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      locale: const Locale('pt', 'BR'),
+
+      // --- TEMA APLICADO VIA CLASSE ESTÁTICA ---
+      theme: AppTheme.darkTheme, // Aplica o tema escuro definido na classe AppTheme
+      // -----------------------------------------
+
+      // --- CONFIGURAÇÕES DE LOCALIZAÇÃO ---
+      locale: const Locale('pt', 'BR'), // Define Português (Brasil) como padrão
       supportedLocales: const [
-         Locale('pt', 'BR'),
-         Locale('en', 'US'),
+        Locale('pt', 'BR'), // Único idioma suportado explicitamente aqui
+        // Locale('en', 'US'), // Adicione se precisar de suporte a Inglês
       ],
       localizationsDelegates: const [
+        // Delegates necessários para usar localizações do Material e Widgets
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate, // Para widgets estilo iOS
       ],
+      // ------------------------------------
 
-      // --- PONTO DE ENTRADA PRINCIPAL ALTERADO ---
-      // Define a tela com a BottomNavigationBar como inicial.
-      // OBS: Isso vai pular a tela de login. O ideal é manter
-      // LoginScreen como home e navegar para MainNavigationScreen APÓS o login.
-      home: const MainNavigationScreen(), // <--- ALTERADO DE LoginScreen
-      // ---------------------------------------------
+      // Remove a faixa "Debug" no canto superior direito
+      debugShowCheckedModeBanner: false,
 
-      // Rotas nomeadas podem ainda ser úteis para navegação específica,
-      // mas a navegação principal será controlada pela BottomNavBar.
+      // --- PONTO DE ENTRADA PRINCIPAL ---
+      // Define a tela inicial que será exibida quando o app abrir.
+      // OBSERVAÇÃO: Conforme seu código anterior, está indo direto para a tela
+      // de navegação principal. Lembre-se que para produção, o fluxo ideal
+      // seria começar com LoginScreen ou um verificador de autenticação.
+      home: const MainNavigationScreen(),
+      // -----------------------------------
+
+      // --- ROTAS NOMEADAS ---
+      // Permitem navegar para telas específicas usando um nome.
+      // Avalie se todas ainda são necessárias ou se a navegação principal
+      // via MainNavigationScreen cobre a maioria dos casos.
       routes: {
         '/login': (context) => const LoginScreen(),
         '/cadastro': (context) => const CadastroScreen(),
-        // A rota '/lista_chamados' pode não ser mais necessária se
-        // ListaChamadosScreen for apenas uma das abas da MainNavigationScreen.
+        // A rota '/lista_chamados' pode ser redundante se essa tela
+        // só é acessada como uma aba dentro de MainNavigationScreen.
         '/lista_chamados': (context) => const ListaChamadosScreen(),
-        // '/home': (context) => const HomePage(),
       },
+      // ---------------------
     );
   }
 }
-
-// Pode remover MyHomePage e _MyHomePageState se não estiverem sendo usados.

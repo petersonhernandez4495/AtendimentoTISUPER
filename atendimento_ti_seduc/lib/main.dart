@@ -86,7 +86,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/cadastro': (context) => const CadastroScreen(),
-        // A rota '/lista_chamados' pode ser redundante se essa tela
+        '/main_nav': (context) => const MainNavigationScreen(),
         // só é acessada como uma aba dentro de MainNavigationScreen.
         '/lista_chamados': (context) => const ListaChamadosScreen(),
       },

@@ -16,7 +16,7 @@ import 'cadastro_screen.dart';
 import 'lista_chamados_screen.dart'; // Importa a tela (embora seja usada dentro da navegação)
 import 'main_navigation_screen.dart'; // Tela principal com a navegação
 import 'firebase_options.dart';     // Arquivo gerado pelo FlutterFire CLI
-
+import 'user_management_screen.dart';
 Future<void> main() async {
   // Garante inicialização do Flutter
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,6 +89,7 @@ class MyApp extends StatelessWidget {
         '/main_nav': (context) => const MainNavigationScreen(),
         // só é acessada como uma aba dentro de MainNavigationScreen.
         '/lista_chamados': (context) => const ListaChamadosScreen(),
+        '/user_management': (context) => const UserManagementScreen(),
       },
       // ---------------------
     );

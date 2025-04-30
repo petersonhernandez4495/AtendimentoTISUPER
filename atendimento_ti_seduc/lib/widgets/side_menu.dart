@@ -1,9 +1,10 @@
-// lib/widgets/side_menu.dart
-
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Importar para pegar usuário logado
+import 'package:cloud_firestore/cloud_firestore.dart'; // Importar para buscar a role
 import '../config/theme/app_theme.dart'; // Importa para usar cores e constantes do tema
 
-class SideMenu extends StatelessWidget {
+// --- Tornando StatefulWidget ---
+class SideMenu extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onLogout;
@@ -16,66 +17,140 @@ class SideMenu extends StatelessWidget {
   });
 
   @override
+  State<SideMenu> createState() => _SideMenuState();
+}
+
+class _SideMenuState extends State<SideMenu> {
+  // --- Estado para controlar visibilidade do item Admin ---
+  bool _isAdmin = false; // Flag para indicar se o usuário é admin
+  bool _isLoadingRole = true; // Flag para indicar que a role está sendo verificada
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserRole(); // Chama a verificação ao iniciar o widget
+  }
+
+  // --- Função para verificar a role do usuário logado ---
+  Future<void> _checkUserRole() async {
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    bool isAdminResult = false; // Resultado padrão
+
+    if (currentUser != null) {
+      try {
+        final DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          // Verifica se o campo role_temp existe e é 'admin'
+          if (userData.containsKey('role_temp') && userData['role_temp'] == 'admin') {
+            isAdminResult = true;
+          }
+        } else {
+           print("SideMenu: Documento do usuário ${currentUser.uid} não encontrado.");
+        }
+      } catch (e) {
+        print("SideMenu: Erro ao buscar role do usuário: $e");
+        // Mantém isAdminResult como false em caso de erro
+      }
+    } else {
+       print("SideMenu: Nenhum usuário logado para verificar a role.");
+    }
+
+    // Atualiza o estado após a verificação (ou falha)
+    if (mounted) { // Verifica se o widget ainda está montado
+      setState(() {
+        _isAdmin = isAdminResult;
+        _isLoadingRole = false; // Marca a verificação como concluída
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Obtém dados do tema
+    // Obtém dados do tema (sem alterações)
     final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
-    final Color? unselectedItemColor = theme.iconTheme.color?.withOpacity(0.8);
-    final TextStyle? unselectedLabelStyle = theme.textTheme.bodyMedium?.copyWith(color: unselectedItemColor);
-    // final Color surfaceColorBase = colorScheme.surface; // Não usamos mais a cor de superfície base aqui
+    // final ColorScheme colorScheme = theme.colorScheme; // Não usado diretamente
+    // final Color? unselectedItemColor = theme.iconTheme.color?.withOpacity(0.8); // Não usado diretamente
+    // final TextStyle? unselectedLabelStyle = theme.textTheme.bodyMedium?.copyWith(color: unselectedItemColor); // Não usado diretamente
+
+    // --- Construção dinâmica dos destinos ---
+    final List<NavigationRailDestination> destinations = [
+      // Destinos Padrão (sempre visíveis)
+      const NavigationRailDestination(
+        icon: Tooltip(message: 'Chamados', child: Icon(Icons.list_alt_outlined)),
+        selectedIcon: Tooltip(message: 'Chamados', child: Icon(Icons.list_alt)),
+        label: Text('Chamados'),
+      ),
+      const NavigationRailDestination(
+        icon: Tooltip(message: 'Novo Chamado', child: Icon(Icons.add_circle_outline)),
+        selectedIcon: Tooltip(message: 'Novo Chamado', child: Icon(Icons.add_circle)),
+        label: Text('Novo'),
+      ),
+      const NavigationRailDestination(
+        icon: Tooltip(message: 'Agenda', child: Icon(Icons.calendar_month_outlined)),
+        selectedIcon: Tooltip(message: 'Agenda', child: Icon(Icons.calendar_month)),
+        label: Text('Agenda'),
+      ),
+      const NavigationRailDestination(
+        icon: Tooltip(message: 'Meu Perfil', child: Icon(Icons.person_outline)),
+        selectedIcon: Tooltip(message: 'Meu Perfil', child: Icon(Icons.person)),
+        label: Text('Perfil'),
+      ),
+      // --- Destino Admin (condicional) ---
+      // Adiciona apenas se não estiver carregando e o usuário for admin
+      if (!_isLoadingRole && _isAdmin)
+        const NavigationRailDestination(
+          icon: Tooltip(message: 'Gerenciar Usuários', child: Icon(Icons.manage_accounts_outlined)),
+          selectedIcon: Tooltip(message: 'Gerenciar Usuários', child: Icon(Icons.manage_accounts)),
+          label: Text('Admin'), // Label curto para o menu
+        ),
+    ];
+    // ---------------------------------------
 
     // Padding externo para efeito flutuante (mantido)
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 20.0, 0.0, 20.0), // Ajuste se necessário
       child: ClipRRect( // ClipRRect para aplicar o arredondamento
-        // --- ARREDONDAMENTO TOTAL ---
-        borderRadius: BorderRadius.circular(24.0), // <<< Aplicado a todos os cantos (ajuste o raio)
-        // ---------------------------
-        child: Container( // <<< CONTAINER PARA O FUNDO COM GRADIENTE
+        borderRadius: BorderRadius.circular(24.0), // Arredondamento
+        child: Container( // Container para o fundo com gradiente
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              // --- GRADIENTE E TRANSPARÊNCIA ---
               colors: [
-                // Use cores do tema com a opacidade desejada (ex: 50% e 30%)
-                AppTheme.kPrimaryColor.withOpacity(0.5),   // <<< Ajuste a opacidade (ex: 0.5, 0.4)
-                AppTheme.kSecondaryColor.withOpacity(0.3), // <<< Ajuste a opacidade (ex: 0.3, 0.2)
+                AppTheme.kPrimaryColor.withOpacity(0.5),
+                AppTheme.kSecondaryColor.withOpacity(0.3),
               ],
-              // Direção do gradiente (pode mudar para Alignment.topLeft, etc.)
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              // ---------------------------------
             ),
           ),
-          child: NavigationRail( // NavigationRail agora é filho do Container
-            selectedIndex: selectedIndex,
-            onDestinationSelected: onDestinationSelected,
+          child: NavigationRail(
+            // Usa o índice passado pelo widget pai
+            selectedIndex: widget.selectedIndex,
+            // Chama o callback do widget pai com o índice selecionado
+            // IMPORTANTE: O widget pai agora precisa saber interpretar o índice
+            //             considerando se o item Admin está presente ou não.
+            onDestinationSelected: widget.onDestinationSelected,
 
-            // --- FUNDO DO NAVIGATION RAIL TRANSPARENTE ---
-            // Para que o gradiente do Container pai seja visível
-            backgroundColor: Colors.transparent, // <<< IMPORTANTE
-            // ------------------------------------------
+            // Fundo transparente para ver o gradiente
+            backgroundColor: Colors.transparent,
 
             // Configurações de aparência (mantidas)
             labelType: NavigationRailLabelType.none,
             useIndicator: false, // Sem indicador de fundo na seleção
             minWidth: 64, // Largura mínima
 
-            // Estilos dos Ícones/Labels (mantidos - verifique contraste com novo fundo)
-            selectedIconTheme: IconThemeData(color: AppTheme.kTextColor, size: 26), // Selecionado usa cor de texto principal
-            unselectedIconTheme: IconThemeData(color: AppTheme.kSecondaryTextColor, size: 24), // Não selecionado usa cor secundária
-            // Ajuste as cores acima se necessário para melhor contraste com o gradiente
+            // Estilos dos Ícones/Labels (mantidos)
+            selectedIconTheme: IconThemeData(color: AppTheme.kTextColor, size: 26),
+            unselectedIconTheme: IconThemeData(color: AppTheme.kSecondaryTextColor, size: 24),
+            selectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith( fontWeight: FontWeight.bold, color: AppTheme.kTextColor,),
+            unselectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.kSecondaryTextColor), // Ajustado para usar cor secundária direto
 
-            // Estilos de Label (não visíveis, mas definidos)
-            selectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith( fontWeight: FontWeight.bold, color: AppTheme.kTextColor,), // Usa cor de texto principal
-            unselectedLabelTextStyle: unselectedLabelStyle?.copyWith(color: AppTheme.kSecondaryTextColor), // Usa cor secundária
-
-            // Destinos (mantidos com Tooltips)
-            destinations: const <NavigationRailDestination>[
-               NavigationRailDestination( icon: Tooltip(message: 'Chamados', child: Icon(Icons.list_alt_outlined)), selectedIcon: Tooltip(message: 'Chamados', child: Icon(Icons.list_alt)), label: Text('Chamados'), ),
-               NavigationRailDestination( icon: Tooltip(message: 'Novo Chamado', child: Icon(Icons.add_circle_outline)), selectedIcon: Tooltip(message: 'Novo Chamado', child: Icon(Icons.add_circle)), label: Text('Novo'), ),
-               NavigationRailDestination( icon: Tooltip(message: 'Agenda', child: Icon(Icons.calendar_month_outlined)), selectedIcon: Tooltip(message: 'Agenda', child: Icon(Icons.calendar_month)), label: Text('Agenda'), ),
-               NavigationRailDestination( icon: Tooltip(message: 'Meu Perfil', child: Icon(Icons.person_outline)), selectedIcon: Tooltip(message: 'Meu Perfil', child: Icon(Icons.person)), label: Text('Perfil'), ),
-            ],
+            // Passa a lista de destinos (possivelmente com o item Admin)
+            destinations: destinations,
 
             // Botão de Logout (mantido)
             trailing: Expanded(
@@ -86,9 +161,8 @@ class SideMenu extends StatelessWidget {
                   child: Tooltip(
                     message: 'Logout',
                     child: IconButton(
-                      // Ajuste a cor se necessário para contraste com o gradiente
                       icon: Icon(Icons.logout, color: AppTheme.kErrorColor.withOpacity(0.8)),
-                      onPressed: onLogout,
+                      onPressed: widget.onLogout, // Usa o callback do pai
                     ),
                   ),
                 ),

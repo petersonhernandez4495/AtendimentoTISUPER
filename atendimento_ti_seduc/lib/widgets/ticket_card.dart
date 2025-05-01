@@ -160,7 +160,7 @@ class TicketCard extends StatelessWidget {
                              children: [
                                Icon(Icons.label_important_outline, size: 13, color: textoSecundarioCor),
                                const SizedBox(width: 4),
-                               Text('Prioridade:', style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor)),
+                               Text('', style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor)),
                                const SizedBox(width: 4),
                                Flexible(
                                  child: Text(

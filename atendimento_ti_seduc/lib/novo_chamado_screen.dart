@@ -1,12 +1,16 @@
 // lib/novo_chamado_screen.dart
-import 'package:atendimento_ti_seduc/main_navigation_screen.dart'; // Verifique se o caminho está correto
+import 'package:atendimento_ti_seduc/main_navigation_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-// --- Constantes ---
+// Importe os novos serviços
+import 'services/chamado_service.dart';
+import 'services/duplicidade_service.dart';
+
+// --- Mantenha as constantes aqui ou mova para um arquivo dedicado ---
 const String kFieldTipoSolicitante = 'tipo_solicitante';
 const String kFieldNomeSolicitante = 'nome_solicitante';
 const String kFieldCelularContato = 'celular_contato';
@@ -37,7 +41,11 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   bool _hasLoadingError = false;
   int _currentStep = 0;
 
-  // --- ESTADO DOS CAMPOS ---
+  // --- Instanciar os serviços ---
+  final ChamadoService _chamadoService = ChamadoService();
+  final DuplicidadeService _duplicidadeService = DuplicidadeService();
+
+  // --- ESTADO DOS CAMPOS (Permanece igual) ---
   String? _tipoSelecionado;
   final _celularController = TextEditingController();
   String? _equipamentoSelecionado;
@@ -58,7 +66,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   final _equipamentoOutroController = TextEditingController();
   final _problemaOutroController = TextEditingController();
 
-  // --- DADOS PARA DROPDOWNS ---
+  // --- DADOS PARA DROPDOWNS (Permanece igual) ---
   List<String> _tipos = [];
   List<String> _cargosEscola = [];
   List<String> _atendimentosEscola = [];
@@ -84,6 +92,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
 
   @override
   void dispose() {
+    // Dispose permanece igual
     _celularController.dispose();
     _marcaModeloController.dispose();
     _patrimonioController.dispose();
@@ -95,8 +104,10 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     super.dispose();
   }
 
-  // --- LÓGICA DE CARREGAMENTO (Adicionando "OUTRO" se não existir) ---
+  // --- LÓGICA DE CARREGAMENTO (Permanece igual) ---
   Future<void> _carregarConfiguracoes() async {
+    // Seu código de _carregarConfiguracoes existente...
+    // (Não precisa mudar nada aqui por enquanto)
     print("--- Iniciando _carregarConfiguracoes ---");
     if (!_isLoadingConfig && !_hasLoadingError) { print("--- Carregamento já realizado. Saindo. ---"); return; }
     setState(() { _isLoadingConfig = true; _hasLoadingError = false; });
@@ -183,10 +194,8 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   // Funções _parseStringList, _parseStringListFromDynamic, _preencherDadosUsuario, _buscarTelefoneUsuario permanecem iguais
-
   List<String> _parseStringList(Map<String, dynamic>? data, String fieldName) { if (data == null || !data.containsKey(fieldName)) { print("WARN (parse): Campo '$fieldName' não encontrado."); return []; } return _parseStringListFromDynamic(data[fieldName], fieldName); }
   List<String> _parseStringListFromDynamic(dynamic data, String fieldDescription) { if (data == null) { print("WARN (parse): Dado nulo para '$fieldDescription'."); return []; } if (data is List) { List<String> result = data .where((item) => item != null) .map((item) => item.toString()) .toList(); if(data.any((item) => item is! String && item != null)){ print("WARN (parse): Itens não-string convertidos em '$fieldDescription'."); } return result; } else { print("WARN (parse): Campo '$fieldDescription' não é Lista/Array. Tipo: ${data.runtimeType}"); return []; } }
-
   Future<void> _preencherDadosUsuario() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -201,14 +210,15 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
       if (mounted) setState(() {});
     }
   }
-
   Future<String> _buscarTelefoneUsuario(String userId) async {
     const String fallbackPhone = "Telefone não informado";
     try { final userProfileDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get(); if (userProfileDoc.exists && userProfileDoc.data() != null) { final phone = userProfileDoc.data()!['phone'] as String?; return phone ?? fallbackPhone; } else { return fallbackPhone; } } catch (e) { print("Erro ao buscar telefone: $e"); return fallbackPhone; }
   }
 
-  // --- Atualiza instituições (Comparando com "OUTRO") ---
+
+  // --- Atualiza instituições (Permanece igual) ---
   void _atualizarInstituicoes(String? cidadeSelecionada) {
+    // Seu código de _atualizarInstituicoes existente...
     setState(() {
       _cidadeSelecionada = cidadeSelecionada;
       _instituicaoSelecionada = null;
@@ -225,8 +235,9 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     });
   }
 
-  // --- Reseta campos dependentes ---
+  // --- Reseta campos dependentes (Permanece igual) ---
   void _resetDependentFields() {
+    // Seu código _resetDependentFields existente...
     _cidadeSelecionada = null;
     _instituicaoSelecionada = null;
     _instituicoesDisponiveis = [];
@@ -240,165 +251,286 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     _problemaOutroController.clear();
     _equipamentoSelecionado = null;
     _problemaSelecionado = null;
-    // setState não é necessário aqui
   }
 
-  // --- LÓGICA DE ENVIO (Comparando com "OUTRO") ---
+  // --- LÓGICA DE ENVIO REATORADA ---
   Future<void> _enviarChamado() async {
-    if (!_formKey.currentState!.validate()) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Por favor, preencha todos os campos obrigatórios.'))); return; }
-    if (_tipoSelecionado == 'ESCOLA' && _isProfessorSelecionado) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar( content: Text('Atenção: Professores devem solicitar via Coordenação...'), duration: Duration(seconds: 7), backgroundColor: Colors.orange, ) ); return; }
+    // 1. Validação inicial do formulário e regras de negócio
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, preencha todos os campos obrigatórios.')));
+      return;
+    }
+    if (_tipoSelecionado == 'ESCOLA' && _isProfessorSelecionado) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Atenção: Professores devem solicitar via Coordenação...'),
+        duration: Duration(seconds: 7),
+        backgroundColor: Colors.orange,
+      ));
+      return;
+    }
+
     setState(() { _isLoading = true; });
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) { if (mounted) { ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Erro: Você precisa estar logado.'))); setState(() { _isLoading = false; }); } return; }
 
-    final String nomeFinalSolicitante = user.displayName?.trim().isNotEmpty ?? false ? user.displayName!.trim() : (user.email ?? "Usuário App (${user.uid.substring(0, 6)})");
-    final creatorUid = user.uid;
-    final creatorPhone = _celularController.text.trim();
-    final unmaskedPhone = _phoneMaskFormatter.getUnmaskedText();
+    // 2. Coletar dados para verificação de duplicidade e criação
+    final String patrimonio = _patrimonioController.text.trim();
+    final String? problemaSel = _problemaSelecionado; // Pode ser null se não preenchido ainda
+    final String problemaOutro = _problemaOutroController.text.trim();
 
-    final dadosChamado = <String, dynamic>{
-        kFieldTipoSolicitante: _tipoSelecionado,
-        kFieldNomeSolicitante: nomeFinalSolicitante,
-        kFieldCelularContato: creatorPhone,
-        'celular_contato_unmasked': unmaskedPhone,
-        'equipamento_solicitacao': _equipamentoSelecionado,
-        'equipamento_conectado_internet': _internetConectadaSelecionado,
-        'marca_modelo_equipamento': _marcaModeloController.text.trim().isEmpty ? null : _marcaModeloController.text.trim(),
-        'numero_patrimonio': _patrimonioController.text.trim(),
-        'problema_ocorre': _problemaSelecionado,
-        'tecnico_responsavel': _tecnicoResponsavelController.text.trim().isEmpty ? null : _tecnicoResponsavelController.text.trim(),
-        'status': 'aberto',
-        'prioridade': 'Média',
-        'data_criacao': FieldValue.serverTimestamp(),
-        'data_atualizacao': FieldValue.serverTimestamp(),
-        'creatorUid': creatorUid,
-        'creatorName': nomeFinalSolicitante,
-        'creatorPhone': creatorPhone,
-        'authUserDisplayName': user.displayName,
-        'authUserEmail': user.email,
-    };
-
-    if (_tipoSelecionado == 'ESCOLA') {
-        dadosChamado[kFieldCidade] = _cidadeSelecionada;
-
-        // --- LÓGICA PARA INSTITUIÇÃO (Comparando com "OUTRO") ---
-        // <<< COMPARA COM "OUTRO" >>>
-        if (_cidadeSelecionada == "OUTRO") {
-          dadosChamado[kFieldInstituicaoManual] = _instituicaoManualController.text.trim();
-          dadosChamado[kFieldInstituicao] = 'OUTRO (Ver '+ kFieldInstituicaoManual +')';
-        } else {
-          dadosChamado[kFieldInstituicao] = _instituicaoSelecionada;
-          dadosChamado[kFieldInstituicaoManual] = null;
-        }
-        // --------------------------------
-
-        dadosChamado['cargo_funcao'] = _cargoSelecionado;
-        dadosChamado['atendimento_para'] = _atendimentoParaSelecionado;
-        if (_isProfessorSelecionado) { dadosChamado['observacao_cargo'] = 'Solicitante é Professor...'; }
-
-    } else if (_tipoSelecionado == 'SUPERINTENDENCIA') {
-        dadosChamado['setor_superintendencia'] = _setorSuperSelecionado;
-        dadosChamado[kFieldCidadeSuperintendencia] = _cidadeSuperController.text.trim();
-    }
-
-    // --- ADICIONAR DESCRIÇÕES "OUTRO" (Comparando com "OUTRO") ---
-    // <<< COMPARA COM "OUTRO" >>>
-    if (_equipamentoSelecionado == "OUTRO") {
-        dadosChamado[kFieldEquipamentoOutro] = _equipamentoOutroController.text.trim();
-    } else {
-        dadosChamado[kFieldEquipamentoOutro] = null;
-    }
-    // <<< COMPARA COM "OUTRO" >>>
-    if (_problemaSelecionado == "OUTRO") {
-        dadosChamado[kFieldProblemaOutro] = _problemaOutroController.text.trim();
-    } else {
-         dadosChamado[kFieldProblemaOutro] = null;
-    }
-    // ----------------------------------------------------
-
+    // 3. Verificar Duplicidade ANTES de tentar criar
     try {
-      final chamadosCollection = FirebaseFirestore.instance.collection(kCollectionChamados);
-      await chamadosCollection.add(dadosChamado);
-      if (mounted) {
-        _formKey.currentState?.reset();
-        _celularController.clear();
-        _marcaModeloController.clear();
-        _patrimonioController.clear();
-        _tecnicoResponsavelController.clear();
-        _cidadeSuperController.clear();
-        _instituicaoManualController.clear();
-        _equipamentoOutroController.clear();
-        _problemaOutroController.clear();
-        setState(() {
-            _tipoSelecionado = null;
-            _equipamentoSelecionado = null;
-            _internetConectadaSelecionado = null;
-            _problemaSelecionado = null;
-            _resetDependentFields();
-            _currentStep = 0;
-        });
-        _preencherDadosUsuario();
-        ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Chamado aberto com sucesso!'), backgroundColor: Colors.green) );
-        Navigator.of(context).pushAndRemoveUntil( MaterialPageRoute(builder: (context) => const MainNavigationScreen()), (Route<dynamic> route) => false, );
+      if (problemaSel != null) { // Só checa se o problema foi selecionado/preenchido
+          final String? duplicateId = await _duplicidadeService.verificarDuplicidade(
+          patrimonio: patrimonio,
+          problemaSelecionado: problemaSel, // Passa o valor do dropdown
+          problemaOutroDescricao: problemaOutro, // Passa o texto livre
+        );
+
+        if (duplicateId != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('ERRO: Já existe um chamado ativo (#$duplicateId) para este problema e patrimônio.'),
+              backgroundColor: Colors.orange.shade800,
+              duration: const Duration(seconds: 8),
+            ),
+          );
+          setState(() { _isLoading = false; });
+          return; // Interrompe a execução
+        }
+      } else {
+         print("INFO: Verificação de duplicidade não realizada (problema não selecionado).");
       }
-    } catch (error) {
-        print('Erro ao abrir chamado: $error');
-        if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar( content: Text('Erro ao salvar chamado. Verifique sua conexão...'), backgroundColor: Colors.red) ); }
-    } finally { if (mounted) { setState(() { _isLoading = false; }); } }
+
+
+      // 4. Se não for duplicado, prosseguir com a criação usando o ChamadoService
+      final String novoChamadoId = await _chamadoService.criarChamado(
+        // Passar todos os dados coletados dos controllers e state vars
+        tipoSelecionado: _tipoSelecionado,
+        celularContato: _celularController.text, // Serviço trata o trim e unmask
+        equipamentoSelecionado: _equipamentoSelecionado,
+        internetConectadaSelecionado: _internetConectadaSelecionado,
+        marcaModelo: _marcaModeloController.text.trim(),
+        patrimonio: patrimonio,
+        problemaSelecionado: problemaSel, // Passa o selecionado
+        tecnicoResponsavel: _tecnicoResponsavelController.text.trim(),
+        cidadeSelecionada: _cidadeSelecionada,
+        instituicaoSelecionada: _instituicaoSelecionada,
+        cargoSelecionado: _cargoSelecionado,
+        atendimentoParaSelecionado: _atendimentoParaSelecionado,
+        isProfessorSelecionado: _isProfessorSelecionado,
+        setorSuperSelecionado: _setorSuperSelecionado,
+        cidadeSuper: _cidadeSuperController.text.trim(),
+        instituicaoManual: _instituicaoManualController.text.trim(),
+        equipamentoOutro: _equipamentoOutroController.text.trim(),
+        problemaOutro: problemaOutro, // Passa o texto livre
+      );
+
+      // 5. Sucesso na criação
+      if (mounted) {
+        _resetFormAndNavigate(); // Limpa o form e navega
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Chamado (#$novoChamadoId) aberto com sucesso!'),
+            backgroundColor: Colors.green)
+        );
+      }
+
+    } catch (e) {
+      // 6. Erro durante a verificação ou criação
+      print('Erro ao processar chamado: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erro ao processar chamado: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ));
+      }
+    } finally {
+      // 7. Garantir que o loading seja desativado
+      if (mounted) {
+        setState(() { _isLoading = false; });
+      }
+    }
   }
+
+  // Helper para limpar o formulário e navegar
+  void _resetFormAndNavigate() {
+    _formKey.currentState?.reset();
+    _celularController.clear();
+    _marcaModeloController.clear();
+    _patrimonioController.clear();
+    _tecnicoResponsavelController.clear();
+    _cidadeSuperController.clear();
+    _instituicaoManualController.clear();
+    _equipamentoOutroController.clear();
+    _problemaOutroController.clear();
+    setState(() {
+      _tipoSelecionado = null;
+      _equipamentoSelecionado = null;
+      _internetConectadaSelecionado = null;
+      _problemaSelecionado = null;
+      _resetDependentFields(); // Chama o reset dos campos dependentes
+      _currentStep = 0;
+    });
+    _preencherDadosUsuario(); // Repreenche o telefone se disponível
+    // Navega para a tela principal, removendo as anteriores
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+          (Route<dynamic> route) => false,
+    );
+  }
+
 
   // Funções _handleStepContinue, _handleStepCancel permanecem iguais
-  void _handleStepContinue() { if (_currentStep < _buildSteps().length - 1) { setState(() { _currentStep += 1; }); } else { _enviarChamado(); } }
+  void _handleStepContinue() {
+    // Valida o passo ATUAL antes de avançar ou enviar
+    bool isStepValid = true;
+    if (_currentStep == 0) {
+       // Valida campos do passo 1
+       isStepValid = _validateStep1();
+    } else if (_currentStep == 1) {
+       // Valida campos do passo 2
+       isStepValid = _validateStep2();
+    }
+
+    if (!isStepValid) {
+        ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Preencha os campos obrigatórios deste passo.')));
+        // Força a validação visual dos campos no passo atual
+        _formKey.currentState?.validate();
+        return;
+    }
+
+
+    if (_currentStep < _buildSteps().length - 1) {
+      setState(() { _currentStep += 1; });
+    } else {
+      // Último passo, tenta enviar
+      _enviarChamado();
+    }
+  }
   void _handleStepCancel() { if (_currentStep > 0) { setState(() { _currentStep -= 1; }); } }
 
-  // --- BUILD PRINCIPAL (sem alterações na estrutura) ---
+  // Funções de validação por passo (NOVO)
+  bool _validateStep1() {
+    // Lógica de validação específica para os campos do Passo 1
+    if (_tipoSelecionado == null) return false;
+    if (_tipoSelecionado == 'ESCOLA') {
+       if (_cidadeSelecionada == null) return false;
+       if (_cidadeSelecionada == "OUTRO" && _instituicaoManualController.text.trim().isEmpty) return false;
+       if (_cidadeSelecionada != "OUTRO" && _instituicaoSelecionada == null) return false;
+       if (_cargoSelecionado == null) return false;
+       if (_atendimentoParaSelecionado == null) return false;
+    } else if (_tipoSelecionado == 'SUPERINTENDENCIA') {
+       if (_setorSuperSelecionado == null) return false;
+       if (_cidadeSuperController.text.trim().isEmpty) return false;
+    }
+    return true; // Se passou por todas as verificações
+  }
+
+  bool _validateStep2() {
+    // Lógica de validação específica para os campos do Passo 2
+    if (_celularController.text.trim().isEmpty || !_phoneMaskFormatter.isFill()) return false;
+    if (_equipamentoSelecionado == null) return false;
+    if (_equipamentoSelecionado == "OUTRO" && _equipamentoOutroController.text.trim().isEmpty) return false;
+    if (_internetConectadaSelecionado == null) return false;
+    if (_patrimonioController.text.trim().isEmpty || _patrimonioController.text.trim() == '0' || int.tryParse(_patrimonioController.text.trim()) == null ) return false;
+    if (_problemaSelecionado == null) return false;
+    if (_problemaSelecionado == "OUTRO" && _problemaOutroController.text.trim().isEmpty) return false;
+    return true; // Se passou por todas as verificações
+  }
+
+  // --- BUILD PRINCIPAL (sem alterações na estrutura visual) ---
   @override
   Widget build(BuildContext context) {
     // Código de Loading e Erro (sem alterações)
     if (_isLoadingConfig) { return Scaffold( appBar: AppBar(title: const Text('Abrir Novo Chamado')), body: const Center(child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ CircularProgressIndicator(), SizedBox(height: 16), Text('Carregando configurações...'), ],)), ); }
     if (_hasLoadingError) { return Scaffold( appBar: AppBar(title: const Text('Erro ao Carregar')), body: Center(child: Padding( padding: const EdgeInsets.all(20.0), child: Column( mainAxisAlignment: MainAxisAlignment.center, children: [ Icon(Icons.error_outline, color: Colors.red.shade700, size: 60), const SizedBox(height: 16), const Text('Não foi possível carregar os dados necessários...', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)), const SizedBox(height: 10), const Text('Verifique sua conexão ou a configuração no Firebase.', textAlign: TextAlign.center, style: TextStyle(fontSize: 14)), const SizedBox(height: 25), ElevatedButton.icon( icon: const Icon(Icons.refresh), label: const Text('Tentar Novamente'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)), onPressed: _isLoadingConfig ? null : _carregarConfiguracoes, ) ], ), )), ); }
 
+
     return Scaffold(
       appBar: AppBar( title: const Text('Abrir Novo Chamado'), automaticallyImplyLeading: _currentStep == 0, ),
-      body: Form( key: _formKey, autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Stepper(
-          type: StepperType.vertical, currentStep: _currentStep,
-          onStepContinue: _isLoading ? null : _handleStepContinue, onStepCancel: _isLoading ? null : _handleStepCancel,
-          onStepTapped: null, // Desabilitado
-          controlsBuilder: (context, details) {
-              return Padding( padding: const EdgeInsets.only(top: 24.0),
-                child: Row( children: <Widget>[
-                    ElevatedButton( onPressed: _isLoading ? null : details.onStepContinue, style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12)), child: Text(details.stepIndex == _buildSteps().length - 1 ? 'Enviar Chamado' : 'Próximo'), ),
-                    const SizedBox(width: 12),
-                    if (details.stepIndex > 0) TextButton( onPressed: _isLoading ? null : details.onStepCancel, child: const Text('Voltar'), ),
-                  ],
-                ),
-              );
-            },
-          steps: _buildSteps(),
+      body: Form(
+          key: _formKey,
+          // Desativar autovalidate global, faremos por passo no 'Próximo'
+          autovalidateMode: AutovalidateMode.disabled,
+          child: Stepper(
+            type: StepperType.vertical, currentStep: _currentStep,
+            // Passar as funções de validação e envio para os botões
+            onStepContinue: _isLoading ? null : _handleStepContinue,
+            onStepCancel: _isLoading ? null : _handleStepCancel,
+            onStepTapped: null, // Desabilitado para forçar fluxo linear
+            controlsBuilder: (context, details) {
+                return Padding( padding: const EdgeInsets.only(top: 24.0),
+                  child: Row( children: <Widget>[
+                      ElevatedButton(
+                         onPressed: _isLoading ? null : details.onStepContinue,
+                         style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12)),
+                         child: _isLoading
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(details.stepIndex == _buildSteps().length - 1 ? 'Enviar Chamado' : 'Próximo'),
+                      ),
+                      const SizedBox(width: 12),
+                      if (details.stepIndex > 0)
+                        TextButton( onPressed: _isLoading ? null : details.onStepCancel, child: const Text('Voltar'), ),
+                    ],
+                  ),
+                );
+              },
+            steps: _buildSteps(),
+          ),
         ),
-      ),
     );
   }
 
-  // Define os Passos do Stepper (sem alterações)
+  // Define os Passos do Stepper (sem alterações estruturais)
   List<Step> _buildSteps() {
-    StepState getStepState(int stepIndex) { if (_hasLoadingError) return StepState.error; if (_currentStep > stepIndex) return StepState.complete; if (_currentStep == stepIndex) return StepState.editing; return StepState.indexed; }
-    bool isStep1Active = !_hasLoadingError; bool isStep2Active = _currentStep >= 1 && !_hasLoadingError && _tipoSelecionado != null;
+    // Função getStepState permanece igual
+    StepState getStepState(int stepIndex) {
+      // Considerar erro apenas se o passo foi visitado e falhou na validação?
+      // Ou manter como está baseado no erro de carregamento? Por ora, manter.
+      if (_hasLoadingError) return StepState.error;
+      if (_currentStep > stepIndex) return StepState.complete;
+      // A lógica de validação agora está no `_handleStepContinue`
+      // Poderíamos adicionar uma flag `_stepHasError[stepIndex]` se quiséssemos
+      // mostrar o erro diretamente no ícone do Step.
+      if (_currentStep == stepIndex) return StepState.editing;
+      return StepState.indexed;
+    }
+
+    // Ativação dos passos permanece igual
+    bool isStep1Active = !_hasLoadingError;
+    bool isStep2Active = _currentStep >= 1 && !_hasLoadingError && _tipoSelecionado != null; // Depende do tipo
+
     return [
-      Step( title: const Text('1. Identificação e Local'), content: _buildStep1Content(), isActive: isStep1Active, state: getStepState(0), ),
-      Step( title: const Text('2. Equipamento e Problema'), content: _tipoSelecionado != null ? _buildStep2Content() : _buildStepPlaceholder("Selecione o tipo de solicitante no passo anterior para continuar."), isActive: isStep2Active, state: getStepState(1), ),
+      Step(
+        title: const Text('1. Identificação e Local'),
+        content: _buildStep1Content(), // Widgets permanecem os mesmos
+        isActive: isStep1Active,
+        state: getStepState(0),
+      ),
+      Step(
+        title: const Text('2. Equipamento e Problema'),
+        content: _tipoSelecionado != null
+            ? _buildStep2Content() // Widgets permanecem os mesmos
+            : _buildStepPlaceholder("Selecione o tipo de solicitante no passo anterior para continuar."),
+        isActive: isStep2Active,
+        state: getStepState(1),
+      ),
     ];
   }
 
-  // Conteúdo dos Passos (Widgets)
-  Widget _buildStepPlaceholder(String message) {
-      return Container( padding: const EdgeInsets.symmetric(vertical: 30.0, horizontal: 10.0), alignment: Alignment.center, decoration: BoxDecoration( color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).disabledColor.withOpacity(0.2)) ), child: Text( message, style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).disabledColor, fontSize: 14, height: 1.4), textAlign: TextAlign.center, ), );
-  }
+  // Conteúdo dos Passos (Widgets _buildStep1Content, _buildStep2Content permanecem iguais)
+  // Os widgets _buildDropdown e _buildTextFormField também permanecem iguais
+  // A lógica de validação DENTRO deles foi mantida, mas a validação GERAL do passo
+  // agora está centralizada em _validateStep1 e _validateStep2, chamadas em _handleStepContinue.
 
-  // --- CONTEÚDO DO PASSO 1 (Comparando com "OUTRO") ---
+   Widget _buildStepPlaceholder(String message) {
+      return Container( padding: const EdgeInsets.symmetric(vertical: 30.0, horizontal: 10.0), alignment: Alignment.center, decoration: BoxDecoration( color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).disabledColor.withOpacity(0.2)) ), child: Text( message, style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).disabledColor, fontSize: 14, height: 1.4), textAlign: TextAlign.center, ), );
+   }
+
   Widget _buildStep1Content() {
-    return Column(
+    // SEU CÓDIGO ORIGINAL PARA _buildStep1Content AQUI...
+    // (Nenhuma mudança necessária na estrutura dos widgets)
+     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _buildDropdown<String>(
@@ -427,7 +559,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
               labelText: 'Nome da Instituição (Escola)*',
               hintText: 'Digite o nome completo da escola',
               validator: (value) {
-                 // <<< COMPARA COM "OUTRO" >>>
+                  // <<< COMPARA COM "OUTRO" >>>
                 if (_tipoSelecionado == 'ESCOLA' && _cidadeSelecionada == "OUTRO" && (value == null || value.trim().isEmpty)) {
                   return 'Informe o nome da instituição';
                 }
@@ -454,7 +586,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
                     }
                     return null;
                 },
-            ),
+              ),
           // ------------------------------------------
 
           const SizedBox(height: 16.0),
@@ -474,9 +606,10 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     );
   }
 
-  // --- CONTEÚDO DO PASSO 2 (Comparando com "OUTRO") ---
   Widget _buildStep2Content() {
-    return Column(
+    // SEU CÓDIGO ORIGINAL PARA _buildStep2Content AQUI...
+    // (Nenhuma mudança necessária na estrutura dos widgets)
+     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _buildTextFormField( controller: _celularController, labelText: 'Número de celular para contato*', hintText: '(XX) XXXXX-XXXX', validator: (v) { if (v == null || v.trim().isEmpty) return 'Digite um número de celular'; if (!_phoneMaskFormatter.isFill()) return 'Número de celular incompleto'; return null; }, keyboardType: TextInputType.phone, inputFormatters: [_phoneMaskFormatter], ),
@@ -507,7 +640,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
             hintText: 'Descreva qual é o equipamento',
             // <<< COMPARA COM "OUTRO" >>>
             validator: (v) => (_equipamentoSelecionado == "OUTRO" && (v == null || v.trim().isEmpty)) ? 'Especifique o equipamento' : null,
-             maxLines: 2,
+              maxLines: 2,
           ),
         ],
         // --------------------------------------------------
@@ -524,7 +657,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
           value: _problemaSelecionado,
           items: _problemasComuns,
           onChanged: (v) {
-             setState(() {
+              setState(() {
                 _problemaSelecionado = v;
                 // <<< COMPARA COM "OUTRO" >>>
                 if (v != "OUTRO") {
@@ -537,12 +670,12 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         // --- CAMPO CONDICIONAL PARA PROBLEMA "OUTRO" ---
         // <<< COMPARA COM "OUTRO" >>>
         if (_problemaSelecionado == "OUTRO") ...[
-           const SizedBox(height: 16.0),
+            const SizedBox(height: 16.0),
           _buildTextFormField(
             controller: _problemaOutroController,
             labelText: 'Descreva o problema ocorrido*',
             hintText: 'Detalhe o que está acontecendo',
-             // <<< COMPARA COM "OUTRO" >>>
+              // <<< COMPARA COM "OUTRO" >>>
             validator: (v) => (_problemaSelecionado == "OUTRO" && (v == null || v.trim().isEmpty)) ? 'Descreva o problema' : null,
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
@@ -556,17 +689,17 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     );
   }
 
-  // Widgets Auxiliares (_buildDropdown, _buildTextFormField) permanecem iguais
- Widget _buildDropdown<T>({ required String labelText, required String hintText, required T? value, required List<T> items, required ValueChanged<T?> onChanged, FormFieldValidator<T>? validator, bool isExpanded = true, bool enabled = true,}) {
+   Widget _buildDropdown<T>({ required String labelText, required String hintText, required T? value, required List<T> items, required ValueChanged<T?> onChanged, FormFieldValidator<T>? validator, bool isExpanded = true, bool enabled = true,}) {
       final effectiveOnChanged = enabled && !_isLoading ? onChanged : null; final bool fieldEnabled = enabled && !_isLoading;
       return DropdownButtonFormField<T>( decoration: InputDecoration( labelText: labelText, hintText: hintText, /* Tema cuida do resto */ ), value: value, isExpanded: isExpanded, items: items.map((item) { return DropdownMenuItem<T>( value: item, child: Text(item.toString(), overflow: TextOverflow.ellipsis), ); }).toList(), onChanged: effectiveOnChanged, validator: fieldEnabled ? validator : null, // A validação só ocorre se habilitado
       style: TextStyle( color: fieldEnabled ? Theme.of(context).textTheme.titleMedium?.color : Theme.of(context).disabledColor),
       );
     }
 
-  Widget _buildTextFormField({ required TextEditingController controller, required String labelText, FormFieldValidator<String>? validator, int maxLines = 1, String? hintText, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters, Widget? suffixIcon, String? helperText, int helperMaxLines = 3, bool obscureText = false, TextCapitalization textCapitalization = TextCapitalization.none, }) {
+   Widget _buildTextFormField({ required TextEditingController controller, required String labelText, FormFieldValidator<String>? validator, int maxLines = 1, String? hintText, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters, Widget? suffixIcon, String? helperText, int helperMaxLines = 3, bool obscureText = false, TextCapitalization textCapitalization = TextCapitalization.none, }) {
       final bool fieldEnabled = !_isLoading;
       return TextFormField( controller: controller, enabled: fieldEnabled, decoration: InputDecoration( labelText: labelText, hintText: hintText, suffixIcon: suffixIcon, helperText: helperText, helperMaxLines: helperMaxLines, /* Tema cuida do resto */ ), maxLines: maxLines, validator: fieldEnabled ? validator : null, keyboardType: keyboardType, inputFormatters: inputFormatters ?? [], obscureText: obscureText, textCapitalization: textCapitalization, );
     }
+
 
 } // Fim da classe _NovoChamadoScreenState

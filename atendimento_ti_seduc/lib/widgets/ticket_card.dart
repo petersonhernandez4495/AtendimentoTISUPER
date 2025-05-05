@@ -1,9 +1,13 @@
 // lib/widgets/ticket_card.dart
 
 import 'package:flutter/material.dart';
-import '../config/theme/app_theme.dart'; // Garanta que este import está correto
+import 'package:firebase_auth/firebase_auth.dart'; // <-- Importar FirebaseAuth para User
+import '../config/theme/app_theme.dart';
+import '../services/chamado_service.dart'; // <-- Importar para kFieldAdminInativo
+import '/detalhes_chamado_screen.dart'; // <-- Importar tela de detalhes para navegação
 
 class TicketCard extends StatelessWidget {
+  // Campos de exibição existentes (recebidos do StreamBuilder/Query)
   final String titulo;
   final String prioridade;
   final String status;
@@ -12,41 +16,47 @@ class TicketCard extends StatelessWidget {
   final String chamadoId;
   final String? creatorPhone;
   final String? tecnicoResponsavel;
-  final VoidCallback? onTap;
-  final VoidCallback? onDelete;
+  final String cidade; // Mantido, usado no fallback ou tipo ESCOLA
+  final String instituicao; // Mantido, usado no fallback ou tipo ESCOLA
+  final String? tipoSolicitante;
+  final String? setorSuperintendencia;
+  final String? cidadeSuperintendencia;
 
-  // Campos de Localidade Originais (Primariamente para Escola)
-  final String cidade;
-  final String instituicao;
+  // <<< NOVOS CAMPOS NECESSÁRIOS >>>
+  final Map<String, dynamic> chamadoData; // Dados completos do documento
+  final User? currentUser; // Usuário logado para verificar permissão
+  final bool isAdmin; // Flag indicando se o usuário é admin
 
-  // <<< NOVOS CAMPOS ADICIONADOS >>>
-  final String? tipoSolicitante;       // Para saber qual localidade exibir
-  final String? setorSuperintendencia; // Para exibir no lugar da instituição
-  final String? cidadeSuperintendencia; // Para exibir no lugar da cidade
+  // Callbacks (inalterados)
+  // ATENÇÃO: O onTap interno agora controla a lógica de acesso.
+  // O VoidCallback? onTap passado externamente pode não ser mais necessário
+  // ou precisa ser usado com cuidado. Vamos removê-lo por enquanto para evitar confusão.
+  // final VoidCallback? onTap;
+  final VoidCallback? onDelete; // Manter se houver exclusão para admin
 
   const TicketCard({
     super.key,
-    // Campos existentes mantidos como required se sempre vierem
+    // Campos existentes
     required this.titulo,
     required this.prioridade,
     required this.status,
     required this.creatorName,
     required this.dataFormatada,
     required this.chamadoId,
-    // Campos de Escola podem ser opcionais se nem sempre vierem?
-    // Se um chamado SUPER nunca tiver 'cidade' e 'instituicao', torne-os opcionais 'String?'
-    // Por ora, mantendo como antes, mas idealmente deveriam ser opcionais.
-    required this.cidade,
-    required this.instituicao,
-    // Campos opcionais existentes
+    required this.cidade, // Manter ou tornar opcional 'String?'
+    required this.instituicao, // Manter ou tornar opcional 'String?'
     this.creatorPhone,
     this.tecnicoResponsavel,
-    this.onTap,
+    // this.onTap, // Removido temporariamente
     this.onDelete,
-    // <<< NOVOS PARÂMETROS OPCIONAIS >>>
     this.tipoSolicitante,
     this.setorSuperintendencia,
     this.cidadeSuperintendencia,
+
+    // <<< NOVOS PARÂMETROS OBRIGATÓRIOS >>>
+    required this.chamadoData,
+    required this.currentUser,
+    required this.isAdmin,
   });
 
   @override
@@ -60,45 +70,86 @@ class TicketCard extends StatelessWidget {
     final Color corPrioridade = AppTheme.getPriorityColor(prioridade) ?? colorScheme.primary;
     final BorderRadius borderRadius = BorderRadius.circular(12.0);
 
+    // <<< VERIFICA ESTADO DE INATIVIDADE >>>
+    final bool isInativo = chamadoData[kFieldAdminInativo] ?? false;
+
     // Define quais informações de localidade mostrar baseado no tipo
-    String? localPrincipalLabel; // Ex: Instituição ou Setor
-    String? localPrincipalValue;
-    IconData? localPrincipalIcon;
+    // (Lógica existente mantida)
+     String? localPrincipalLabel; // Ex: Instituição ou Setor
+     String? localPrincipalValue;
+     IconData? localPrincipalIcon;
+     String? localSecundarioLabel; // Ex: Cidade
+     String? localSecundarioValue;
+     IconData? localSecundarioIcon;
 
-    String? localSecundarioLabel; // Ex: Cidade
-    String? localSecundarioValue;
-    IconData? localSecundarioIcon;
-
-    if (tipoSolicitante == 'ESCOLA') {
-      localPrincipalIcon = Icons.business_outlined;
-      localPrincipalValue = instituicao;
-      localSecundarioIcon = Icons.location_city_outlined;
-      localSecundarioValue = cidade;
-    } else if (tipoSolicitante == 'SUPERINTENDENCIA') {
-      localPrincipalIcon = Icons.meeting_room_outlined; // Ícone para Setor
-      localPrincipalValue = setorSuperintendencia;
-      localSecundarioIcon = Icons.location_city_rounded; // Ícone para Cidade SUPER
-      localSecundarioValue = cidadeSuperintendencia;
-    } else {
-      // Fallback se tipo for desconhecido ou nulo (mostrar info de escola por padrão?)
-      localPrincipalIcon = Icons.business_outlined;
-      localPrincipalValue = instituicao;
-      localSecundarioIcon = Icons.location_city_outlined;
-      localSecundarioValue = cidade;
-    }
-
-    // Altura mínima pode ser menos necessária agora, ou ajustada
-    // A altura vai variar um pouco dependendo dos campos exibidos
-    // const double alturaMinimaCard = 220.0;
+     if (tipoSolicitante == 'ESCOLA') {
+       localPrincipalIcon = Icons.business_outlined;
+       localPrincipalValue = instituicao;
+       localSecundarioIcon = Icons.location_city_outlined;
+       localSecundarioValue = cidade;
+     } else if (tipoSolicitante == 'SUPERINTENDENCIA') {
+       localPrincipalIcon = Icons.meeting_room_outlined; // Ícone para Setor
+       localPrincipalValue = setorSuperintendencia;
+       localSecundarioIcon = Icons.location_city_rounded; // Ícone para Cidade SUPER
+       localSecundarioValue = cidadeSuperintendencia;
+     } else {
+       // Fallback
+       localPrincipalIcon = Icons.business_outlined;
+       localPrincipalValue = instituicao;
+       localSecundarioIcon = Icons.location_city_outlined;
+       localSecundarioValue = cidade;
+     }
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: borderRadius),
       elevation: 1.5,
-      // Removido ConstrainedBox para altura dinâmica, adicione se necessário
       child: InkWell(
-        onTap: onTap,
+        // <<< LÓGICA DE ACESSO NO onTap >>>
+        onTap: () {
+          if (isAdmin) {
+            // Admin sempre pode acessar os detalhes
+             print("Admin acessando detalhes de $chamadoId (Inativo: $isInativo)");
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DetalhesChamadoScreen( // Certifique-se que o nome da tela está correto
+                  chamadoId: chamadoId,
+                  // Opcional: Passar dados já carregados para evitar nova leitura inicial
+                  // chamadoData: chamadoData,
+                ),
+              ),
+            );
+          } else {
+            // É Requisitante (ou outro não-admin)
+            if (isInativo) {
+              // Chamado está inativo, bloquear acesso
+              print("Requisitante bloqueado de acessar detalhes de $chamadoId (Inativo)");
+              ScaffoldMessenger.of(context).removeCurrentSnackBar(); // Remove snackbar anterior se houver
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Este chamado está inativo e não pode ser acessado.'),
+                  backgroundColor: Colors.orange.shade800,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+              // NÃO NAVEGAR
+            } else {
+              // Chamado está ativo, permitir acesso
+              print("Requisitante acessando detalhes de $chamadoId (Ativo)");
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetalhesChamadoScreen(
+                    chamadoId: chamadoId,
+                    // chamadoData: chamadoData, // Opcional
+                 ),
+                ),
+              );
+            }
+          }
+        }, // Fim onTap
         borderRadius: borderRadius,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -117,42 +168,57 @@ class TicketCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.start, // Alinha ao topo
                   children: [
-                    // PARTE SUPERIOR: Título e Excluir (inalterado)
+                    // PARTE SUPERIOR: Título, TAG INATIVO e Excluir
                     Row(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Padding(
-                           padding: const EdgeInsets.only(top: 3.0),
-                           child: CircleAvatar(
-                             radius: 14,
-                             backgroundColor: corPrioridade.withOpacity(0.1),
-                             child: Icon(Icons.report_problem_outlined, size: 15, color: corPrioridade),
-                           ),
-                         ),
-                         const SizedBox(width: 10),
-                         Expanded(
-                           child: Text(
-                             titulo,
-                             style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, height: 1.3),
-                             maxLines: 3,
-                             overflow: TextOverflow.ellipsis,
-                           ),
-                         ),
-                         if (onDelete != null)
-                           InkWell(
-                             onTap: onDelete,
-                             borderRadius: BorderRadius.circular(20),
-                             child: Padding(
-                               padding: const EdgeInsets.all(4.0),
-                               child: Icon(Icons.close_rounded, color: AppTheme.kErrorColor.withOpacity(0.7), size: 18),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding( // Ícone de Prioridade/Problema
+                            padding: const EdgeInsets.only(top: 3.0),
+                            child: CircleAvatar(
+                              radius: 14,
+                              backgroundColor: corPrioridade.withOpacity(0.1),
+                              child: Icon(Icons.report_problem_outlined, size: 15, color: corPrioridade),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded( // Título
+                            child: Text(
+                              titulo,
+                              style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, height: 1.3),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          // <<< TAG INATIVO (Visível para todos) >>>
+                          if (isInativo)
+                             Padding(
+                               padding: const EdgeInsets.only(left: 8.0), // Espaço antes da tag
+                               child: Chip(
+                                 label: const Text('INATIVO', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                 backgroundColor: Colors.red.shade700,
+                                 padding: EdgeInsets.zero,
+                                 labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                                 visualDensity: VisualDensity.compact,
+                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                 side: BorderSide.none,
+                               ),
                              ),
-                           ),
-                         ],
-                     ),
+                           // Botão Excluir (se aplicável)
+                          if (onDelete != null)
+                             InkWell(
+                               onTap: onDelete,
+                               borderRadius: BorderRadius.circular(20),
+                               child: Padding(
+                                 padding: const EdgeInsets.all(4.0),
+                                 child: Icon(Icons.close_rounded, color: AppTheme.kErrorColor.withOpacity(0.7), size: 18),
+                               ),
+                             ),
+                          ],
+                        ),
                     const SizedBox(height: 14.0),
 
                     // PARTE DO MEIO: Prioridade e Status (inalterado)
-                    Row(
+                     Row(
                        children: [
                          Expanded(
                            child: Row(
@@ -160,7 +226,7 @@ class TicketCard extends StatelessWidget {
                              children: [
                                Icon(Icons.label_important_outline, size: 13, color: textoSecundarioCor),
                                const SizedBox(width: 4),
-                               Text('', style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor)),
+                               //Text('Prioridade:', style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor)),
                                const SizedBox(width: 4),
                                Flexible(
                                  child: Text(
@@ -197,53 +263,50 @@ class TicketCard extends StatelessWidget {
                     Divider(height: 1, thickness: 0.5, color: theme.dividerColor.withOpacity(0.5)),
                     const SizedBox(height: 12.0),
 
-                    // ================================================
-                    // INFORMAÇÕES INFERIORES (COM LÓGICA CONDICIONAL)
-                    // ================================================
-
-                    // Linha 1: Criador e Data (inalterado)
-                    Row(
+                    // INFORMAÇÕES INFERIORES (COM LÓGICA CONDICIONAL - inalterado)
+                    // Linha 1: Criador e Data
+                     Row(
                        crossAxisAlignment: CrossAxisAlignment.center,
                        children: [
-                           Expanded(
-                             child: Row(
-                               mainAxisSize: MainAxisSize.min,
-                               children: [
-                                 Icon(Icons.person_outline, size: 13, color: textoSecundarioCor),
-                                 const SizedBox(width: 4),
-                                 Flexible(
-                                   child: Text(
-                                     creatorName,
-                                     style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
-                                     maxLines: 1,
-                                     overflow: TextOverflow.ellipsis,
-                                   ),
-                                 ),
-                               ],
-                             ),
-                           ),
-                           const SizedBox(width: 10),
-                           Row(
+                         Expanded(
+                           child: Row(
                              mainAxisSize: MainAxisSize.min,
                              children: [
-                               Icon(Icons.calendar_today_outlined, size: 11, color: textoSecundarioCor),
+                               Icon(Icons.person_outline, size: 13, color: textoSecundarioCor),
                                const SizedBox(width: 4),
-                               Text(
-                                 dataFormatada,
-                                 style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
-                                 maxLines: 1,
-                                 overflow: TextOverflow.ellipsis,
+                               Flexible(
+                                 child: Text(
+                                   creatorName,
+                                   style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
+                                   maxLines: 1,
+                                   overflow: TextOverflow.ellipsis,
+                                 ),
                                ),
                              ],
                            ),
-                         ],
+                         ),
+                         const SizedBox(width: 10),
+                         Row(
+                           mainAxisSize: MainAxisSize.min,
+                           children: [
+                             Icon(Icons.calendar_today_outlined, size: 11, color: textoSecundarioCor),
+                             const SizedBox(width: 4),
+                             Text(
+                               dataFormatada,
+                               style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
+                               maxLines: 1,
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                           ],
+                         ),
+                       ],
                      ),
                     const SizedBox(height: 6.0),
 
-                    // --- Linha 2: Instituição OU Setor (CONDICIONAL) ---
+                    // Linha 2: Instituição OU Setor (CONDICIONAL)
                     if (localPrincipalValue != null && localPrincipalValue.isNotEmpty && localPrincipalIcon != null)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 6.0), // Adiciona espaço SÓ se for exibido e antes da linha 3
+                        padding: const EdgeInsets.only(bottom: 6.0),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -261,23 +324,24 @@ class TicketCard extends StatelessWidget {
                         ),
                       ),
 
-                    // --- Linha 3: Cidade (ESCOLA ou SUPER - CONDICIONAL) ---
+                    // Linha 3: Cidade (ESCOLA ou SUPER - CONDICIONAL)
                     if (localSecundarioValue != null && localSecundarioValue.isNotEmpty && localSecundarioIcon != null)
-                      Row(
+                       Row(
                          crossAxisAlignment: CrossAxisAlignment.center,
                          children: [
-                            Icon(localSecundarioIcon, size: 13, color: textoSecundarioCor),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                localSecundarioValue,
-                                style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                           Icon(localSecundarioIcon, size: 13, color: textoSecundarioCor),
+                           const SizedBox(width: 6),
+                           Expanded(
+                             child: Text(
+                               localSecundarioValue,
+                               style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
+                               maxLines: 1,
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                           ),
+                         ],
                        ),
+
 
                     // Linha 4 & 5: Telefone e Técnico (Opcional - Coluna - inalterado)
                     if ((creatorPhone != null && creatorPhone!.isNotEmpty) || (tecnicoResponsavel != null && tecnicoResponsavel!.isNotEmpty))

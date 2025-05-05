@@ -1,4 +1,3 @@
-// lib/detalhes_chamado_screen.dart
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -89,17 +88,18 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     }
   }
 
+
   Future<void> _mostrarDialogoEdicao(Map<String, dynamic> dadosAtuais) async {
     final ThemeData theme = Theme.of(context);
     final formKeyDialog = GlobalKey<FormState>();
     final DateFormat dateFormat = DateFormat('dd/MM/yyyy');
-    final scaffoldMessenger = ScaffoldMessenger.of(context); // Para SnackBar
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     String statusSelecionado = dadosAtuais[kFieldStatus] as String? ?? kListaStatusChamado.first;
     String prioridadeSelecionada = dadosAtuais[kFieldPrioridade] as String? ?? _listaPrioridades.first;
     String tecnicoResponsavel = dadosAtuais[kFieldTecnicoResponsavel] as String? ?? '';
     final solutionControllerDialog = TextEditingController(text: dadosAtuais[kFieldSolucao] as String? ?? '');
-    bool showMandatoryFields = statusSelecionado == kStatusSolucionado; // Visibilidade inicial
+    bool showMandatoryFields = statusSelecionado == kStatusSolucionado;
     DateTime? _selectedAtendimentoDate;
     final Timestamp? currentAtendimentoTs = dadosAtuais[kFieldDataAtendimento] as Timestamp?;
     if (currentAtendimentoTs != null) { _selectedAtendimentoDate = currentAtendimentoTs.toDate(); }
@@ -114,8 +114,8 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
 
     bool? confirmou = await showDialog<bool>(
       context: context,
-      barrierDismissible: false, // Impede fechar clicando fora durante edição
-      builder: (BuildContext dialogContext) { // Usa dialogContext para o SnackBar
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -133,8 +133,6 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                       const SizedBox(height: 15),
                       TextFormField( initialValue: tecnicoResponsavel, onChanged: (value) => tecnicoResponsavel = value, decoration: const InputDecoration(labelText: 'Técnico Responsável (Opcional)'), ),
                       const SizedBox(height: 15),
-
-                      // --- Campos Condicionais para Solucionado ---
                       Visibility(
                         visible: showMandatoryFields,
                         child: Column(
@@ -155,44 +153,28 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                            ]
                         )
                       ),
-                      // --- Fim Campos Condicionais ---
-
                     ],
                   ),
                 ),
               ),
               actions: <Widget>[
-                TextButton( child: const Text('Cancelar'), onPressed: () => Navigator.of(dialogContext).pop(false), ),
-                ElevatedButton(
+                 TextButton( child: const Text('Cancelar'), onPressed: () => Navigator.of(dialogContext).pop(false), ),
+                 ElevatedButton(
                    child: const Text('Salvar'),
                    onPressed: () {
-                     // 1. Valida o formulário (verifica descrição se visível)
-                     if (!formKeyDialog.currentState!.validate()) {
-                        return; // Para se a validação básica falhar
-                     }
-                     // 2. Verifica condição especial para 'Solucionado'
+                     if (!formKeyDialog.currentState!.validate()) { return; }
                      if (statusSelecionado == kStatusSolucionado) {
                         final isDescriptionEmpty = solutionControllerDialog.text.trim().isEmpty;
                         final isDateMissing = _selectedAtendimentoDate == null;
-
                         if (isDescriptionEmpty || isDateMissing) {
-                            // Usa o ScaffoldMessenger do CONTEXTO DO DIÁLOGO
-                            ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Para status "Solucionado", a descrição e a data de atendimento são obrigatórias.'),
-                                backgroundColor: Colors.orange,
-                                behavior: SnackBarBehavior.floating, // Para aparecer dentro do dialog
-                                margin: const EdgeInsets.all(10),
-                              )
-                            );
-                            return; // Não fecha o diálogo
+                            ScaffoldMessenger.of(dialogContext).showSnackBar( const SnackBar( content: Text('Para status "Solucionado", descrição e data são obrigatórias.'), backgroundColor: Colors.orange, behavior: SnackBarBehavior.floating, margin: EdgeInsets.all(10),) );
+                            return;
                         }
                      }
-                     // 3. Se passou em tudo, fecha o diálogo confirmando
                      Navigator.of(dialogContext).pop(true);
                    },
-                ),
-              ],
+                 ),
+               ],
             );
           }
         );

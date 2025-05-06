@@ -3,7 +3,7 @@ description: "A new Flutter project."
 publish_to: 'none'
 
 # Ajuste a versão conforme necessário para seu próximo release
-version: 2.0.1+2
+version: 2.0.2+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -56,7 +56,7 @@ msix_config:
   publisher_display_name: Sua Organização ou Nome
   publisher: CN=AtendimentoTISUPERTeste
   identity_name: SeuDominio.AtendimentoTISeduc
-  msix_version: 2.0.1.0 # Deve corresponder à 'version' acima (ex: 2.0.0+1 -> 2.0.0.1)
+  msix_version: 2.0.2.1 # Deve corresponder à 'version' acima (ex: 2.0.0+1 -> 2.0.0.1)
   logo_path: assets/images/seu_logo.png # Caminho RELATIVO é recomendado
   certificate_path: C:\Users\Comum\Documents\GitHub\AtendimentoTISUPER\certificado_teste.pfx # <-- CUIDADO: Caminho absoluto. Relativo é melhor (ex: certs/certificado_teste.pfx)
   certificate_password: 100senha

@@ -31,7 +31,7 @@ dependencies:
   table_calendar: ^3.1.1
   # --- NOVAS DEPENDÊNCIAS PARA OPÇÃO 1 DE UPDATE ---
   http: ^1.1.0          # Ou versão mais recente (para buscar JSON)
-  package_info_plus: ^5.0.1 # Ou versão mais recente (para pegar versão atual)
+  package_info_plus: ^8.3.0 # Ou versão mais recente (para pegar versão atual)
   url_launcher: ^6.1.14   # Ou versão mais recente (para abrir link download)
   pub_semver: ^2.1.4      # Ou versão mais recente (para comparar versões)
   # -------------------------------------------------

@@ -72,12 +72,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       print('[UpdateCheck] Versão Instalada: $currentVersion');
 
       // 2. Buscar informações da versão online
+      // 2. Buscar informações da versão online
       final response = await http.get(Uri.parse(versionUrl));
       if (response.statusCode == 200) {
+        
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
         final String? latestVersionStr = jsonResponse['latestSemanticVersion'] as String?;
         final String? releaseNotes = jsonResponse['releaseNotes'] as String?;
         final String? downloadUrl = jsonResponse['downloadUrl'] as String?;
+       
 
         if (latestVersionStr == null || downloadUrl == null) {
           print('[UpdateCheck] Erro: JSON de versão inválido ou incompleto.');

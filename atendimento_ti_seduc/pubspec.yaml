@@ -2,7 +2,7 @@ name: atendimento_ti_seduc
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0.0 # <-- Ajuste conforme sua versão atual
+version: 1.0.0+1 # <-- Ajuste conforme sua versão atual
 
 environment:
   sdk: '>=3.0.0 <4.0.0' # <-- Use um range mais flexível ou a sua versão exata
@@ -57,6 +57,6 @@ msix_config:
   # languages: # Opcional: Especifique idiomas suportados
   #   - pt-br
   # architecture: x64 # Opcional: Especifique arquitetura (x64, arm64)
-  certificate_path: C:\Users\Lenovo\Documents\GitHub\AtendimentoTISUPER\certificado_teste.pfx # Opcional: Caminho para o certificado .pfx para assinar
+  certificate_path: C:\Users\Comum\Documents\GitHub\AtendimentoTISUPER\certificado_teste.pfx # Opcional: Caminho para o certificado .pfx para assinar
   certificate_password: 100senha # Opcional: Senha do certificado
 # --- FIM DA CONFIGURAÇÃO MSIX ---

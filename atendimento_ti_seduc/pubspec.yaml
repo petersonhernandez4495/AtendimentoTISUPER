@@ -49,7 +49,7 @@ flutter:
 msix_config:
   display_name: Atendimento TI SEDUC # Nome que aparece para o usuário
   publisher_display_name: Sua Organização ou Nome # Nome do publicador que aparece
-  publisher: CN=Teste # IMPORTANTE: ID do Publicador. Para testes, use "CN=Teste". Para produção, use EXATAMENTE o "Subject" do seu certificado de assinatura (ex: "CN=Sua Empresa LTDA, O=Sua Empresa LTDA, L=Sua Cidade, S=Seu Estado, C=BR")
+  publisher: CN=AtendimentoTISUPERTeste # IMPORTANTE: ID do Publicador. Para testes, use "CN=Teste". Para produção, use EXATAMENTE o "Subject" do seu certificado de assinatura (ex: "CN=Sua Empresa LTDA, O=Sua Empresa LTDA, L=Sua Cidade, S=Seu Estado, C=BR")
   identity_name: SeuDominio.AtendimentoTISeduc # Identificador único, geralmente no formato reverso de domínio
   msix_version: 0.0.0.9 # Versão do MSIX (deve ter 4 partes: Major.Minor.Build.Revision). Incremente a cada build. Pode basear-se na 'version' acima (ex: 1.0.0+1 -> 1.0.0.1)
   logo_path: assets/images/seu_logo.png # << CAMINHO RELATIVO para o logo (ex: dentro da pasta assets). Use barras normais '/'

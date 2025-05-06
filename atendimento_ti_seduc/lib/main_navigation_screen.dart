@@ -58,9 +58,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _verificarAtualizacoesApp() async {
     print('[UpdateCheck] Verificando atualizações...');
     // !!! SUBSTITUA PELA URL RAW DO SEU versao.json NO GITHUB !!!
-    final String versionUrl = 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/appcast.xml';
+    final String versionUrl = 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/versao.json';
 
-    if (versionUrl == 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/appcast.xml' || versionUrl.isEmpty) {
+    if (versionUrl == 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/versao.json' || versionUrl.isEmpty) {
       print('[UpdateCheck] ERRO: URL de versão não configurada!');
       return;
     }
@@ -72,15 +72,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       print('[UpdateCheck] Versão Instalada: $currentVersion');
 
       // 2. Buscar informações da versão online
-      // 2. Buscar informações da versão online
       final response = await http.get(Uri.parse(versionUrl));
       if (response.statusCode == 200) {
-        
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
         final String? latestVersionStr = jsonResponse['latestSemanticVersion'] as String?;
         final String? releaseNotes = jsonResponse['releaseNotes'] as String?;
         final String? downloadUrl = jsonResponse['downloadUrl'] as String?;
-       
 
         if (latestVersionStr == null || downloadUrl == null) {
           print('[UpdateCheck] Erro: JSON de versão inválido ou incompleto.');

@@ -57,9 +57,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<void> _initializeAutoUpdater() async {
-    String feedURL = 'COLE_AQUI_SUA_URL_RAW_DO_APPCAST_XML'; // <<< SUBSTITUA!
+    String feedURL = 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/appcast.xml?token=GHSAT0AAAAAADCHIWS436YNPEYWBOCUIPTW2AZNSOQ'; // <<< SUBSTITUA!
 
-    if (feedURL == 'COLE_AQUI_SUA_URL_RAW_DO_APPCAST_XML' || feedURL.isEmpty) {
+    if (feedURL == 'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/appcast.xml?token=GHSAT0AAAAAADCHIWS436YNPEYWBOCUIPTW2AZNSOQ' || feedURL.isEmpty) {
        print("[AutoUpdater] ERRO: Feed URL não configurada!");
        return;
     }

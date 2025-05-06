@@ -3,10 +3,10 @@
 <channel>
 <title>Atendimento TI SEDUC</title> <language>pt-br</language>
 <item>
-<title>Versão 1.0.0</title> <sparkle:releaseNotesLink>https://github.com/petersonhernandez4495/AtendimentoTISUPER/releases/download/Atualiza%C3%A7%C3%A3o/atendimento_ti_seduc.msix</sparkle:releaseNotesLink>
+<title>Versão 1.0.1.1</title> <sparkle:releaseNotesLink>https://github.com/petersonhernandez4495/AtendimentoTISUPER/releases/download/v1.0.1.1/atendimento_ti_seduc.msix</sparkle:releaseNotesLink>
 <pubDate>Tue, 07 May 2025 10:00:00 +0000</pubDate> <enclosure
-url="https://github.com/petersonhernandez4495/AtendimentoTISUPER/releases/download/Atualiza%C3%A7%C3%A3o/atendimento_ti_seduc.msix"
-sparkle:version="1.0.0.3" sparkle:os="windows"
+url="https://github.com/petersonhernandez4495/AtendimentoTISUPER/releases/download/v1.0.1.1/atendimento_ti_seduc.msix"
+sparkle:version="1.0.1.1" sparkle:os="windows"
 length="0" type="application/octet-stream" />
 </item>
 </channel>

@@ -2,10 +2,11 @@ name: atendimento_ti_seduc
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.0.0+1 # <-- Ajuste conforme sua versão atual
+# Ajuste a versão conforme necessário para seu próximo release
+version: 2.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0' # <-- Use um range mais flexível ou a sua versão exata
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -15,26 +16,31 @@ dependencies:
   mask_text_input_formatter: ^2.9.0
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
-  firebase_storage: ^12.4.5 # Versão verificada
-  firebase_core: ^3.13.0    # Versão verificada
-  cloud_firestore: ^5.6.7  # Versão verificada
-  firebase_auth: ^5.5.3   # Versão verificada
-  intl: ^0.19.0           # Use a versão mais recente compatível
-  auto_updater: ^1.0.0      # Use a versão mais recente compatível
-  signature: ^6.0.0         # Use a versão mais recente compatível
-  pdf: ^3.10.8              # Use a versão mais recente compatível
-  path_provider: ^2.1.3     # Use a versão mais recente compatível
-  share_plus: ^11.0.0        # Use a versão mais recente compatível
-  open_filex: ^4.4.0        # Use a versão mais recente compatível
-  audioplayers: ^6.0.0        # Verifique a versão compatível
-  table_calendar: ^3.1.1    # Verifique a versão compatível
-  # msix: ^3.16.9 # Movido para dev_dependencies
+  firebase_storage: ^12.4.5
+  firebase_core: ^3.13.0
+  cloud_firestore: ^5.6.7
+  firebase_auth: ^5.5.3
+  intl: ^0.19.0
+  # auto_updater: ^1.0.0 # <<< REMOVIDO >>>
+  signature: ^6.0.0 # Mantido para assinatura no perfil
+  pdf: ^3.10.8
+  path_provider: ^2.1.3
+  share_plus: ^11.0.0
+  open_filex: ^4.4.0
+  audioplayers: ^6.0.0
+  table_calendar: ^3.1.1
+  # --- NOVAS DEPENDÊNCIAS PARA OPÇÃO 1 DE UPDATE ---
+  http: ^1.1.0          # Ou versão mais recente (para buscar JSON)
+  package_info_plus: ^5.0.1 # Ou versão mais recente (para pegar versão atual)
+  url_launcher: ^6.1.14   # Ou versão mais recente (para abrir link download)
+  pub_semver: ^2.1.4      # Ou versão mais recente (para comparar versões)
+  # -------------------------------------------------
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0 # Use a versão mais recente compatível
-  msix: ^3.16.9 # Pacote para criar MSIX é uma dependência de desenvolvimento
+  flutter_lints: ^3.0.0 # Use a versão mais recente compatível
+  msix: ^3.16.9
 
 flutter:
   uses-material-design: true
@@ -43,20 +49,14 @@ flutter:
     - assets/images/
   # fonts:
   #   - family: Schyler
-  #   # ... (configuração de fontes)
- 
-# --- ADICIONE A CONFIGURAÇÃO MSIX AQUI ---
+  #   # ...
+
 msix_config:
-  display_name: Atendimento TI SEDUC # Nome que aparece para o usuário
-  publisher_display_name: Sua Organização ou Nome # Nome do publicador que aparece
-  publisher: CN=AtendimentoTISUPERTeste # IMPORTANTE: ID do Publicador. Para testes, use "CN=Teste". Para produção, use EXATAMENTE o "Subject" do seu certificado de assinatura (ex: "CN=Sua Empresa LTDA, O=Sua Empresa LTDA, L=Sua Cidade, S=Seu Estado, C=BR")
-  identity_name: SeuDominio.AtendimentoTISeduc # Identificador único, geralmente no formato reverso de domínio
-  msix_version: 2.0.0.1 # Versão do MSIX (deve ter 4 partes: Major.Minor.Build.Revision). Incremente a cada build. Pode basear-se na 'version' acima (ex: 1.0.0+1 -> 1.0.0.1)
-  logo_path: assets/images/seu_logo.png # << CAMINHO RELATIVO para o logo (ex: dentro da pasta assets). Use barras normais '/'
-  # capabilities: internetClient # Adicione capabilities necessárias (ex: acesso à internet)
-  # languages: # Opcional: Especifique idiomas suportados
-  #   - pt-br
-  # architecture: x64 # Opcional: Especifique arquitetura (x64, arm64)
-  certificate_path: C:\Users\Comum\Documents\GitHub\AtendimentoTISUPER\certificado_teste.pfx # Opcional: Caminho para o certificado .pfx para assinar
-  certificate_password: 100senha # Opcional: Senha do certificado
-# --- FIM DA CONFIGURAÇÃO MSIX ---
+  display_name: Atendimento TI SEDUC
+  publisher_display_name: Sua Organização ou Nome
+  publisher: CN=AtendimentoTISUPERTeste
+  identity_name: SeuDominio.AtendimentoTISeduc
+  msix_version: 2.0.0.1 # Deve corresponder à 'version' acima (ex: 2.0.0+1 -> 2.0.0.1)
+  logo_path: assets/images/seu_logo.png # Caminho RELATIVO é recomendado
+  certificate_path: C:\Users\Comum\Documents\GitHub\AtendimentoTISUPER\certificado_teste.pfx # <-- CUIDADO: Caminho absoluto. Relativo é melhor (ex: certs/certificado_teste.pfx)
+  certificate_password: 100senha

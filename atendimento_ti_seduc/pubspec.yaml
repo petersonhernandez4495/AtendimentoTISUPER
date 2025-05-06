@@ -2,7 +2,7 @@ name: atendimento_ti_seduc
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+2 # <-- Ajuste conforme sua versão atual
+version: 1.0.0.0 # <-- Ajuste conforme sua versão atual
 
 environment:
   sdk: '>=3.0.0 <4.0.0' # <-- Use um range mais flexível ou a sua versão exata

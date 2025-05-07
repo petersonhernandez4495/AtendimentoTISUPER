@@ -1,10 +1,12 @@
+// lib/config/theme/app_theme.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   AppTheme._(); 
 
-  static const Color kWinBackground = Color(0xFFD3D3D3); // Exemplo de cinza mais escuro
+  static const Color kWinBackground = Color(0xFFD3D3D3); 
   static const Color kWinSurface = Color(0xFFFFFFFF);   
   static const Color kWinPrimaryText = Color(0xFF201F1E); 
   static const Color kWinSecondaryText = Color(0xFF555555); 
@@ -14,6 +16,9 @@ class AppTheme {
   static const Color kWinInputFillOpaque = Color(0xFFFFFFFF); 
   static const Color kWinDivider = Color(0xFFD1D1D1);    
   static const Color kWinLighterAccent = Color(0xFF5094E0); 
+
+  // Nova cor para o status "Finalizado"
+  static const Color kWinStatusFinalizadoBackground = Color(0xFF616161); // Cinza Escuro (Material Grey 700)
 
   static const Color kBackgroundGradientStart = kWinBackground;
   static const Color kBackgroundGradientEnd = kWinBackground;
@@ -185,12 +190,16 @@ class AppTheme {
         return Colors.orange.shade700;
       case 'pendente':
         return Colors.deepPurple.shade400; 
-      case 'solucionado': // ATUALIZADO PARA 'solucionado'
+      case 'solucionado': // Mantido para o fluxo do requerente
         return Colors.green.shade600;
-      case 'resolvido': // Mantido caso algum lugar ainda use, mas priorize 'solucionado'
-        return Colors.green.shade600;
+      case 'resolvido': // Pode ser um alias de Solucionado ou um passo intermediário
+        return Colors.green.shade600; 
+      case 'finalizado': // NOVO STATUS PARA ADMIN
+        return kWinStatusFinalizadoBackground; // Cinza Escuro
       case 'fechado':
-        return Colors.grey.shade700;
+        return Colors.grey.shade700; // Um cinza um pouco diferente de finalizado
+      case 'cancelado':
+        return Colors.red.shade400;
       default:
         return Colors.grey.shade500;
     }

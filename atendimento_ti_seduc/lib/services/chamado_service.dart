@@ -1,9 +1,10 @@
+// lib/services/chamado_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-// Constantes Globais de Campos e Coleções
+// ... (suas constantes kField... existentes)
 const String kCollectionChamados = 'chamados';
 const String kFieldTipoSolicitante = 'tipo_solicitante';
 const String kFieldNomeSolicitante = 'nome_solicitante';
@@ -25,7 +26,7 @@ const String kFieldCidadeSuperintendencia = 'cidade_superintendencia';
 const String kFieldStatus = 'status';
 const String kFieldPrioridade = 'prioridade';
 const String kFieldTecnicoResponsavel = 'tecnico_responsavel';
-const String kFieldTecnicoUid = 'tecnicoUid'; // UID do técnico que efetivamente trabalhou/solucionou
+const String kFieldTecnicoUid = 'tecnicoUid';
 const String kFieldSolucao = 'solucao';
 const String kFieldAuthUserDisplay = 'authUserDisplayName';
 const String kFieldDataCriacao = 'data_criacao';
@@ -42,13 +43,19 @@ const String kFieldAdminFinalizouData = 'adminFinalizouData';
 const String kFieldAdminFinalizouUid = 'adminFinalizouUid';
 const String kFieldAdminFinalizouNome = 'adminFinalizouNome';
 
-// Constante padrão para o status "Solucionado"
 const String kStatusPadraoSolicionado = 'Solucionado';
+const String kStatusFinalizado = 'Finalizado'; // NOVO STATUS
 
 class ChamadoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final _phoneMaskFormatter = MaskTextInputFormatter( mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')}, );
+
+  // ... (método criarChamado - garanta que inicializa kStatus com 'Aberto')
+  // ... (método definirInatividadeAdministrativa)
+  // ... (método atualizarDetalhesAdmin - garanta que se o status mudar de Solucionado/Finalizado para outro, limpe os campos de adminFinalizou)
+  // ... (método adicionarComentarioSistema)
+  // ... (método confirmarServicoRequerente)
 
   Future<String> criarChamado({
     required String? tipoSelecionado,
@@ -69,7 +76,7 @@ class ChamadoService {
     required String? setorSuperSelecionado, 
     required String cidadeSuper, 
     required String tecnicoResponsavel,
-    String? tecnicoUid,
+    String? tecnicoUid, 
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Usuário não autenticado.');
@@ -168,18 +175,26 @@ class ChamadoService {
       if (prioridade != null) kFieldPrioridade: prioridade,
       if (tecnicoResponsavel != null) kFieldTecnicoResponsavel: tecnicoResponsavel.trim().isEmpty ? null : tecnicoResponsavel.trim(),
       if (tecnicoUid != null && tecnicoUid.trim().isNotEmpty) kFieldTecnicoUid: tecnicoUid.trim() 
-      else if ((tecnicoResponsavel == null || tecnicoResponsavel.trim().isEmpty) && (tecnicoUid == null || tecnicoUid.trim().isEmpty)) kFieldTecnicoUid: FieldValue.delete(), // Remove se o nome e UID do técnico forem removidos/nulos
+      else if ((tecnicoResponsavel == null || tecnicoResponsavel.trim().isEmpty) && (tecnicoUid == null || tecnicoUid.trim().isEmpty)) kFieldTecnicoUid: FieldValue.delete(),
       
       kFieldSolucao: solucao,
       kFieldDataAtendimento: dataAtendimento,
     };
 
-    if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()) {
+    // Se o status NÃO for Solucionado OU Finalizado, limpa as flags de admin
+    if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase() && status.toLowerCase() != kStatusFinalizado.toLowerCase()) {
         dataToUpdate[kFieldAdminFinalizou] = false;
         dataToUpdate[kFieldAdminFinalizouData] = null;
         dataToUpdate[kFieldAdminFinalizouUid] = null;
         dataToUpdate[kFieldAdminFinalizouNome] = null;
     }
+    // Se o status for alterado para algo diferente de Solucionado, também limpar confirmação do requerente
+    if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()) {
+        dataToUpdate[kFieldRequerenteConfirmou] = false;
+        dataToUpdate[kFieldRequerenteConfirmouData] = null;
+        dataToUpdate[kFieldRequerenteConfirmouUid] = null;
+    }
+
 
     try {
       await docRef.update(dataToUpdate);
@@ -238,6 +253,7 @@ class ChamadoService {
         kFieldRequerenteConfirmouData: FieldValue.serverTimestamp(),
         kFieldRequerenteConfirmouUid: currentUser.uid, 
         kFieldDataAtualizacao: FieldValue.serverTimestamp(),
+        // Não muda o status aqui, apenas confirma. A mudança para "Finalizado" é feita pelo admin.
       });
 
       final String nomeConfirmador = currentUser.displayName?.trim().isNotEmpty ?? false
@@ -270,6 +286,12 @@ class ChamadoService {
       if (!requerenteJaConfirmou) {
         throw Exception('A confirmação do requerente é necessária antes da finalização pelo administrador.');
       }
+      
+      // Verifica se o status é "Solucionado" antes de permitir a finalização pelo admin
+      final String statusAtual = chamadoData[kFieldStatus] as String? ?? '';
+      if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()){
+          throw Exception('O chamado precisa estar com status "$kStatusPadraoSolicionado" para ser finalizado pelo administrador.');
+      }
 
       final bool adminJaFinalizou = chamadoData[kFieldAdminFinalizou] as bool? ?? false;
       if (adminJaFinalizou) {
@@ -285,13 +307,13 @@ class ChamadoService {
         kFieldAdminFinalizouData: FieldValue.serverTimestamp(),
         kFieldAdminFinalizouUid: adminUser.uid,
         kFieldAdminFinalizouNome: adminNome,
+        kFieldStatus: kStatusFinalizado, // <<< MUDANDO O STATUS PARA "FINALIZADO"
         kFieldDataAtualizacao: FieldValue.serverTimestamp(),
-        // kFieldStatus: 'Concluído', // Opcional: Mudar status final aqui se desejar
       });
 
       await adicionarComentarioSistema(
         chamadoId,
-        'Chamado finalizado e confirmado pelo administrador ($adminNome).',
+        'Chamado finalizado e confirmado pelo administrador ($adminNome). Status alterado para "$kStatusFinalizado".',
       );
     } catch (e) {
       print('Erro ao finalizar chamado pelo administrador $chamadoId: $e');

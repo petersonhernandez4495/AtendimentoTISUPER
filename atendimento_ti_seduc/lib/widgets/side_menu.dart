@@ -1,9 +1,9 @@
 // lib/widgets/side_menu.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart'; // Não é mais necessário aqui se isAdminUser é passado
 import '../config/theme/app_theme.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Para kReleaseMode
+
 class MenuItemData {
   final IconData icon;
   final String title;
@@ -23,9 +23,9 @@ class SideMenu extends StatefulWidget {
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onLogout;
   final bool isAdminUser;
-  final User? currentUser; // Para exibir informações do usuário
-  final VoidCallback? onCheckForUpdates; // Callback para verificar atualizações
-  final VoidCallback? onSearchPressed; // Callback para ação de busca
+  final User? currentUser;
+  final VoidCallback? onCheckForUpdates;
+  final VoidCallback? onSearchPressed;
 
   const SideMenu({
     super.key,
@@ -45,46 +45,35 @@ class SideMenu extends StatefulWidget {
 class _SideMenuState extends State<SideMenu> {
   bool _isExpanded = false;
   final double _collapsedWidth = 70.0;
-  final double _expandedWidth = 240.0; // Um pouco mais largo para acomodar mais informações
+  final double _expandedWidth = 240.0;
 
-  late List<MenuItemData> _displayedMenuItems;
+  late List<MenuItemData> _navigationRailItems;
+  static const int perfilScreenIndex = 3;
 
   @override
   void initState() {
     super.initState();
-    _updateMenuItems();
+    _updateNavigationRailItems();
   }
 
   @override
   void didUpdateWidget(covariant SideMenu oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isAdminUser != widget.isAdminUser) {
-      _updateMenuItems();
+      _updateNavigationRailItems();
     }
   }
 
-  void _updateMenuItems() {
-    final allPossibleItems = [
+  void _updateNavigationRailItems() {
+    _navigationRailItems = [
       MenuItemData(icon: Icons.list_alt_rounded, title: 'Chamados', index: 0),
       MenuItemData(icon: Icons.add_comment_outlined, title: 'Novo Chamado', index: 1),
       MenuItemData(icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
-      // O item de Perfil agora pode ser acessado clicando no avatar/nome do usuário
-      // MenuItemData(icon: Icons.person_outline_rounded, title: 'Meu Perfil', index: 3), 
-      MenuItemData(icon: Icons.manage_accounts_outlined, title: 'Gerenciar Usuários', index: 4, isAdminOnly: true),
+      MenuItemData(icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5),
     ];
 
-    // Ajuste: O item de perfil é geralmente o penúltimo item visível antes do admin
-    // Se o item de perfil for removido daqui, o índice 3 pode ficar vago ou ser reatribuído.
-    // Vamos manter o perfil como um item de navegação por enquanto para consistência de índices.
-    // Se for removido, a lógica de `onDestinationSelected` e `selectedIndex` precisa ser ajustada.
-    _displayedMenuItems = [
-       MenuItemData(icon: Icons.list_alt_rounded, title: 'Chamados', index: 0),
-       MenuItemData(icon: Icons.add_comment_outlined, title: 'Novo Chamado', index: 1),
-       MenuItemData(icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
-       MenuItemData(icon: Icons.person_outline_rounded, title: 'Meu Perfil', index: 3),
-    ];
     if (widget.isAdminUser) {
-      _displayedMenuItems.add(MenuItemData(icon: Icons.manage_accounts_outlined, title: 'Gerenciar Usuários', index: 4, isAdminOnly: true));
+      _navigationRailItems.add(MenuItemData(icon: Icons.manage_accounts_outlined, title: 'Gerenciar Usuários', index: 4, isAdminOnly: true));
     }
   }
 
@@ -92,10 +81,24 @@ class _SideMenuState extends State<SideMenu> {
     final User? user = widget.currentUser;
     final ThemeData theme = Theme.of(context);
 
+    // SOLUÇÃO PARA O ERRO "No host specified in URI":
+    // Validar user.photoURL antes de usá-lo com NetworkImage.
+    ImageProvider? userImageProvider;
+    if (user?.photoURL != null &&
+        user!.photoURL!.isNotEmpty &&
+        (user.photoURL!.startsWith('http://') || user.photoURL!.startsWith('https://'))) {
+      try {
+        userImageProvider = NetworkImage(user.photoURL!);
+      } catch (e) {
+        print('Erro ao criar NetworkImage para ${user.photoURL}: $e');
+        // userImageProvider permanece null, o ícone de fallback será usado
+      }
+    }
+
     return Column(
       crossAxisAlignment: _isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        if (_isExpanded) // Logo visível apenas quando expandido
+        if (_isExpanded)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
             child: Image.asset(
@@ -110,14 +113,11 @@ class _SideMenuState extends State<SideMenu> {
         if (user != null)
           InkWell(
             onTap: () {
-              // Navegar para a tela de perfil (índice 3, conforme _displayedMenuItems)
-              // Encontrar o índice correto do perfil na lista atual
-              final profileItem = _displayedMenuItems.firstWhere((item) => item.title == 'Meu Perfil', orElse: () => _displayedMenuItems[3]);
-              widget.onDestinationSelected(profileItem.index);
+              widget.onDestinationSelected(perfilScreenIndex);
             },
             child: Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2, // 40 é o tamanho do avatar
+                horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2,
                 vertical: 12.0,
               ),
               child: _isExpanded
@@ -126,8 +126,8 @@ class _SideMenuState extends State<SideMenu> {
                         CircleAvatar(
                           radius: 20,
                           backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                          backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-                          child: user.photoURL == null
+                          backgroundImage: userImageProvider, // Usar a variável validada
+                          child: userImageProvider == null // Mostrar ícone se a imagem não puder ser carregada
                               ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
                               : null,
                         ),
@@ -155,11 +155,11 @@ class _SideMenuState extends State<SideMenu> {
                         ),
                       ],
                     )
-                  : CircleAvatar( // Apenas Avatar quando colapsado
+                  : CircleAvatar(
                       radius: 20,
                       backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                      backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-                      child: user.photoURL == null
+                      backgroundImage: userImageProvider, // Usar a variável validada
+                      child: userImageProvider == null // Mostrar ícone se a imagem não puder ser carregada
                           ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
                           : null,
                     ),
@@ -169,7 +169,7 @@ class _SideMenuState extends State<SideMenu> {
       ],
     );
   }
-  
+
   Widget _buildMenuActions(BuildContext context) {
     Widget buildActionItem({required IconData icon, required String label, VoidCallback? onPressed}) {
       if (_isExpanded) {
@@ -195,13 +195,12 @@ class _SideMenuState extends State<SideMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-         if (widget.onSearchPressed != null) buildActionItem(icon: Icons.search_outlined, label: 'Buscar', onPressed: widget.onSearchPressed),
-         if (widget.onCheckForUpdates != null && kReleaseMode) // Mostrar apenas em Release Mode
+          if (widget.onSearchPressed != null) buildActionItem(icon: Icons.search_outlined, label: 'Buscar', onPressed: widget.onSearchPressed),
+          if (widget.onCheckForUpdates != null && kReleaseMode)
             buildActionItem(icon: Icons.update_outlined, label: 'Verificar Atualizações', onPressed: widget.onCheckForUpdates),
       ],
     );
   }
-
 
   Widget _buildLogoutButton(BuildContext context) {
     final Color logoutIconColor = AppTheme.kErrorColor.withOpacity(0.9);
@@ -240,20 +239,23 @@ class _SideMenuState extends State<SideMenu> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    int railSelectedIndex = -1;
+    if (widget.selectedIndex != perfilScreenIndex) {
+        railSelectedIndex = _navigationRailItems.indexWhere((item) => item.index == widget.selectedIndex);
+    }
 
     return Container(
       width: _isExpanded ? _expandedWidth : _collapsedWidth,
       decoration: BoxDecoration(
-        color: AppTheme.kWinSurface, 
+        color: AppTheme.kWinSurface,
         border: Border(
           right: BorderSide(color: AppTheme.kWinDivider, width: 1.0),
         ),
       ),
-      child: Column( // Estrutura principal do SideMenu
+      child: Column(
         children: [
-          // 1. Botão de Expandir/Recolher
           Container(
-            height: 56, // Altura para o botão de toggle
+            height: 56,
             alignment: _isExpanded ? Alignment.centerRight : Alignment.center,
             padding: _isExpanded ? const EdgeInsets.only(right: 8) : EdgeInsets.zero,
             child: IconButton(
@@ -268,23 +270,20 @@ class _SideMenuState extends State<SideMenu> {
               },
             ),
           ),
-          // 2. Cabeçalho com Logo e Informações do Usuário
-          _buildMenuHeader(context), // Não é mais parte do `leading` do NavigationRail
-
-          // 3. Itens de Navegação Principais
+          _buildMenuHeader(context),
           Expanded(
             child: NavigationRail(
-              selectedIndex: widget.selectedIndex < _displayedMenuItems.length ? widget.selectedIndex : 0,
-              onDestinationSelected: (index) {
-                 if (index < _displayedMenuItems.length) {
-                   widget.onDestinationSelected(_displayedMenuItems[index].index);
-                 }
+              selectedIndex: railSelectedIndex >= 0 ? railSelectedIndex : null,
+              onDestinationSelected: (selectedIndexInRail) {
+                  if (selectedIndexInRail < _navigationRailItems.length) {
+                    widget.onDestinationSelected(_navigationRailItems[selectedIndexInRail].index);
+                  }
               },
               extended: _isExpanded,
               backgroundColor: Colors.transparent,
-              minWidth: _collapsedWidth, // Usa a largura colapsada para o rail
-              minExtendedWidth: _expandedWidth, // Usa a largura expandida para o rail
-              labelType: NavigationRailLabelType.none, 
+              minWidth: _collapsedWidth,
+              minExtendedWidth: _expandedWidth,
+              labelType: NavigationRailLabelType.none,
               selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 26),
               unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 24),
               selectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -297,22 +296,18 @@ class _SideMenuState extends State<SideMenu> {
               useIndicator: true,
               indicatorColor: AppTheme.kWinAccent.withOpacity(0.12),
               indicatorShape: RoundedRectangleBorder(
-                 borderRadius: BorderRadius.circular(8.0)
+                  borderRadius: BorderRadius.circular(8.0)
               ),
-              // O leading do NavigationRail pode ser usado para o toggle, mas como já temos um acima, pode ser nulo.
-              // Ou, se preferir o toggle DENTRO do scroll do NavigationRail:
-              // leading: IconButton(icon: Icon(_isExpanded ? Icons.menu_open_rounded : Icons.menu_rounded), onPressed: () => setState(() => _isExpanded = !_isExpanded)),
-              destinations: _displayedMenuItems.map((item) {
+              destinations: _navigationRailItems.map((item) {
                 return NavigationRailDestination(
                   icon: Tooltip(message: item.title, child: Icon(item.icon)),
                   selectedIcon: Tooltip(message: item.title, child: Icon(item.icon)),
                   label: Text(item.title),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0), // Ajuste padding do destino
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
                 );
               }).toList(),
             ),
           ),
-          // 4. Ações (Busca, Atualização) e Logout
           _buildMenuActions(context),
           const Divider(height: 0, thickness: 1, color: AppTheme.kWinDivider),
           Padding(

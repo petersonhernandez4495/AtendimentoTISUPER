@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../config/theme/app_theme.dart';
-import '../services/chamado_service.dart'; // Importa kStatusPadraoSolicionado e outros
+import '../services/chamado_service.dart';
 
 class ChamadoListItem extends StatelessWidget {
   final String chamadoId;
@@ -16,6 +16,8 @@ class ChamadoListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final Function(String) onDownloadPdf;
   final bool isLoadingPdfDownload;
+  final Future<void> Function(String chamadoId)? onFinalizarArquivar;
+  final bool isLoadingFinalizarArquivar;
 
   const ChamadoListItem({
     super.key,
@@ -29,6 +31,8 @@ class ChamadoListItem extends StatelessWidget {
     required this.onDownloadPdf,
     required this.isLoadingPdfDownload,
     this.onDelete,
+    this.onFinalizarArquivar,
+    this.isLoadingFinalizarArquivar = false,
   });
 
   String _formatTimestamp(Timestamp? timestamp, [String format = 'dd/MM/yy HH:mm']) {
@@ -56,9 +60,8 @@ class ChamadoListItem extends StatelessWidget {
     final bool requerenteConfirmou = chamadoData[kFieldRequerenteConfirmou] as bool? ?? false;
     final String? creatorUid = chamadoData[kFieldCreatorUid] as String?;
     final String? currentUserId = currentUser?.uid;
-    
-    // Usando a constante importada de ChamadoService
-    final String statusSolucionadoComparacao = kStatusPadraoSolicionado; 
+
+    final String statusSolucionadoComparacao = kStatusPadraoSolicionado;
 
     final bool podeConfirmar = !isAdmin && currentUserId != null && currentUserId == creatorUid && status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && !requerenteConfirmou && !isInativo;
     final bool mostrarSolucaoAceitaChip = status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && requerenteConfirmou && !isInativo;
@@ -106,6 +109,13 @@ class ChamadoListItem extends StatelessWidget {
     if (creatorPhone != null && creatorPhone.isNotEmpty) {
       infoSolicitanteCombinada += ' \u00B7 $creatorPhone';
     }
+    
+    final bool podeFinalizarPelaLista = isAdmin &&
+                                (chamadoData[kFieldStatus] == kStatusPadraoSolicionado) &&
+                                (chamadoData[kFieldRequerenteConfirmou] as bool? ?? false) &&
+                                !(chamadoData[kFieldAdminFinalizou] as bool? ?? false) &&
+                                onFinalizarArquivar != null;
+
 
     return Opacity(
       opacity: isInativo ? 0.6 : 1.0,
@@ -128,15 +138,15 @@ class ChamadoListItem extends StatelessWidget {
             );
           },
           borderRadius: BorderRadius.circular(8.0),
-          child: Column( 
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding( 
+              Padding(
                 padding: const EdgeInsets.fromLTRB(12.0, 10.0, 8.0, 10.0),
-                child: Row( 
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container( 
+                    Container(
                       width: 5.0,
                       margin: const EdgeInsets.only(right: 10.0),
                       decoration: BoxDecoration(
@@ -144,11 +154,11 @@ class ChamadoListItem extends StatelessWidget {
                         borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4))
                       ),
                     ),
-                    Expanded( 
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text( 
+                          Text(
                             titulo,
                             style: textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
@@ -158,25 +168,25 @@ class ChamadoListItem extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4.0),
-                          Row( 
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded( 
-                                flex: 3, 
+                              Expanded(
+                                flex: 3,
                                 child: Text(
                                   infoSolicitanteCombinada,
                                   style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor),
-                                  maxLines: 2, 
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Column( 
+                              Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Row( 
+                                  Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -192,7 +202,7 @@ class ChamadoListItem extends StatelessWidget {
                                         ),
                                         const SizedBox(width: 4),
                                       ],
-                                      Chip( 
+                                      Chip(
                                         label: Text(status.toUpperCase()),
                                         labelStyle: textTheme.labelSmall?.copyWith(
                                           color: corStatus != null && corStatus.computeLuminance() > 0.5 ? Colors.black.withOpacity(0.7) : Colors.white.withOpacity(0.85),
@@ -210,13 +220,13 @@ class ChamadoListItem extends StatelessWidget {
                                         Tooltip(
                                           message: 'Solução aceita pelo requerente',
                                           child: Chip(
-                                            avatar: Icon(Icons.check_circle_outline, size: 14, color: Colors.green[800]), 
+                                            avatar: Icon(Icons.check_circle_outline, size: 14, color: Colors.green[800]),
                                             label: Text('Aceita', style: textTheme.labelSmall?.copyWith(color: Colors.green[800], fontWeight: FontWeight.w500)),
-                                            backgroundColor: Colors.green[100]?.withOpacity(0.7), 
+                                            backgroundColor: Colors.green[100]?.withOpacity(0.7),
                                             visualDensity: VisualDensity.compact,
                                             padding: const EdgeInsets.symmetric(horizontal: 5.0),
                                             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            side: BorderSide(color: Colors.green.shade200, width: 0.5), 
+                                            side: BorderSide(color: Colors.green.shade200, width: 0.5),
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                           ),
                                         ),
@@ -224,8 +234,8 @@ class ChamadoListItem extends StatelessWidget {
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text( 
-                                    dataFormatada, 
+                                  Text(
+                                    dataFormatada,
                                     style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
                                     textAlign: TextAlign.end,
                                   ),
@@ -237,7 +247,7 @@ class ChamadoListItem extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.only(top: 3.0),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end, 
+                                mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
                                   Icon(Icons.engineering_outlined, size: 11, color: textoSecundarioCor),
                                   const SizedBox(width: 3),
@@ -255,7 +265,7 @@ class ChamadoListItem extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (isClickable) 
+                    if (isClickable)
                       PopupMenuButton<String>(
                         icon: Icon(Icons.more_vert, color: textoSecundarioCor),
                         tooltip: "Mais opções",
@@ -264,34 +274,62 @@ class ChamadoListItem extends StatelessWidget {
                             onNavigateToDetails(chamadoId);
                           } else if (value == 'delete' && isAdmin && onDelete != null) {
                             onDelete!();
-                          } else if (value == 'download_pdf_direct' && status.toLowerCase() == statusSolucionadoComparacao.toLowerCase()) {
+                          } else if (value == 'download_pdf_direct') {
                              onDownloadPdf(chamadoId);
+                          } else if (value == 'confirmar_servico' && podeConfirmar) {
+                             onConfirmar(chamadoId);
+                          } else if (value == 'finalizar_arquivar' && podeFinalizarPelaLista) {
+                            onFinalizarArquivar!(chamadoId);
                           }
                         },
-                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                          const PopupMenuItem<String>(
-                            value: 'details',
-                            child: Text('Ver Detalhes'),
-                          ),
-                          if (status.toLowerCase() == statusSolucionadoComparacao.toLowerCase())
-                             PopupMenuItem<String>(
-                              value: 'download_pdf_direct',
-                              child: Text(isLoadingPdfDownload ? 'Baixando PDF...' : 'Baixar PDF Solução'),
-                              enabled: !isLoadingPdfDownload,
-                            ),
-                          if (isAdmin && onDelete != null)
-                            const PopupMenuItem<String>(
+                        itemBuilder: (BuildContext context) {
+                          List<PopupMenuEntry<String>> items = [];
+                          items.add(const PopupMenuItem<String>(value: 'details', child: Text('Ver Detalhes')));
+                          
+                          if (status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() || status.toLowerCase() == kStatusFinalizado.toLowerCase()) {
+                             items.add(PopupMenuItem<String>(
+                                value: 'download_pdf_direct',
+                                enabled: !isLoadingPdfDownload,
+                                child: isLoadingPdfDownload ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Baixando PDF...')]) : const Text('Baixar PDF Solução'),
+                              ));
+                          }
+
+                          if (podeConfirmar) {
+                            items.add(PopupMenuItem<String>(
+                              value: 'confirmar_servico',
+                              enabled: !isLoadingConfirmation,
+                              child: isLoadingConfirmation
+                                  ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Confirmando...')])
+                                  : const Text('Aceitar Solução'),
+                            ));
+                          }
+
+                          if (podeFinalizarPelaLista) {
+                            items.add(PopupMenuItem<String>(
+                                value: 'finalizar_arquivar',
+                                enabled: !isLoadingFinalizarArquivar,
+                                child: isLoadingFinalizarArquivar
+                                    ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Finalizando...')])
+                                    : const Text('Finalizar e Arquivar'),
+                            ));
+                          }
+
+                          if (isAdmin && onDelete != null) {
+                            items.add(const PopupMenuDivider());
+                            items.add(const PopupMenuItem<String>(
                               value: 'delete',
                               child: Text('Excluir Chamado', style: TextStyle(color: Colors.red)),
-                            ),
-                        ],
+                            ));
+                          }
+                          return items;
+                        },
                       ),
                   ],
                 ),
-              ), 
+              ),
               if (!isInativo && podeConfirmar)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0), 
+                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0),
                   child: Column(
                     children: [
                       const Divider(height: 1, thickness: 0.5),
@@ -315,25 +353,25 @@ class ChamadoListItem extends StatelessWidget {
                   ),
                 ),
               if (!isInativo && status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && solucao != null && solucao.isNotEmpty && !podeConfirmar && !mostrarSolucaoAceitaChip)
-                Padding( 
-                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0), 
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                       const Divider(height: 1, thickness: 0.5),
-                       const SizedBox(height: 6),
-                       Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
-                       const SizedBox(height: 2),
-                       Text(
-                         solucao,
-                         style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
-                         maxLines: 2,
-                         overflow: TextOverflow.ellipsis,
-                       ),
+                      const Divider(height: 1, thickness: 0.5),
+                      const SizedBox(height: 6),
+                      Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
+                      const SizedBox(height: 2),
+                      Text(
+                        solucao,
+                        style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   )
                 )
-            ], 
+            ],
           ),
         ),
       ),

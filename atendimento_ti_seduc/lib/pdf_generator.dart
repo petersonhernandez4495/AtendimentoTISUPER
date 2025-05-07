@@ -87,6 +87,7 @@ class PdfGenerator {
     required Map<String, dynamic> dadosChamado,
     String? adminSignatureUrl, // Assinatura de quem solucionou
     String? requesterSignatureUrl, // Assinatura de quem confirmou
+    String? nomeRequerenteConfirmou,
   }) async {
     final pdf = pw.Document();
     final DateFormat dateFormatTimestamp = DateFormat('dd/MM/yyyy HH:mm', 'pt_BR');

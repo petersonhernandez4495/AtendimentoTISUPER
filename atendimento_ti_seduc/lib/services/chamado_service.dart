@@ -3,10 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
+// --- COLEÇÕES ---
 const String kCollectionChamados = 'chamados';
+const String kCollectionUsers = 'users'; // Adicionada para clareza
+const String kSubCollectionComentarios = 'comentarios';
+
+// --- CAMPOS COMUNS DO CHAMADO ---
 const String kFieldTipoSolicitante = 'tipo_solicitante';
 const String kFieldNomeSolicitante = 'nome_solicitante';
 const String kFieldCelularContato = 'celular_contato';
+const String kFieldCelularContatoUnmasked = 'celular_contato_unmasked';
 const String kFieldEquipamentoSolicitacao = 'equipamento_solicitacao';
 const String kFieldEquipamentoOutro = 'equipamento_outro_descricao';
 const String kFieldConectadoInternet = 'equipamento_conectado_internet';
@@ -14,44 +20,70 @@ const String kFieldMarcaModelo = 'marca_modelo_equipamento';
 const String kFieldPatrimonio = 'numero_patrimonio';
 const String kFieldProblemaOcorre = 'problema_ocorre';
 const String kFieldProblemaOutro = 'problema_outro_descricao';
-const String kFieldCidade = 'cidade';
-const String kFieldInstituicao = 'instituicao';
-const String kFieldInstituicaoManual = 'instituicao_manual';
-const String kFieldCargoFuncao = 'cargo_funcao';
-const String kFieldAtendimentoPara = 'atendimento_para';
-const String kFieldSetorSuper = 'setor_superintendencia';
-const String kFieldCidadeSuperintendencia = 'cidade_superintendencia';
 const String kFieldStatus = 'status';
 const String kFieldPrioridade = 'prioridade';
 const String kFieldTecnicoResponsavel = 'tecnico_responsavel';
 const String kFieldTecnicoUid = 'tecnicoUid';
 const String kFieldSolucao = 'solucao';
-const String kFieldAuthUserDisplay = 'authUserDisplayName';
 const String kFieldDataCriacao = 'data_criacao';
 const String kFieldDataAtualizacao = 'data_atualizacao';
+const String kFieldCreatorUid = 'creatorUid'; // UID do criador do chamado
+const String kFieldCreatorName = 'creatorName'; // Nome do criador do chamado
+const String kFieldAuthUserDisplay = 'authUserDisplayName'; // DisplayName do Auth no momento da criação
+const String kFieldAuthUserEmail = 'authUserEmail'; // Email do Auth no momento da criação
 const String kFieldAdminInativo = 'isAdministrativamenteInativo';
+
+// --- CAMPOS ESPECÍFICOS ESCOLA ---
+const String kFieldCidade = 'cidade';
+const String kFieldInstituicao = 'instituicao'; // Usado para nome da escola selecionada
+const String kFieldInstituicaoManual = 'instituicao_manual';
+const String kFieldCargoFuncao = 'cargo_funcao';
+const String kFieldAtendimentoPara = 'atendimento_para';
+const String kFieldObservacaoCargo = 'observacao_cargo';
+
+// --- CAMPOS ESPECÍFICOS SUPERINTENDÊNCIA ---
+const String kFieldSetorSuper = 'setor_superintendencia';
+const String kFieldCidadeSuperintendencia = 'cidade_superintendencia';
+
+// --- CAMPO UNIFICADO PARA LÓGICA DE VISUALIZAÇÃO INSTITUCIONAL (NOVO) ---
+// Este campo no documento do CHAMADO armazenará a escola ou setor para consulta.
+const String kFieldUnidadeOrganizacionalChamado = 'unidadeOrganizacionalChamado';
+
+// --- CAMPOS DE FINALIZAÇÃO/CONFIRMAÇÃO ---
 const String kFieldDataAtendimento = 'data_atendimento';
 const String kFieldRequerenteConfirmou = 'requerente_confirmou';
 const String kFieldRequerenteConfirmouData = 'requerente_confirmou_data';
 const String kFieldRequerenteConfirmouUid = 'requerente_confirmou_uid';
-const String kFieldCreatorUid = 'creatorUid';
+const String kFieldNomeRequerenteConfirmador = 'nomeRequerenteConfirmador'; // Adicionado para PDF
 
 const String kFieldAdminFinalizou = 'adminFinalizou';
 const String kFieldAdminFinalizouData = 'adminFinalizouData';
 const String kFieldAdminFinalizouUid = 'adminFinalizouUid';
 const String kFieldAdminFinalizouNome = 'adminFinalizouNome';
 
-const String kStatusPadraoSolicionado = 'Solucionado';
-const String kStatusFinalizado = 'Finalizado';
-
 const String kFieldSolucaoPorUid = 'solucaoPorUid';
 const String kFieldSolucaoPorNome = 'solucaoPorNome';
 const String kFieldDataDaSolucao = 'dataDaSolucao';
 
+// --- STATUS ---
+const String kStatusAberto = 'Aberto';
+const String kStatusPadraoSolicionado = 'Solucionado';
+const String kStatusFinalizado = 'Finalizado'; // Status para arquivado/concluído
+const String kStatusCancelado = 'Cancelado'; // Outro status de encerramento
+
+// --- CAMPOS DO DOCUMENTO DO USUÁRIO (na coleção 'users') ---
+const String kFieldUserRole = 'role_temp'; // Ou o nome do seu campo de role
+const String kFieldUserInstituicao = 'institution'; // IMPORTANTE: Nome do campo no DOC do USUÁRIO
+const String kFieldUserAssinaturaUrl = 'assinatura_url';
+
+
 class ChamadoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final _phoneMaskFormatter = MaskTextInputFormatter( mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')}, );
+  final _phoneMaskFormatter = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: {"#": RegExp(r'[0-9]')},
+  );
 
   Future<String> criarChamado({
     required String? tipoSelecionado,
@@ -64,28 +96,43 @@ class ChamadoService {
     required String? problemaSelecionado,
     required String? problemaOutro,
     required String? cidadeSelecionada,
-    required String? instituicaoSelecionada,
+    required String? instituicaoSelecionada, // Este é o nome da escola ou null
     required String? instituicaoManual,
     required String? cargoSelecionado,
     required String? atendimentoParaSelecionado,
     required bool isProfessorSelecionado,
-    required String? setorSuperSelecionado,
+    required String? setorSuperSelecionado, // Este é o nome do setor ou null
     required String cidadeSuper,
-    required String tecnicoResponsavel,
+    required String tecnicoResponsavel, // Mantido, mas pode ser opcional dependendo da lógica
     String? tecnicoUid,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('Usuário não autenticado.');
-    final String nomeFinalSolicitante = user.displayName?.trim().isNotEmpty ?? false ? user.displayName!.trim() : (user.email ?? "User (${user.uid.substring(0, 6)})");
+
+    final String nomeFinalSolicitante = user.displayName?.trim().isNotEmpty ?? false
+        ? user.displayName!.trim()
+        : (user.email ?? "User (${user.uid.substring(0, 6)})");
     final String creatorUid = user.uid;
     final String creatorPhone = celularContato.trim();
     final String unmaskedPhone = _phoneMaskFormatter.unmaskText(creatorPhone);
+
+    // Determinar a unidade organizacional para o chamado
+    String? unidadeOrganizacionalDoChamado;
+    if (tipoSelecionado == 'ESCOLA') {
+      if (cidadeSelecionada == "OUTRO" && instituicaoManual != null && instituicaoManual.trim().isNotEmpty) {
+        unidadeOrganizacionalDoChamado = instituicaoManual.trim(); // Usar o nome manual se "OUTRO"
+      } else {
+        unidadeOrganizacionalDoChamado = instituicaoSelecionada; // Nome da escola selecionada
+      }
+    } else if (tipoSelecionado == 'SUPERINTENDENCIA') {
+      unidadeOrganizacionalDoChamado = setorSuperSelecionado; // Nome do setor da SUPER
+    }
 
     final dadosChamado = <String, dynamic>{
       kFieldTipoSolicitante: tipoSelecionado,
       kFieldNomeSolicitante: nomeFinalSolicitante,
       kFieldCelularContato: creatorPhone,
-      'celular_contato_unmasked': unmaskedPhone,
+      kFieldCelularContatoUnmasked: unmaskedPhone,
       kFieldEquipamentoSolicitacao: equipamentoSelecionado,
       kFieldEquipamentoOutro: equipamentoSelecionado == "OUTRO" ? equipamentoOutro?.trim() : null,
       kFieldConectadoInternet: internetConectadaSelecionado,
@@ -95,14 +142,14 @@ class ChamadoService {
       kFieldProblemaOutro: problemaSelecionado == "OUTRO" ? problemaOutro?.trim() : null,
       kFieldTecnicoResponsavel: tecnicoResponsavel.trim().isEmpty ? null : tecnicoResponsavel.trim(),
       if (tecnicoUid != null && tecnicoUid.trim().isNotEmpty) kFieldTecnicoUid: tecnicoUid.trim(),
-      kFieldStatus: 'Aberto',
-      kFieldPrioridade: 'Média',
+      kFieldStatus: kStatusAberto,
+      kFieldPrioridade: 'Média', // Valor padrão, pode ser ajustado
       kFieldDataCriacao: FieldValue.serverTimestamp(),
       kFieldDataAtualizacao: FieldValue.serverTimestamp(),
       kFieldCreatorUid: creatorUid,
-      'creatorName': nomeFinalSolicitante,
+      kFieldCreatorName: nomeFinalSolicitante,
       kFieldAuthUserDisplay: user.displayName,
-      'authUserEmail': user.email,
+      kFieldAuthUserEmail: user.email,
       kFieldAdminInativo: false,
       kFieldSolucao: null,
       kFieldDataAtendimento: null,
@@ -116,49 +163,52 @@ class ChamadoService {
       kFieldSolucaoPorUid: null,
       kFieldSolucaoPorNome: null,
       kFieldDataDaSolucao: null,
+      kFieldUnidadeOrganizacionalChamado: unidadeOrganizacionalDoChamado, // NOVO CAMPO ADICIONADO
+
       if (tipoSelecionado == 'ESCOLA') ...{
         kFieldCidade: cidadeSelecionada,
         kFieldCargoFuncao: cargoSelecionado,
         kFieldAtendimentoPara: atendimentoParaSelecionado,
-        if (isProfessorSelecionado) 'observacao_cargo': 'Solicitante é Professor...',
-        if (cidadeSelecionada == "OUTRO") ...{
-          kFieldInstituicaoManual: instituicaoManual?.trim(),
-          kFieldInstituicao: 'OUTRO (Ver $kFieldInstituicaoManual)',
-        } else ...{
-          kFieldInstituicao: instituicaoSelecionada,
-          kFieldInstituicaoManual: null,
-        },
-      } else if (tipoSelecionado  == 'SUPERINTENDENCIA') ...{
-        kFieldSetorSuper: setorSuperSelecionado,
+        if (isProfessorSelecionado) kFieldObservacaoCargo: 'Solicitante é Professor...',
+        // kFieldInstituicao e kFieldInstituicaoManual são mantidos para fins de exibição detalhada,
+        // mas kFieldUnidadeOrganizacionalChamado é o campo chave para a query.
+        kFieldInstituicao: (cidadeSelecionada == "OUTRO") ? 'OUTRO (Ver Manual)' : instituicaoSelecionada,
+        kFieldInstituicaoManual: (cidadeSelecionada == "OUTRO") ? instituicaoManual?.trim() : null,
+      } else if (tipoSelecionado == 'SUPERINTENDENCIA') ...{
+        kFieldSetorSuper: setorSuperSelecionado, // Mantido para exibição
         kFieldCidadeSuperintendencia: cidadeSuper.trim(),
       },
     };
+
     try {
       final docRef = await _db.collection(kCollectionChamados).add(dadosChamado);
       return docRef.id;
     } catch (e) {
+      print("Erro ao criar chamado: $e");
       throw Exception('Falha ao salvar chamado.');
     }
   }
 
   Future<void> definirInatividadeAdministrativa(String chamadoId, bool inativo) async {
-    if (chamadoId.isEmpty) throw ArgumentError('ID vazio.');
+    if (chamadoId.isEmpty) throw ArgumentError('ID do chamado não pode ser vazio.');
     final docRef = _db.collection(kCollectionChamados).doc(chamadoId);
     try {
-        await docRef.update({
-            kFieldAdminInativo: inativo,
-            kFieldDataAtualizacao: FieldValue.serverTimestamp(),
-        });
-        await adicionarComentarioSistema( chamadoId, inativo ? 'Chamado INATIVO administrativamente.' : 'Chamado REATIVADO administrativamente.' );
+      await docRef.update({
+        kFieldAdminInativo: inativo,
+        kFieldDataAtualizacao: FieldValue.serverTimestamp(),
+      });
+      await adicionarComentarioSistema(
+          chamadoId, inativo ? 'Chamado INATIVO administrativamente.' : 'Chamado REATIVADO administrativamente.');
     } catch (e) {
-        throw Exception('Falha ao definir inatividade do chamado.');
+      print("Erro ao definir inatividade: $e");
+      throw Exception('Falha ao definir inatividade do chamado.');
     }
   }
 
   Future<void> atualizarDetalhesAdmin({
     required String chamadoId,
     required String status,
-    required User solucionadorUser,
+    required User adminUser, // Alterado para adminUser para clareza do contexto
     String? prioridade,
     String? tecnicoResponsavel,
     String? tecnicoUid,
@@ -171,55 +221,98 @@ class ChamadoService {
       kFieldStatus: status,
       kFieldDataAtualizacao: FieldValue.serverTimestamp(),
       if (prioridade != null) kFieldPrioridade: prioridade,
+      // Lógica para técnico: se nome vazio, limpar UID também. Se UID vazio, limpar nome.
       kFieldTecnicoResponsavel: tecnicoResponsavel?.trim().isEmpty ?? true ? null : tecnicoResponsavel?.trim(),
-      if (tecnicoUid != null && tecnicoUid.trim().isNotEmpty) kFieldTecnicoUid: tecnicoUid.trim()
-      else if ((tecnicoResponsavel == null || tecnicoResponsavel.trim().isEmpty) && (tecnicoUid == null || tecnicoUid.trim().isEmpty)) kFieldTecnicoUid: FieldValue.delete(),
-      kFieldSolucao: solucao,
-      kFieldDataAtendimento: dataAtendimento,
     };
 
+    if (tecnicoUid != null && tecnicoUid.trim().isNotEmpty) {
+      dataToUpdate[kFieldTecnicoUid] = tecnicoUid.trim();
+    } else {
+      dataToUpdate[kFieldTecnicoUid] = FieldValue.delete(); // Remove o campo se UID for nulo ou vazio
+       if (tecnicoResponsavel == null || tecnicoResponsavel.trim().isEmpty) {
+         dataToUpdate[kFieldTecnicoResponsavel] = null; // Garante que nome também é nulo
+       }
+    }
+    
+    // Se o técnico responsável for explicitamente nulo ou vazio, garantir que o UID também seja removido
+    if (tecnicoResponsavel == null || tecnicoResponsavel.trim().isEmpty) {
+        dataToUpdate[kFieldTecnicoUid] = FieldValue.delete();
+        dataToUpdate[kFieldTecnicoResponsavel] = null; // Garante que o nome seja nulo se estiver vazio
+    }
+
+
+    dataToUpdate[kFieldSolucao] = solucao; // Pode ser null para limpar
+    dataToUpdate[kFieldDataAtendimento] = dataAtendimento; // Pode ser null para limpar
+
     if (status.toLowerCase() == kStatusPadraoSolicionado.toLowerCase()) {
-      final String nomeSolucionador = solucionadorUser.displayName?.trim().isNotEmpty ?? false
-          ? solucionadorUser.displayName!.trim()
-          : (solucionadorUser.email ?? 'Usuário (${solucionadorUser.uid.substring(0, 6)})');
-      dataToUpdate[kFieldSolucaoPorUid] = solucionadorUser.uid;
+      final String nomeSolucionador = adminUser.displayName?.trim().isNotEmpty ?? false
+          ? adminUser.displayName!.trim()
+          : (adminUser.email ?? 'Admin (${adminUser.uid.substring(0, 6)})');
+      dataToUpdate[kFieldSolucaoPorUid] = adminUser.uid;
       dataToUpdate[kFieldSolucaoPorNome] = nomeSolucionador;
       dataToUpdate[kFieldDataDaSolucao] = FieldValue.serverTimestamp();
     } else {
+      // Se o status mudou de "Solucionado" para outro, limpar campos de solução
       DocumentSnapshot currentDoc = await docRef.get();
-      if (currentDoc.exists && (currentDoc.data() as Map<String,dynamic>)[kFieldStatus]?.toString().toLowerCase() == kStatusPadraoSolicionado.toLowerCase()){
-        dataToUpdate[kFieldSolucaoPorUid] = FieldValue.delete();
-        dataToUpdate[kFieldSolucaoPorNome] = FieldValue.delete();
-        dataToUpdate[kFieldDataDaSolucao] = FieldValue.delete();
-        dataToUpdate[kFieldSolucao] = FieldValue.delete(); 
-        dataToUpdate[kFieldDataAtendimento] = FieldValue.delete();
+      if (currentDoc.exists) {
+        final currentData = currentDoc.data() as Map<String, dynamic>;
+        if (currentData[kFieldStatus]?.toString().toLowerCase() == kStatusPadraoSolicionado.toLowerCase()) {
+          dataToUpdate[kFieldSolucaoPorUid] = FieldValue.delete();
+          dataToUpdate[kFieldSolucaoPorNome] = FieldValue.delete();
+          dataToUpdate[kFieldDataDaSolucao] = FieldValue.delete();
+          // Considerar se deve limpar kFieldSolucao e kFieldDataAtendimento também ao reverter de "Solucionado"
+          // dataToUpdate[kFieldSolucao] = FieldValue.delete();
+          // dataToUpdate[kFieldDataAtendimento] = FieldValue.delete();
+        }
       }
     }
 
-    if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase() && status.toLowerCase() != kStatusFinalizado.toLowerCase()) {
-        dataToUpdate[kFieldAdminFinalizou] = false;
-        dataToUpdate[kFieldAdminFinalizouData] = null;
-        dataToUpdate[kFieldAdminFinalizouUid] = null;
-        dataToUpdate[kFieldAdminFinalizouNome] = null;
+    // Resetar flags de confirmação se o status não for mais relevante para elas
+    if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase() &&
+        status.toLowerCase() != kStatusFinalizado.toLowerCase()) {
+      dataToUpdate[kFieldAdminFinalizou] = false;
+      dataToUpdate[kFieldAdminFinalizouData] = null;
+      dataToUpdate[kFieldAdminFinalizouUid] = null;
+      dataToUpdate[kFieldAdminFinalizouNome] = null;
     }
     if (status.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()) {
-        dataToUpdate[kFieldRequerenteConfirmou] = false;
-        dataToUpdate[kFieldRequerenteConfirmouData] = null;
-        dataToUpdate[kFieldRequerenteConfirmouUid] = null;
+      dataToUpdate[kFieldRequerenteConfirmou] = false; // Requerente precisaria confirmar novamente se status voltar para solucionado
+      dataToUpdate[kFieldRequerenteConfirmouData] = null;
+      dataToUpdate[kFieldRequerenteConfirmouUid] = null;
+      // dataToUpdate[kFieldNomeRequerenteConfirmador] = null; // Se você armazenar este
     }
 
     try {
       await docRef.update(dataToUpdate);
       final List<String> changes = [];
-      changes.add('Status atualizado para: "$status".');
-      if (prioridade != null) changes.add('Prioridade definida como: "$prioridade".');
-      if (tecnicoResponsavel != null) changes.add(tecnicoResponsavel.trim().isEmpty ? 'Técnico responsável removido.' : 'Técnico atribuído: "$tecnicoResponsavel".');
-      if (dataToUpdate.containsKey(kFieldSolucao)) { changes.add(solucao != null && solucao.isNotEmpty ? 'Solução/Diagnóstico registrado.' : 'Solução/Diagnóstico removido.'); }
-      if (dataToUpdate.containsKey(kFieldDataAtendimento)) { changes.add(dataAtendimento != null ? 'Data de atendimento definida para: ${DateFormat('dd/MM/yyyy').format(dataAtendimento.toDate())}.' : 'Data de atendimento removida.'); }
+      // Construir mensagem de log de forma mais granular
+      DocumentSnapshot oldSnap = await docRef.get(); // Pegar dados antes da atualização para comparação se necessário
+      Map<String,dynamic> oldData = oldSnap.data() as Map<String,dynamic>;
+
+      if(oldData[kFieldStatus] != status) changes.add('Status atualizado para: "$status".');
+      if(prioridade != null && oldData[kFieldPrioridade] != prioridade) changes.add('Prioridade definida como: "$prioridade".');
+      
+      String? oldTecnico = oldData[kFieldTecnicoResponsavel];
+      String? newTecnico = tecnicoResponsavel?.trim().isEmpty ?? true ? null : tecnicoResponsavel?.trim();
+      if(oldTecnico != newTecnico) {
+        changes.add(newTecnico == null ? 'Técnico responsável removido.' : 'Técnico atribuído: "$newTecnico".');
+      }
+      
+      String? oldSolucao = oldData[kFieldSolucao];
+      if(oldSolucao != solucao) {
+         changes.add(solucao != null && solucao.isNotEmpty ? 'Solução/Diagnóstico registrado/alterado.' : 'Solução/Diagnóstico removido.');
+      }
+
+      Timestamp? oldDataAtendimento = oldData[kFieldDataAtendimento];
+      if(oldDataAtendimento != dataAtendimento) {
+        changes.add(dataAtendimento != null ? 'Data de atendimento definida para: ${DateFormat('dd/MM/yyyy HH:mm').format(dataAtendimento.toDate())}.' : 'Data de atendimento removida.');
+      }
+
       if (changes.isNotEmpty) {
         await adicionarComentarioSistema(chamadoId, changes.join(' '));
       }
     } catch (e) {
+      print("Erro ao atualizar detalhes do chamado: $e");
       throw Exception('Falha ao atualizar detalhes do chamado.');
     }
   }
@@ -227,60 +320,81 @@ class ChamadoService {
   Future<void> adicionarComentarioSistema(String chamadoId, String texto) async {
     if (chamadoId.isEmpty || texto.isEmpty) return;
     try {
-        await _db.collection(kCollectionChamados).doc(chamadoId).collection('comentarios').add({
-            'texto': texto,
-            'autorNome': 'Sistema',
-            'autorUid': 'sistema',
-            'timestamp': FieldValue.serverTimestamp(),
-            'isSystemMessage': true,
-        });
+      await _db
+          .collection(kCollectionChamados)
+          .doc(chamadoId)
+          .collection(kSubCollectionComentarios) // Usando constante
+          .add({
+        'texto': texto,
+        'autorNome': 'Sistema', // Ou nome do Admin/Serviço que está logando
+        'autorUid': 'sistema', // Ou UID do Admin/Serviço
+        'timestamp': FieldValue.serverTimestamp(),
+        'isSystemMessage': true,
+      });
     } catch (e) {
-        // Silently fail or log, as this is a system comment
+      print("Erro ao adicionar comentário do sistema: $e");
+      // Silently fail or log, as this is a system comment
     }
   }
 
-  Future<void> confirmarServicoRequerente(String chamadoId, User currentUser) async {
+ Future<void> confirmarServicoRequerente(String chamadoId, User currentUser) async {
     if (chamadoId.isEmpty) throw ArgumentError('ID do chamado não pode ser vazio.');
     final docRef = _db.collection(kCollectionChamados).doc(chamadoId);
+
     try {
-      final chamadoDoc = await docRef.get();
-      if (!chamadoDoc.exists || chamadoDoc.data() == null) {
-        throw Exception('Chamado não encontrado ou dados inválidos.');
-      }
-      final chamadoData = chamadoDoc.data()!;
-      final String? creatorUid = chamadoData[kFieldCreatorUid] as String?;
+        final chamadoDoc = await docRef.get();
+        if (!chamadoDoc.exists || chamadoDoc.data() == null) {
+            throw Exception('Chamado não encontrado ou dados inválidos.');
+        }
+        final chamadoData = chamadoDoc.data()!;
+        final String? creatorUid = chamadoData[kFieldCreatorUid] as String?;
 
-      if (creatorUid == null || creatorUid != currentUser.uid) {
-        throw Exception('Ação não permitida. Apenas o solicitante original pode confirmar o serviço.');
-      }
+        // Somente o criador original pode confirmar
+        if (creatorUid == null || creatorUid != currentUser.uid) {
+            throw Exception('Ação não permitida. Apenas o solicitante original pode confirmar o serviço.');
+        }
 
-      final bool jaConfirmado = chamadoData[kFieldRequerenteConfirmou] as bool? ?? false;
-      if (jaConfirmado) {
-        return;
-      }
+        final bool jaConfirmado = chamadoData[kFieldRequerenteConfirmou] as bool? ?? false;
+        if (jaConfirmado) {
+            // Poderia lançar um erro ou apenas retornar se a intenção é ser idempotente
+            // throw Exception('Este chamado já foi confirmado pelo requerente.');
+            return; // Evita reconfirmar
+        }
+        
+        // Verifica se o status é "Solucionado" antes de permitir a confirmação
+        final String statusAtual = chamadoData[kFieldStatus] as String? ?? '';
+        if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()){
+           throw Exception('O chamado precisa estar com status "$kStatusPadraoSolicionado" para que o requerente possa confirmar a solução.');
+        }
 
-      await docRef.update({
-        kFieldRequerenteConfirmou: true,
-        kFieldRequerenteConfirmouData: FieldValue.serverTimestamp(),
-        kFieldRequerenteConfirmouUid: currentUser.uid,
-        kFieldDataAtualizacao: FieldValue.serverTimestamp(),
-      });
 
-      final String nomeConfirmador = currentUser.displayName?.trim().isNotEmpty ?? false
-          ? currentUser.displayName!.trim()
-          : (currentUser.email ?? 'Requerente (${currentUser.uid.substring(0, 6)})');
+        final String nomeConfirmador = currentUser.displayName?.trim().isNotEmpty ?? false
+            ? currentUser.displayName!.trim()
+            : (currentUser.email ?? 'Requerente (${currentUser.uid.substring(0, 6)})');
 
-      await adicionarComentarioSistema(
-        chamadoId,
-        'Serviço confirmado como solucionado pelo requerente ($nomeConfirmador).',
-      );
+        await docRef.update({
+            kFieldRequerenteConfirmou: true,
+            kFieldRequerenteConfirmouData: FieldValue.serverTimestamp(),
+            kFieldRequerenteConfirmouUid: currentUser.uid,
+            kFieldNomeRequerenteConfirmador: nomeConfirmador, // Salva o nome para o PDF
+            kFieldDataAtualizacao: FieldValue.serverTimestamp(),
+        });
+
+        await adicionarComentarioSistema(
+            chamadoId,
+            'Serviço confirmado como solucionado pelo requerente ($nomeConfirmador).',
+        );
     } catch (e) {
-      if (e.toString().contains('Ação não permitida')) {
-          throw e;
-      }
-      throw Exception('Falha ao registrar a confirmação do serviço.');
+        print("Erro ao confirmar serviço pelo requerente: $e");
+        if (e.toString().contains('Ação não permitida') || 
+            e.toString().contains('Este chamado já foi confirmado') ||
+            e.toString().contains('O chamado precisa estar com status "$kStatusPadraoSolicionado"')) {
+            throw e; // Repassa exceções específicas
+        }
+        throw Exception('Falha ao registrar a confirmação do serviço.');
     }
-  }
+}
+
 
   Future<void> adminConfirmarSolucaoFinal(String chamadoId, User adminUser) async {
     if (chamadoId.isEmpty) throw ArgumentError('ID do chamado não pode ser vazio.');
@@ -293,19 +407,24 @@ class ChamadoService {
       }
       final chamadoData = chamadoDoc.data()!;
 
+      // Verifica se o requerente já confirmou (RF010 - Ordem de Serviço)
       final bool requerenteJaConfirmou = chamadoData[kFieldRequerenteConfirmou] as bool? ?? false;
       if (!requerenteJaConfirmou) {
-        throw Exception('A confirmação do requerente é necessária antes da finalização/arquivamento.');
+        throw Exception(
+            'A confirmação do requerente é necessária antes da finalização/arquivamento pelo administrador.');
       }
 
+      // Verifica se o status atual é "Solucionado"
       final String statusAtual = chamadoData[kFieldStatus] as String? ?? '';
-      if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()){
-          throw Exception('O chamado precisa estar com status "$kStatusPadraoSolicionado" para ser finalizado/arquivado.');
+      if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()) {
+        throw Exception(
+            'O chamado precisa estar com status "$kStatusPadraoSolicionado" para ser finalizado/arquivado.');
       }
 
       final bool adminJaFinalizou = chamadoData[kFieldAdminFinalizou] as bool? ?? false;
       if (adminJaFinalizou) {
-          return;
+        // throw Exception('Este chamado já foi finalizado/arquivado pelo administrador.');
+        return; // Evita re-finalizar
       }
 
       final String adminNome = adminUser.displayName?.trim().isNotEmpty ?? false
@@ -317,7 +436,7 @@ class ChamadoService {
         kFieldAdminFinalizouData: FieldValue.serverTimestamp(),
         kFieldAdminFinalizouUid: adminUser.uid,
         kFieldAdminFinalizouNome: adminNome,
-        kFieldStatus: kStatusFinalizado,
+        kFieldStatus: kStatusFinalizado, // Muda o status para Finalizado/Arquivado
         kFieldDataAtualizacao: FieldValue.serverTimestamp(),
       });
 
@@ -326,20 +445,34 @@ class ChamadoService {
         'Chamado arquivado pelo administrador ($adminNome). Status alterado para "$kStatusFinalizado".',
       );
     } catch (e) {
-      if (e.toString().contains('A confirmação do requerente é necessária') || e.toString().contains('O chamado precisa estar com status')) {
-          throw e;
+      print("Erro ao finalizar/arquivar chamado pelo admin: $e");
+      if (e.toString().contains('A confirmação do requerente é necessária') ||
+          e.toString().contains('O chamado precisa estar com status') ||
+          e.toString().contains('Este chamado já foi finalizado')) {
+        throw e; // Repassa exceções específicas
       }
       throw Exception('Falha ao arquivar o chamado.');
     }
   }
 
   Future<void> excluirChamado(String chamadoId) async {
+    // Adicionar verificação de permissão se necessário (ex: só admin pode excluir)
     if (chamadoId.isEmpty) {
       throw ArgumentError('ID do chamado não pode ser vazio para exclusão.');
     }
     try {
+      // Opcional: Excluir subcoleções como 'comentarios' antes de excluir o chamado.
+      // Query queryComentarios = _db.collection(kCollectionChamados).doc(chamadoId).collection(kSubCollectionComentarios);
+      // WriteBatch batch = _db.batch();
+      // QuerySnapshot comentariosSnapshot = await queryComentarios.get();
+      // for (DocumentSnapshot doc in comentariosSnapshot.docs) {
+      //   batch.delete(doc.reference);
+      // }
+      // await batch.commit(); // Deleta comentários
+
       await _db.collection(kCollectionChamados).doc(chamadoId).delete();
     } catch (e) {
+      print("Erro ao excluir chamado: $e");
       throw Exception('Falha ao excluir chamado: $e');
     }
   }

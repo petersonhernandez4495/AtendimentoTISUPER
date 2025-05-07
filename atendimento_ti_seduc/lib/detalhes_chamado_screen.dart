@@ -223,7 +223,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
         await _chamadoService.atualizarDetalhesAdmin(
           chamadoId: widget.chamadoId,
           status: statusSelecionado,
-          solucionadorUser: usuarioLogado,
+          adminUser: usuarioLogado,
           prioridade: prioridadeSelecionada,
           tecnicoResponsavel: tecnicoFinal.isEmpty ? null : tecnicoFinal,
           tecnicoUid: tecnicoUid.trim().isEmpty ? null : tecnicoUid.trim(),

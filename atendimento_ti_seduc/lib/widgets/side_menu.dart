@@ -168,7 +168,7 @@ class _SideMenuState extends State<SideMenu> {
   Widget _buildLogoSection(BuildContext context) {
     if (!_isExpanded) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: _logoVerticalPadding, horizontal: 12.0),
+      padding: const EdgeInsets.symmetric(vertical: _logoVerticalPadding, horizontal: 60.0),
       child: SizedBox(
         height: _maxLogoContainerHeight,
         width: double.infinity,

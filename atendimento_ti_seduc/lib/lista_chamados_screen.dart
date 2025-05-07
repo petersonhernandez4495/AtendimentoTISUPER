@@ -1,20 +1,29 @@
-import 'dart:typed_data';
-import 'dart:io';
-import 'dart:math'; // Import necessário para min()
+// lib/lista_chamados_screen.dart
+
+import 'dart:math';
+import 'dart:typed_data'; // ADICIONADO
+import 'dart:io';       // ADICIONADO
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart'; // ADICIONADO
+import 'package:open_filex/open_filex.dart';     // ADICIONADO
+import 'package:printing/printing.dart';         // ADICIONADO
+import 'package:pdf/pdf.dart' show PdfPageFormat;
+import '../pdf_generator.dart' as pdfGen; // ADICIONADO
+import '../detalhes_chamado_screen.dart' show DetalhesChamadoScreen;
+import '../config/theme/app_theme.dart';
+import '../widgets/chamado_list_item.dart';
+import '../services/chamado_service.dart'; // Assumindo que as constantes de campo estão aqui ou são importadas por ele
 
-import 'pdf_generator.dart' as pdfGen;
-import 'detalhes_chamado_screen.dart';
-import 'config/theme/app_theme.dart';
-import 'widgets/chamado_list_item.dart'; // Certifique-se que este caminho está correto
-import 'services/chamado_service.dart';
+// Se suas constantes de campo não estiverem acessíveis via chamado_service.dart,
+// importe-as ou defina-as aqui para _getSignatureUrlFromFirestore e pdfGen.
+// Exemplo:
+// const String kFieldSolucaoPorUid = 'solucaoPorUid';
+// const String kFieldRequerenteConfirmou = 'requerenteConfirmou';
+// const String kFieldRequerenteConfirmouUid = 'requerenteConfirmouUid';
+// const String kFieldNomeRequerenteConfirmador = 'nomeRequerenteConfirmador'; // Usado no PDF
 
 class ListaChamadosScreen extends StatefulWidget {
   const ListaChamadosScreen({super.key});
@@ -31,7 +40,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
 
   final List<String> _statusOptions = [
     'Aberto', 'Em Andamento', 'Pendente', kStatusPadraoSolicionado,
-    kStatusFinalizado, 'Fechado', 'Cancelado', 'Aguardando Aprovação',
+    'Fechado', 'Cancelado', 'Aguardando Aprovação',
     'Aguardando Peça', 'Chamado Duplicado', 'Aguardando Equipamento',
     'Atribuido para GSIOR', 'Garantia Fabricante',
   ];
@@ -49,9 +58,8 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   User? _currentUser;
   bool _isConfirmingAcceptance = false;
   String? _confirmingChamadoId;
-  bool _isGeneratingOrHandlingPdf = false; // Estado unificado para PDF
-  String? _processingPdfId; // ID do chamado cujo PDF está sendo processado
 
+  String? _idChamadoGerandoPdf; // ADICIONADO: Para controlar o loading do PDF por item
   String? _idChamadoFinalizandoDaLista;
   bool _isLoadingFinalizarDaLista = false;
 
@@ -66,25 +74,20 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   }
 
   Future<void> _checkUserRole() async {
-    if (!mounted) return;
-    if (!_isLoadingRole) return;
+    // ... (seu código existente)
+    if (!mounted || !_isLoadingRole) return;
     bool isAdminResult = false;
     User? user = _auth.currentUser;
     if (user != null) {
-      final userId = user.uid;
       try {
-        final DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+        final DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          if (userData.containsKey('role_temp') && userData['role_temp'] == 'admin') {
-            isAdminResult = true;
-          }
+          isAdminResult = (userData['role_temp'] == 'admin');
         }
       } catch (e) {
-        isAdminResult = false;
+        print("ListaChamadosScreen: Erro ao verificar role do usuário: $e");
       }
-    } else {
-      isAdminResult = false;
     }
     if (mounted) {
       setState(() {
@@ -101,6 +104,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   }
 
   Query _buildFirestoreQuery() {
+    // ... (seu código existente)
     Query query = FirebaseFirestore.instance.collection(kCollectionChamados);
 
     if (!_isLoadingRole && !_isAdmin) {
@@ -112,25 +116,18 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     } else if (_isLoadingRole) {
       query = query.where('__inexistente__', isEqualTo: '__aguardando_role__');
     }
-
-    // Adiciona filtro para não mostrar Finalizado/Arquivado nesta tela
     query = query.where(kFieldStatus, isNotEqualTo: kStatusFinalizado);
-
     if (_selectedStatusFilter != null) {
       query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
     }
     if (_selectedDateFilter != null) {
       final DateTime startOfDay = DateTime(_selectedDateFilter!.year, _selectedDateFilter!.month, _selectedDateFilter!.day, 0, 0, 0);
       final DateTime endOfDay = DateTime(_selectedDateFilter!.year, _selectedDateFilter!.month, _selectedDateFilter!.day, 23, 59, 59, 999);
-      query = query.where(kFieldDataCriacao, isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay));
-      query = query.where(kFieldDataCriacao, isLessThanOrEqualTo: Timestamp.fromDate(endOfDay));
+      query = query.where(kFieldDataCriacao, isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay), isLessThanOrEqualTo: Timestamp.fromDate(endOfDay));
     }
-
     final String sortField = _selectedSortOption['field'] as String;
     final bool sortDescending = _selectedSortOption['descending'] as bool;
-
     query = query.orderBy(sortField, descending: sortDescending);
-
     if (sortField != kFieldDataCriacao) {
       query = query.orderBy(kFieldDataCriacao, descending: true);
     }
@@ -138,6 +135,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   }
 
   void _applyCustomClientSort(List<QueryDocumentSnapshot> docs) {
+    // ... (seu código existente)
     docs.sort((aDoc, bDoc) {
       Map<String, dynamic> aData = aDoc.data() as Map<String, dynamic>;
       Map<String, dynamic> bData = bDoc.data() as Map<String, dynamic>;
@@ -149,33 +147,24 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       bool aIsSolved = (statusA == solvedForSortLower);
       bool bIsSolved = (statusB == solvedForSortLower);
 
-      int getGroupOrder(bool isSolved) {
-        if (isSolved) return 1;
-        return 0;
-      }
+      int getGroupOrder(bool isSolved) => isSolved ? 1 : 0; 
 
       int orderA = getGroupOrder(aIsSolved);
       int orderB = getGroupOrder(bIsSolved);
 
-      if (orderA != orderB) {
-        return orderA.compareTo(orderB);
-      }
+      if (orderA != orderB) return orderA.compareTo(orderB); 
 
       Timestamp? aTimestamp = aData[kFieldDataCriacao] as Timestamp?;
       Timestamp? bTimestamp = bData[kFieldDataCriacao] as Timestamp?;
-
-      if (aTimestamp != null && bTimestamp != null) {
-        return bTimestamp.compareTo(aTimestamp);
-      } else if (bTimestamp != null) {
-        return 1;
-      } else if (aTimestamp != null) {
-        return -1;
-      }
+      if (aTimestamp != null && bTimestamp != null) return bTimestamp.compareTo(aTimestamp);
+      if (bTimestamp != null) return 1;
+      if (aTimestamp != null) return -1;
       return 0;
     });
   }
 
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
+    // ... (seu código existente)
     if (!_isAdmin || !mounted) return;
     bool confirmar = await showDialog<bool>(
           context: context,
@@ -190,278 +179,274 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
               ),
             ],
           ),
-        ) ??
-        false;
+        ) ?? false;
 
     if (!confirmar || !mounted) return;
 
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    scaffoldMessenger.showSnackBar(
-      const SnackBar(content: Text('Excluindo chamado...'), duration: Duration(seconds: 2)),
-    );
-
+    scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Excluindo...')));
     try {
       await FirebaseFirestore.instance.collection(kCollectionChamados).doc(chamadoId).delete();
-      if (mounted) {
-        scaffoldMessenger.removeCurrentSnackBar();
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Chamado excluído com sucesso!'), backgroundColor: Colors.green),
-        );
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Excluído!'), backgroundColor: Colors.green));
     } catch (e) {
-      if (mounted) {
-        scaffoldMessenger.removeCurrentSnackBar();
-        scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Erro ao excluir chamado: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
     }
   }
 
   Future<void> _handleRequerenteConfirmar(String chamadoId) async {
+    // ... (seu código existente)
     final user = _auth.currentUser;
     if (user == null || !mounted) return;
-
-    setState(() {
-      _isConfirmingAcceptance = true;
-      _confirmingChamadoId = chamadoId;
-    });
-
+    setState(() { _isConfirmingAcceptance = true; _confirmingChamadoId = chamadoId; });
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       await _chamadoService.confirmarServicoRequerente(chamadoId, user);
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Confirmação de serviço registrada com sucesso!'), backgroundColor: Colors.green));
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Confirmado!'), backgroundColor: Colors.green));
     } catch (e) {
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro ao registrar confirmação: ${e.toString()}'), backgroundColor: Colors.red));
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro: ${e.toString()}'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isConfirmingAcceptance = false;
-          _confirmingChamadoId = null;
-        });
-      }
+      if (mounted) setState(() { _isConfirmingAcceptance = false; _confirmingChamadoId = null; });
     }
   }
 
   Future<void> _handleFinalizarArquivarChamado(String chamadoId) async {
-    if (!_isAdmin || _currentUser == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ação não permitida ou usuário não autenticado.'), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _isLoadingFinalizarDaLista = true;
-        _idChamadoFinalizandoDaLista = chamadoId;
-      });
-    }
-
+    // ... (seu código existente)
+     if (!_isAdmin || _currentUser == null || !mounted) return;
+    setState(() { _isLoadingFinalizarDaLista = true; _idChamadoFinalizandoDaLista = chamadoId; });
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       await _chamadoService.adminConfirmarSolucaoFinal(chamadoId, _currentUser!);
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('Chamado finalizado e arquivado com sucesso!'), backgroundColor: Colors.green),
-        );
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Arquivado!'), backgroundColor: Colors.green));
     } catch (e) {
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Erro ao finalizar chamado: ${e.toString()}'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro: ${e.toString()}'), backgroundColor: Colors.red));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingFinalizarDaLista = false;
-          _idChamadoFinalizandoDaLista = null;
-        });
-      }
+      if (mounted) setState(() { _isLoadingFinalizarDaLista = false; _idChamadoFinalizandoDaLista = null; });
     }
   }
 
-  // --- FUNÇÃO UNIFICADA PARA GERAR PDF E MOSTRAR OPÇÕES ---
-  Future<void> _gerarPdfEExibirOpcoes(String chamadoId, Map<String, dynamic> dadosChamado) async {
-    if (!mounted) return;
-    // Evita execuções múltiplas se já estiver processando este PDF
-    if (_isGeneratingOrHandlingPdf && _processingPdfId == chamadoId) return;
+  // ============== INÍCIO DA LÓGICA DE PDF ==============
 
+  // Mova esta função para uma classe de utilitário/serviço se for usada em mais lugares.
+  Future<String?> _getSignatureUrlFromFirestore(String? userId) async {
+    if (userId == null || userId.isEmpty) return null;
+    try {
+      DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data() != null) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        return userData['assinatura_url'] as String?;
+      }
+    } catch (e) {
+      print("ListaChamadosScreen: Erro ao buscar URL da assinatura para $userId: $e");
+    }
+    return null;
+  }
+
+  Future<void> _handleGerarPdfOpcoes(String chamadoId, Map<String, dynamic> chamadoData) async {
+    if (!mounted) return;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    BuildContext currentContext = context; // Salva contexto para diálogos
+    BuildContext currentContext = context; // Salva o contexto para diálogos
 
     setState(() {
-      _isGeneratingOrHandlingPdf = true;
-      _processingPdfId = chamadoId;
+      _idChamadoGerandoPdf = chamadoId;
     });
 
-    // Mostra indicador de progresso da GERAÇÃO
+    // Opcional: Diálogo de progresso global
     showDialog(
       context: currentContext,
       barrierDismissible: false,
-      builder: (dialogCtx) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+      builder: (dialogCtx) => PopScope(
+          canPop: false,
+          child: const Center(child: CircularProgressIndicator(backgroundColor: Colors.white,))), // Adicionado backgroundColor
     );
 
     Uint8List? pdfBytes;
+    String? adminSigUrl;
+    String? requesterSigUrl;
+
     try {
-      // Gera PDF sem assinaturas dinâmicas (passando null)
+      // Certifique-se que as constantes kFieldSolucaoPorUid, kFieldRequerenteConfirmou, kFieldRequerenteConfirmouUid
+      // estão disponíveis (importadas do chamado_service.dart ou definidas aqui)
+      final String? adminSolucionouUid = chamadoData[kFieldSolucaoPorUid] as String?; // Adapte se o nome da constante for diferente
+      if (adminSolucionouUid != null && adminSolucionouUid.isNotEmpty) {
+        adminSigUrl = await _getSignatureUrlFromFirestore(adminSolucionouUid);
+      }
+
+      final bool requerenteConfirmou = chamadoData[kFieldRequerenteConfirmou] as bool? ?? false; // Adapte
+      final String? uidDoRequerenteQueConfirmou = chamadoData[kFieldRequerenteConfirmouUid] as String?; // Adapte
+      if (requerenteConfirmou && uidDoRequerenteQueConfirmou != null && uidDoRequerenteQueConfirmou.isNotEmpty) {
+        requesterSigUrl = await _getSignatureUrlFromFirestore(uidDoRequerenteQueConfirmou);
+      }
+
       pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
         chamadoId: chamadoId,
-        dadosChamado: dadosChamado,
-        adminSignatureUrl: null, // Sem busca dinâmica de assinatura na lista
-        requesterSignatureUrl: null, // Sem busca dinâmica de assinatura na lista
+        dadosChamado: chamadoData,
+        adminSignatureUrl: adminSigUrl,
+        requesterSignatureUrl: requesterSigUrl,
       );
+
     } catch (e) {
-       if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
-         Navigator.of(currentContext, rootNavigator: true).pop(); // Fecha progresso
-       }
-       if (mounted) {
+      if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+        Navigator.of(currentContext, rootNavigator: true).pop(); // Fecha diálogo de progresso
+      }
+      if (mounted) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erro ao gerar PDF: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
-    } finally {
-       if (mounted) {
-         setState(() { // Reseta o estado de loading mesmo se o diálogo de opções não for mostrado
-           _isGeneratingOrHandlingPdf = false;
-           _processingPdfId = null;
-         });
-       }
+      setState(() {
+        _idChamadoGerandoPdf = null;
+      });
+      return;
     }
 
-    // Fecha diálogo de progresso APÓS geração (se não fechou no erro)
-    if (pdfBytes != null && Navigator.of(currentContext, rootNavigator: true).canPop()) {
-      Navigator.of(currentContext, rootNavigator: true).pop();
+    if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+       Navigator.of(currentContext, rootNavigator: true).pop(); // Fecha diálogo de progresso
+    }
+    
+    // É importante resetar o estado ANTES de mostrar o próximo diálogo,
+    // caso o usuário feche o diálogo de opções sem escolher uma.
+    if (mounted) {
+      setState(() {
+        _idChamadoGerandoPdf = null;
+      });
     }
 
-    // Mostra diálogo de opções se a geração foi bem-sucedida
     if (pdfBytes != null && mounted) {
-      showDialog(
-        context: context, // Usa contexto original para o novo diálogo
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('Opções do PDF'),
-            content: const Text('O que você gostaria de fazer?'),
-            actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            actions: <Widget>[
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.print_outlined),
-                    label: const Text('Imprimir / Salvar'),
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop();
-                      _imprimirPdfLista(pdfBytes!); // Chama impressão
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    icon: const Icon(Icons.open_in_new_outlined),
-                    label: const Text('Abrir / Visualizar'),
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop();
-                      _abrirPdfLocalmenteLista(pdfBytes!, chamadoId); // Chama abrir local
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    child: const Text('Cancelar'),
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop();
-                    },
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      );
-    } else if (mounted && pdfBytes == null) { // Se pdfBytes for null e não houve erro no catch (pouco provável)
+      _mostrarOpcoesPdfDialog(pdfBytes, chamadoId);
+    } else if (mounted) {
       scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('Falha ao gerar bytes do PDF.'), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('Falha ao gerar PDF.'), backgroundColor: Colors.orange),
       );
     }
   }
 
-  // --- FUNÇÕES AUXILIARES PARA AÇÕES DO PDF (Lista) ---
+  void _mostrarOpcoesPdfDialog(Uint8List pdfBytes, String chamadoId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Opções do PDF'),
+          content: const Text('O que você gostaria de fazer com o PDF do chamado?'),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          actions: <Widget>[
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.print_outlined),
+                  label: const Text('Imprimir / Salvar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _imprimirPdfLista(pdfBytes);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new_outlined),
+                  label: const Text('Abrir / Visualizar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _abrirPdfLocalmenteLista(pdfBytes, chamadoId);
+                  },
+                ),
+                 const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Compartilhar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _compartilharPdfLista(pdfBytes, chamadoId);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  child: const Text('Cancelar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _imprimirPdfLista(Uint8List pdfBytes) async {
-    if(!mounted) return;
+    if (!mounted) return;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
-      // Mostra indicador enquanto prepara a impressão
-       showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
-       );
       await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdfBytes);
-      // Fecha indicador após comando de impressão ser enviado (layoutPdf pode retornar antes de fechar a UI de impressão)
-      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-         Navigator.of(context, rootNavigator: true).pop();
-      }
     } catch (e) {
-       if (mounted && Navigator.of(context, rootNavigator: true).canPop()) { // Fecha em caso de erro
-         Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao preparar impressão: $e'), backgroundColor: Colors.red),
+        );
       }
-       if(mounted) {
-         scaffoldMessenger.showSnackBar(
-           SnackBar(content: Text('Erro ao preparar impressão: $e'), backgroundColor: Colors.red),
-         );
-       }
     }
   }
 
   Future<void> _abrirPdfLocalmenteLista(Uint8List pdfBytes, String chamadoId) async {
-     if (!mounted) return;
-     final scaffoldMessenger = ScaffoldMessenger.of(context);
-     BuildContext dialogContext = context;
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContextForDialog = context;
 
-     showDialog(
-        context: dialogContext,
-        barrierDismissible: false,
-        builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
-     );
+    showDialog(
+      context: currentContextForDialog,
+      barrierDismissible: false,
+      builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator(backgroundColor: Colors.white))), // Adicionado backgroundColor
+    );
 
-     try {
-        final outputDir = await getTemporaryDirectory();
-        final filename = 'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}_lista.pdf';
-        final outputFile = File("${outputDir.path}/$filename");
-        await outputFile.writeAsBytes(pdfBytes);
+    try {
+      final outputDir = await getTemporaryDirectory();
+      final filename = 'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}.pdf';
+      final outputFile = File("${outputDir.path}/$filename");
+      await outputFile.writeAsBytes(pdfBytes);
 
-        if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
-            Navigator.of(dialogContext, rootNavigator: true).pop();
-        }
+      if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+        Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+      }
 
-        final result = await OpenFilex.open(outputFile.path);
+      final result = await OpenFilex.open(outputFile.path);
 
-        if (result.type != ResultType.done && mounted) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(content: Text('Não foi possível abrir o PDF: ${result.message}')),
-            );
-        }
-     } catch(e) {
-         if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
-            Navigator.of(dialogContext, rootNavigator: true).pop();
-         }
-         if (mounted) {
-           scaffoldMessenger.showSnackBar(
-             SnackBar(content: Text('Erro ao abrir PDF localmente: $e'), backgroundColor: Colors.red),
-           );
-         }
-     }
+      if (result.type != ResultType.done && mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Não foi possível abrir o PDF: ${result.message}')),
+        );
+      }
+    } catch (e) {
+      if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+        Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+      }
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao abrir PDF localmente: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
-  // --- Função _showFilterBottomSheet (sem alterações significativas na lógica interna) ---
+  Future<void> _compartilharPdfLista(Uint8List pdfBytes, String chamadoId) async {
+      if(!mounted) return;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      try {
+        await Printing.sharePdf(bytes: pdfBytes, filename: 'chamado_${chamadoId.substring(0,min(6, chamadoId.length))}.pdf');
+      } catch (e) {
+        if (mounted) {
+            scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('Erro ao compartilhar PDF: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+  }
+
+  // ============== FIM DA LÓGICA DE PDF ==============
+
   void _showFilterBottomSheet() {
+    // ... (seu código existente)
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -508,24 +493,24 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                           spacing: 8.0,
                           runSpacing: 4.0,
                           children: _statusOptions
-                              .where((status) => status != kStatusFinalizado) // Não mostrar Finalizado aqui
+                              .where((status) => status != kStatusFinalizado)
                               .map((statusValue) {
-                                  final bool isSelected = _selectedStatusFilter == statusValue;
-                                  return FilterChip(
-                                    label: Text(statusValue),
-                                    selected: isSelected,
-                                    onSelected: (selected) {
-                                      setState(() {
-                                        _selectedStatusFilter = selected ? statusValue : null;
-                                      });
-                                      sheetSetState(() {});
-                                    },
-                                    selectedColor: colorScheme.primaryContainer,
-                                    checkmarkColor: colorScheme.onPrimaryContainer,
-                                    labelStyle: TextStyle(color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
-                                  );
-                                }
-                              ).toList(),
+                                final bool isSelected = _selectedStatusFilter == statusValue;
+                                return FilterChip(
+                                  label: Text(statusValue),
+                                  selected: isSelected,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      _selectedStatusFilter = selected ? statusValue : null;
+                                    });
+                                    sheetSetState(() {});
+                                  },
+                                  selectedColor: colorScheme.primaryContainer,
+                                  checkmarkColor: colorScheme.onPrimaryContainer,
+                                  labelStyle: TextStyle(color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
+                                );
+                              }
+                            ).toList(),
                         ),
                         const SizedBox(height: 20),
                         Text('Filtrar por Data de Criação:', style: theme.textTheme.titleMedium),
@@ -553,9 +538,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                     locale: const Locale('pt', 'BR'),
                                   );
                                   if (pickedDate != null) {
-                                    setState(() {
-                                      _selectedDateFilter = pickedDate;
-                                    });
+                                    setState(() { _selectedDateFilter = pickedDate; });
                                     sheetSetState(() {});
                                   }
                                 },
@@ -569,9 +552,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                                 onPressed: () {
-                                  setState(() {
-                                    _selectedDateFilter = null;
-                                  });
+                                  setState(() { _selectedDateFilter = null; });
                                   sheetSetState(() {});
                                 },
                               )
@@ -591,9 +572,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                               selected: isSelected,
                               onSelected: (selected) {
                                 if (selected) {
-                                  setState(() {
-                                    _selectedSortOption = option;
-                                  });
+                                  setState(() { _selectedSortOption = option; });
                                   sheetSetState(() {});
                                 }
                               },
@@ -602,7 +581,16 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             );
                           }).toList(),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              child: const Text('Aplicar Filtros'),
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   );
@@ -730,13 +718,10 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 final chamadoId = document.id;
 
                                 final bool isLoadingConfirmation = _isConfirmingAcceptance && _confirmingChamadoId == chamadoId;
-                                // Usa o estado unificado de PDF para indicar loading no item
-                                final bool isLoadingPdfItem = _isGeneratingOrHandlingPdf && _processingPdfId == chamadoId;
+                                final bool isLoadingPdfItem = _idChamadoGerandoPdf == chamadoId; // ATUALIZADO
                                 final bool isLoadingFinalizarItem = _isLoadingFinalizarDaLista && _idChamadoFinalizandoDaLista == chamadoId;
-
                                 final String? dataAtualizacaoKey = data[kFieldDataAtualizacao]?.toString() ?? data[kFieldDataCriacao]?.toString();
 
-                                // --- PASSANDO A NOVA CALLBACK PARA O ITEM ---
                                 return ChamadoListItem(
                                   key: ValueKey(chamadoId + (dataAtualizacaoKey ?? DateTime.now().millisecondsSinceEpoch.toString())),
                                   chamadoId: chamadoId,
@@ -750,14 +735,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (_) => DetalhesChamadoScreen(chamadoId: id)),
-                                    );
+                                    ).then((_) { if (mounted) setState(() {}); });
                                   },
-                                  isLoadingPdfDownload: isLoadingPdfItem, // Usa o estado unificado
-                                  onGerarPdfOpcoes: _gerarPdfEExibirOpcoes, // Passa a nova função
+                                  isLoadingPdfDownload: isLoadingPdfItem,         // ATUALIZADO
+                                  onGerarPdfOpcoes: _handleGerarPdfOpcoes,      // ATUALIZADO
                                   onFinalizarArquivar: _handleFinalizarArquivarChamado,
                                   isLoadingFinalizarArquivar: isLoadingFinalizarItem,
                                 );
-                                // --- FIM DA MODIFICAÇÃO ---
                               },
                             );
                           },

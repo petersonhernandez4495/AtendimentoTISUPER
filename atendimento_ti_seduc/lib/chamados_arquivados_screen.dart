@@ -1,15 +1,26 @@
-// lib/screens/chamados_arquivados_screen.dart
+// lib/screens/chamados_arquivados_screen.dart (Exemplo de caminho)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
-// Presumindo que estas são as localizações corretas dos seus arquivos
 import '../pdf_generator.dart' as pdfGen;
-import '../screens/detalhes_chamado_screen.dart';
+// --- CORREÇÃO DE IMPORTAÇÃO ---
+// Assumindo que 'detalhes_chamado_screen.dart' está na pasta 'lib/'
+// e este arquivo ('chamados_arquivados_screen.dart') está em 'lib/screens/'
+import '../detalhes_chamado_screen.dart';
 import '../config/theme/app_theme.dart';
 import '../widgets/chamado_list_item.dart';
-import '../services/chamado_service.dart'; // Para constantes
+import '../services/chamado_service.dart';
+
+// Constantes de Espaçamento (MAIS COMPACTAS) - movidas para o topo do arquivo ou para um arquivo de constantes global
+const double kSpacingXXSmall = 2.0;
+const double kSpacingXSmall = 4.0;
+const double kSpacingSmall = 8.0;
+const double kSpacingMedium = 12.0;
+const double kSpacingLarge = 16.0;
+const double kSpacingXLarge = 20.0;
+
 
 class ListaChamadosArquivadosScreen extends StatefulWidget {
   const ListaChamadosArquivadosScreen({super.key});
@@ -62,7 +73,7 @@ class _ListaChamadosArquivadosScreenState
           }
         }
       } catch (e, s) {
-        print("Erro buscar role ChamadosArquivados: $e\n$s");
+        print("Erro buscar role Arquivados: $e\n$s");
       }
     }
     if (mounted) {
@@ -75,7 +86,7 @@ class _ListaChamadosArquivadosScreenState
 
   bool get _isFilterActive {
     return _selectedDateFilter != null ||
-        _selectedSortOption['field'] != kFieldAdminFinalizouData; // Verifica contra o campo padrão de ordenação
+        _selectedSortOption['field'] != kFieldAdminFinalizouData;
   }
 
   Query _buildFirestoreQuery() {
@@ -105,7 +116,6 @@ class _ListaChamadosArquivadosScreenState
 
     query = query.orderBy(sortField, descending: sortDescending);
 
-    // Adiciona ordenação secundária por data de criação se a ordenação principal não for ela, para desempate.
     if (sortField != kFieldDataCriacao) {
       query = query.orderBy(kFieldDataCriacao, descending: true);
     }
@@ -136,14 +146,13 @@ class _ListaChamadosArquivadosScreenState
     if (foundDoc != null && foundDoc.exists) {
       docData = foundDoc.data() as Map<String, dynamic>?;
     } else {
-      // Se não encontrar nos docs atuais, busca no Firestore (opcional, mas recomendado para robustez)
       try {
         DocumentSnapshot firestoreDoc = await FirebaseFirestore.instance.collection(kCollectionChamados).doc(chamadoId).get();
         if (firestoreDoc.exists) {
           docData = firestoreDoc.data() as Map<String, dynamic>?;
         }
       } catch (e) {
-        print("Erro ao buscar doc $chamadoId para PDF (arquivados): $e");
+        // Erro já tratado no print
       }
     }
 
@@ -187,7 +196,7 @@ class _ListaChamadosArquivadosScreenState
                 builder: (_, scrollController) {
                   return SingleChildScrollView(
                     controller: scrollController,
-                    padding: const EdgeInsets.all(16.0).copyWith(bottom: MediaQuery.of(context).viewInsets.bottom + 16.0),
+                    padding: const EdgeInsets.all(kSpacingMedium).copyWith(bottom: MediaQuery.of(context).viewInsets.bottom + kSpacingMedium),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -208,9 +217,9 @@ class _ListaChamadosArquivadosScreenState
                             ),
                           ],
                         ),
-                        const Divider(height: 24),
+                        const Divider(height: kSpacingLarge),
                         Text('Filtrar por Data de Finalização:', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: kSpacingSmall),
                         Row(
                           children: [
                             Expanded(
@@ -225,8 +234,8 @@ class _ListaChamadosArquivadosScreenState
                                   final DateTime? pickedDate = await showDatePicker(
                                     context: context,
                                     initialDate: _selectedDateFilter ?? DateTime.now(),
-                                    firstDate: DateTime(DateTime.now().year - 5), // Ajuste conforme necessário
-                                    lastDate: DateTime.now(), // Não pode selecionar data futura para finalização
+                                    firstDate: DateTime(DateTime.now().year - 5),
+                                    lastDate: DateTime.now(),
                                     locale: const Locale('pt', 'BR'),
                                     helpText: 'SELECIONE A DATA DE FINALIZAÇÃO',
                                   );
@@ -246,11 +255,12 @@ class _ListaChamadosArquivadosScreenState
                               )
                           ],
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: kSpacingLarge),
                         Text('Ordenar por:', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: kSpacingSmall),
                         Wrap(
-                          spacing: 8.0, runSpacing: 4.0,
+                          spacing: kSpacingSmall,
+                          runSpacing: kSpacingXSmall,
                           children: _sortOptions.map((option) {
                             final bool isSelected = _selectedSortOption['label'] == option['label'];
                             return ChoiceChip(
@@ -267,7 +277,7 @@ class _ListaChamadosArquivadosScreenState
                             );
                           }).toList(),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: kSpacingLarge),
                       ],
                     ),
                   );
@@ -296,7 +306,7 @@ class _ListaChamadosArquivadosScreenState
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+                  padding: const EdgeInsets.fromLTRB(kSpacingMedium, kSpacingSmall, kSpacingMedium, 0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -320,8 +330,8 @@ class _ListaChamadosArquivadosScreenState
                           builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
                             if (snapshot.hasError) {
                               return Center(child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text('Erro ao carregar chamados arquivados: ${snapshot.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
+                                padding: const EdgeInsets.all(kSpacingMedium),
+                                child: Text('Erro: ${snapshot.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
                               ));
                             }
                             if (snapshot.connectionState == ConnectionState.waiting && _currentDocs == null) {
@@ -331,20 +341,20 @@ class _ListaChamadosArquivadosScreenState
                             _currentDocs = snapshot.data?.docs;
                                                         
                             if (_currentDocs == null || _currentDocs!.isEmpty) {
-                              String msg = _isAdmin ? 'Nenhum chamado finalizado/arquivado encontrado.' : 'Você não possui chamados finalizados/arquivados.';
-                              if (_isFilterActive) msg = 'Nenhum chamado finalizado/arquivado encontrado com os filtros aplicados.';
+                              String msg = _isAdmin ? 'Nenhum chamado finalizado/arquivado.' : 'Você não possui chamados finalizados/arquivados.';
+                              if (_isFilterActive) msg = 'Nenhum chamado finalizado com os filtros.';
                               
                               return Center(
                                 child: Padding(
-                                  padding: const EdgeInsets.all(20.0),
+                                  padding: const EdgeInsets.all(kSpacingLarge),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.inventory_2_outlined, size: 50, color: Colors.grey[500]), // Ícone de arquivo/inventário
-                                      const SizedBox(height: 16),
+                                      Icon(Icons.inventory_2_outlined, size: 50, color: Colors.grey[500]),
+                                      const SizedBox(height: kSpacingMedium),
                                       Text(msg, textAlign: TextAlign.center, style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey[600])),
                                       if (_isFilterActive) ...[
-                                        const SizedBox(height: 20),
+                                        const SizedBox(height: kSpacingLarge),
                                         ElevatedButton.icon(
                                           icon: const Icon(Icons.clear_all),
                                           label: const Text('Limpar Filtros'),
@@ -362,7 +372,7 @@ class _ListaChamadosArquivadosScreenState
                             }
 
                             return ListView.builder(
-                              padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0, bottom: 72.0),
+                              padding: const EdgeInsets.only(top: kSpacingSmall, left: kSpacingSmall, right: kSpacingSmall, bottom: 72.0),
                               itemCount: _currentDocs!.length,
                               itemBuilder: (BuildContext context, int index) {
                                 final DocumentSnapshot document = _currentDocs![index];
@@ -379,9 +389,9 @@ class _ListaChamadosArquivadosScreenState
                                   chamadoData: data,
                                   currentUser: _currentUser,
                                   isAdmin: _isAdmin,
-                                  onConfirmar: null, 
-                                  isLoadingConfirmation: false, 
-                                  onDelete: null, // Sem exclusão para arquivados
+                                  onConfirmar: null, // Ação não relevante para arquivados
+                                  isLoadingConfirmation: false,
+                                  onDelete: null, // Decidimos não permitir exclusão de arquivados por enquanto
                                   onNavigateToDetails: (id) {
                                     Navigator.push(
                                       context,
@@ -390,6 +400,7 @@ class _ListaChamadosArquivadosScreenState
                                   },
                                   onDownloadPdf: _handleDownloadPdf,
                                   isLoadingPdfDownload: isLoadingPdf,
+                                  // onFinalizarArquivar e isLoadingFinalizarArquivar não são necessários aqui
                                 );
                               },
                             );

@@ -10,7 +10,7 @@ class ChamadoListItem extends StatelessWidget {
   final Map<String, dynamic> chamadoData;
   final User? currentUser;
   final bool isAdmin;
-  final Function(String) onConfirmar;
+  final Function(String)? onConfirmar;
   final Function(String) onNavigateToDetails;
   final bool isLoadingConfirmation;
   final VoidCallback? onDelete;
@@ -25,14 +25,14 @@ class ChamadoListItem extends StatelessWidget {
     required this.chamadoData,
     required this.currentUser,
     required this.isAdmin,
-    required this.onConfirmar,
+    this.onConfirmar, // MODIFICADO: Não é mais 'required'
     required this.onNavigateToDetails,
-    required this.isLoadingConfirmation,
+    this.isLoadingConfirmation = false, // MODIFICADO: Valor padrão
     required this.onDownloadPdf,
-    required this.isLoadingPdfDownload,
+    this.isLoadingPdfDownload = false, // MODIFICADO: Valor padrão
     this.onDelete,
-    this.onFinalizarArquivar,
-    this.isLoadingFinalizarArquivar = false,
+    this.onFinalizarArquivar, // NOVO PARÂMETRO
+    this.isLoadingFinalizarArquivar = false, // NOVO PARÂMETRO com valor padrão
   });
 
   String _formatTimestamp(Timestamp? timestamp, [String format = 'dd/MM/yy HH:mm']) {
@@ -63,7 +63,14 @@ class ChamadoListItem extends StatelessWidget {
 
     final String statusSolucionadoComparacao = kStatusPadraoSolicionado;
 
-    final bool podeConfirmar = !isAdmin && currentUserId != null && currentUserId == creatorUid && status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && !requerenteConfirmou && !isInativo;
+    final bool podeConfirmar = !isAdmin &&
+        currentUserId != null &&
+        currentUserId == creatorUid &&
+        status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() &&
+        !requerenteConfirmou &&
+        !isInativo &&
+        onConfirmar != null;
+
     final bool mostrarSolucaoAceitaChip = status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && requerenteConfirmou && !isInativo;
     final String? solucao = chamadoData[kFieldSolucao] as String?;
 
@@ -116,7 +123,6 @@ class ChamadoListItem extends StatelessWidget {
                                 !(chamadoData[kFieldAdminFinalizou] as bool? ?? false) &&
                                 onFinalizarArquivar != null;
 
-
     return Opacity(
       opacity: isInativo ? 0.6 : 1.0,
       child: Card(
@@ -148,6 +154,7 @@ class ChamadoListItem extends StatelessWidget {
                   children: [
                     Container(
                       width: 5.0,
+                      height: 60, 
                       margin: const EdgeInsets.only(right: 10.0),
                       decoration: BoxDecoration(
                         color: isInativo ? Colors.grey.shade400 : corPrioridade,
@@ -274,11 +281,11 @@ class ChamadoListItem extends StatelessWidget {
                             onNavigateToDetails(chamadoId);
                           } else if (value == 'delete' && isAdmin && onDelete != null) {
                             onDelete!();
-                          } else if (value == 'download_pdf_direct') {
+                          } else if (value == 'download_pdf') {
                              onDownloadPdf(chamadoId);
-                          } else if (value == 'confirmar_servico' && podeConfirmar) {
-                             onConfirmar(chamadoId);
-                          } else if (value == 'finalizar_arquivar' && podeFinalizarPelaLista) {
+                          } else if (value == 'confirmar_servico' && podeConfirmar && onConfirmar != null) {
+                             onConfirmar!(chamadoId);
+                          } else if (value == 'finalizar_arquivar' && podeFinalizarPelaLista && onFinalizarArquivar != null) {
                             onFinalizarArquivar!(chamadoId);
                           }
                         },
@@ -286,13 +293,11 @@ class ChamadoListItem extends StatelessWidget {
                           List<PopupMenuEntry<String>> items = [];
                           items.add(const PopupMenuItem<String>(value: 'details', child: Text('Ver Detalhes')));
                           
-                          if (status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() || status.toLowerCase() == kStatusFinalizado.toLowerCase()) {
-                             items.add(PopupMenuItem<String>(
-                                value: 'download_pdf_direct',
-                                enabled: !isLoadingPdfDownload,
-                                child: isLoadingPdfDownload ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Baixando PDF...')]) : const Text('Baixar PDF Solução'),
-                              ));
-                          }
+                          items.add(PopupMenuItem<String>(
+                              value: 'download_pdf',
+                              enabled: !isLoadingPdfDownload,
+                              child: isLoadingPdfDownload ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Baixando PDF...')]) : const Text('Baixar PDF'),
+                          ));
 
                           if (podeConfirmar) {
                             items.add(PopupMenuItem<String>(
@@ -346,7 +351,9 @@ class ChamadoListItem extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   textStyle: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
                                 ),
-                                onPressed: () => onConfirmar(chamadoId),
+                                onPressed: () {
+                                  if(onConfirmar != null) onConfirmar!(chamadoId);
+                                }
                               ),
                       )
                     ],
@@ -358,16 +365,16 @@ class ChamadoListItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Divider(height: 1, thickness: 0.5),
-                      const SizedBox(height: 6),
-                      Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
-                      const SizedBox(height: 2),
-                      Text(
-                        solucao,
-                        style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                        const Divider(height: 1, thickness: 0.5),
+                        const SizedBox(height: 6),
+                        Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
+                        const SizedBox(height: 2),
+                        Text(
+                          solucao,
+                          style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                     ],
                   )
                 )

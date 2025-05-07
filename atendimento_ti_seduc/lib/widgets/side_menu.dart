@@ -1,7 +1,6 @@
-// lib/widgets/side_menu.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../config/theme/app_theme.dart';
+import '../config/theme/app_theme.dart'; // Ajuste o caminho se necessário
 import 'package:flutter/foundation.dart'; // Para kReleaseMode
 
 class MenuItemData {
@@ -43,12 +42,17 @@ class SideMenu extends StatefulWidget {
 }
 
 class _SideMenuState extends State<SideMenu> {
-  bool _isExpanded = false;
+  bool _isExpanded = true;
   final double _collapsedWidth = 70.0;
-  final double _expandedWidth = 240.0;
+  final double _expandedWidth = 256.0;
 
   late List<MenuItemData> _navigationRailItems;
   static const int perfilScreenIndex = 3;
+
+  // Defina uma altura máxima razoável para a logo
+  static const double _maxLogoContainerHeight = 180.0; // Reduzido para teste, ajuste conforme necessário
+  // Defina um padding vertical para a logo
+  static const double _logoVerticalPadding = 8.0;
 
   @override
   void initState() {
@@ -77,129 +81,139 @@ class _SideMenuState extends State<SideMenu> {
     }
   }
 
-  Widget _buildMenuHeader(BuildContext context) {
+  Widget _buildLogoSection(BuildContext context) {
+    if (!_isExpanded) return const SizedBox.shrink(); // Não mostra logo se colapsado
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: _logoVerticalPadding, horizontal: 12.0),
+      child: SizedBox(
+        height: _maxLogoContainerHeight,
+        width: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.centerLeft,
+          child: Image.asset(
+            'assets/images/seu_logo.png', // SUBSTITUA PELO CAMINHO CORRETO
+            errorBuilder: (c, e, s) => Container(
+              height: _maxLogoContainerHeight,
+              alignment: Alignment.center,
+              child: Text(
+                "LOGO",
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppTheme.kWinPrimaryText),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserProfileSection(BuildContext context) {
     final User? user = widget.currentUser;
     final ThemeData theme = Theme.of(context);
+    if (user == null) return const SizedBox.shrink();
 
-    // SOLUÇÃO PARA O ERRO "No host specified in URI":
-    // Validar user.photoURL antes de usá-lo com NetworkImage.
-    ImageProvider? userImageProvider;
-    if (user?.photoURL != null &&
-        user!.photoURL!.isNotEmpty &&
-        (user.photoURL!.startsWith('http://') || user.photoURL!.startsWith('https://'))) {
-      try {
-        userImageProvider = NetworkImage(user.photoURL!);
-      } catch (e) {
-        print('Erro ao criar NetworkImage para ${user.photoURL}: $e');
-        // userImageProvider permanece null, o ícone de fallback será usado
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: _isExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      children: [
-        if (_isExpanded)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-            child: Image.asset(
-              'assets/images/seu_logo.png', // Certifique-se que o caminho está correto
-              height: 28,
-              errorBuilder: (c, e, s) => Text(
-                "APP LOGO",
-                style: theme.textTheme.titleMedium?.copyWith(color: AppTheme.kWinPrimaryText),
-              ),
-            ),
-          ),
-        if (user != null)
-          InkWell(
-            onTap: () {
-              widget.onDestinationSelected(perfilScreenIndex);
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2,
-                vertical: 12.0,
-              ),
-              child: _isExpanded
-                  ? Row(
+    return InkWell(
+      onTap: () {
+        widget.onDestinationSelected(perfilScreenIndex);
+      },
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2, // 40 = diâmetro do avatar
+          vertical: 10.0,
+        ),
+        child: _isExpanded
+            ? Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
+                    backgroundImage: user.photoURL != null && user.photoURL!.isNotEmpty && (user.photoURL!.startsWith('http') || user.photoURL!.startsWith('https'))
+                        ? NetworkImage(user.photoURL!)
+                        : null,
+                    child: user.photoURL == null || user.photoURL!.isEmpty || !(user.photoURL!.startsWith('http') || user.photoURL!.startsWith('https'))
+                        ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                          backgroundImage: userImageProvider, // Usar a variável validada
-                          child: userImageProvider == null // Mostrar ícone se a imagem não puder ser carregada
-                              ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if(user.displayName != null && user.displayName!.isNotEmpty)
-                                Text(
-                                  user.displayName!,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                      color: AppTheme.kWinPrimaryText, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              if (user.email != null && user.email!.isNotEmpty)
-                                Text(
-                                  user.email!,
-                                  style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.kWinSecondaryText),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                            ],
+                        if (user.displayName != null && user.displayName!.isNotEmpty)
+                          Text(
+                            user.displayName!,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                                color: AppTheme.kWinPrimaryText, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
-                        ),
+                        if (user.email != null && user.email!.isNotEmpty)
+                          Text(
+                            user.email!,
+                            style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.kWinSecondaryText),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                       ],
-                    )
-                  : CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                      backgroundImage: userImageProvider, // Usar a variável validada
-                      child: userImageProvider == null // Mostrar ícone se a imagem não puder ser carregada
-                          ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
-                          : null,
                     ),
-            ),
-          ),
-        const Divider(height: 1, thickness: 1, color: AppTheme.kWinDivider),
-      ],
+                  ),
+                ],
+              )
+            : CircleAvatar(
+                radius: 20,
+                backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
+                backgroundImage: user.photoURL != null && user.photoURL!.isNotEmpty && (user.photoURL!.startsWith('http') || user.photoURL!.startsWith('https'))
+                    ? NetworkImage(user.photoURL!)
+                    : null,
+                child: user.photoURL == null || user.photoURL!.isEmpty || !(user.photoURL!.startsWith('http') || user.photoURL!.startsWith('https'))
+                    ? Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent)
+                    : null,
+              ),
+      ),
     );
   }
 
   Widget _buildMenuActions(BuildContext context) {
-    Widget buildActionItem({required IconData icon, required String label, VoidCallback? onPressed}) {
-      if (_isExpanded) {
-        return TextButton.icon(
-          icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 20),
-          label: Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.kWinPrimaryText)),
-          onPressed: onPressed,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            alignment: Alignment.centerLeft,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
-          ),
-        );
-      } else {
-        return IconButton(
-          icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 24),
-          tooltip: label,
-          onPressed: onPressed,
-        );
-      }
+    // Esta função pode ser simplificada ou ter seus itens com altura controlada
+    List<Widget> actions = [];
+    if (widget.onSearchPressed != null) {
+      actions.add(_buildActionItem(context, icon: Icons.search_outlined, label: 'Buscar', onPressed: widget.onSearchPressed));
     }
+    if (widget.onCheckForUpdates != null && kReleaseMode) {
+      actions.add(_buildActionItem(context, icon: Icons.update_outlined, label: 'Verificar Atualizações', onPressed: widget.onCheckForUpdates));
+    }
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return Column(mainAxisSize: MainAxisSize.min, children: actions);
+  }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-          if (widget.onSearchPressed != null) buildActionItem(icon: Icons.search_outlined, label: 'Buscar', onPressed: widget.onSearchPressed),
-          if (widget.onCheckForUpdates != null && kReleaseMode)
-            buildActionItem(icon: Icons.update_outlined, label: 'Verificar Atualizações', onPressed: widget.onCheckForUpdates),
-      ],
-    );
+  Widget _buildActionItem(BuildContext context, {required IconData icon, required String label, VoidCallback? onPressed}) {
+    if (_isExpanded) {
+      return TextButton.icon(
+        icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 20),
+        label: Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.kWinPrimaryText),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Padding vertical reduzido
+          alignment: Alignment.centerLeft,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
+        ),
+      );
+    } else {
+      return IconButton(
+        icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 24),
+        tooltip: label,
+        onPressed: onPressed,
+        padding: const EdgeInsets.all(12), // Padding para IconButton
+      );
+    }
   }
 
   Widget _buildLogoutButton(BuildContext context) {
@@ -208,16 +222,18 @@ class _SideMenuState extends State<SideMenu> {
 
     if (_isExpanded) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0), // Padding vertical
         child: TextButton.icon(
           icon: Icon(Icons.logout_rounded, color: logoutIconColor, size: 22),
           label: Text(
             'Sair',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: logoutTextColor, fontWeight: FontWeight.w600)
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: logoutTextColor, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           onPressed: widget.onLogout,
           style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), // Padding vertical reduzido
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             alignment: Alignment.centerLeft,
           ),
@@ -231,6 +247,7 @@ class _SideMenuState extends State<SideMenu> {
           icon: Icon(Icons.logout_rounded, color: logoutIconColor),
           iconSize: 24,
           onPressed: widget.onLogout,
+          padding: const EdgeInsets.all(12), // Padding para IconButton
         ),
       );
     }
@@ -239,6 +256,7 @@ class _SideMenuState extends State<SideMenu> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+
     int railSelectedIndex = -1;
     if (widget.selectedIndex != perfilScreenIndex) {
         railSelectedIndex = _navigationRailItems.indexWhere((item) => item.index == widget.selectedIndex);
@@ -254,6 +272,7 @@ class _SideMenuState extends State<SideMenu> {
       ),
       child: Column(
         children: [
+          // 1. Botão de Expandir/Recolher
           Container(
             height: 56,
             alignment: _isExpanded ? Alignment.centerRight : Alignment.center,
@@ -270,7 +289,16 @@ class _SideMenuState extends State<SideMenu> {
               },
             ),
           ),
-          _buildMenuHeader(context),
+
+          // 2. Seção do Logo (somente se expandido)
+          _buildLogoSection(context),
+
+          // 3. Seção do Perfil do Usuário
+          _buildUserProfileSection(context),
+          
+          const Divider(height: 1, thickness: 1, color: AppTheme.kWinDivider),
+
+          // 4. Itens de Navegação Principais
           Expanded(
             child: NavigationRail(
               selectedIndex: railSelectedIndex >= 0 ? railSelectedIndex : null,
@@ -284,36 +312,49 @@ class _SideMenuState extends State<SideMenu> {
               minWidth: _collapsedWidth,
               minExtendedWidth: _expandedWidth,
               labelType: NavigationRailLabelType.none,
-              selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 26),
-              unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 24),
-              selectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith(
+              selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 24), // Tamanho do ícone ajustado
+              unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 22), // Tamanho do ícone ajustado
+              selectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith( // Usando bodySmall para labels
                 fontWeight: FontWeight.bold,
                 color: AppTheme.kWinAccent,
               ),
-              unselectedLabelTextStyle: theme.textTheme.bodyMedium?.copyWith(
+              unselectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith( // Usando bodySmall
                 color: AppTheme.kWinPrimaryText,
               ),
               useIndicator: true,
               indicatorColor: AppTheme.kWinAccent.withOpacity(0.12),
               indicatorShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0)
+                  borderRadius: BorderRadius.circular(6.0) // Raio menor
               ),
               destinations: _navigationRailItems.map((item) {
                 return NavigationRailDestination(
                   icon: Tooltip(message: item.title, child: Icon(item.icon)),
                   selectedIcon: Tooltip(message: item.title, child: Icon(item.icon)),
-                  label: Text(item.title),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+                  label: Text(
+                    item.title,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0), // Padding vertical reduzido
                 );
               }).toList(),
             ),
           ),
-          _buildMenuActions(context),
+          
+          // 5. Ações (Busca, Atualização)
+          if (_isExpanded) // Mostrar ações apenas se expandido e se houver ações
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: _buildMenuActions(context),
+            )
+          else if (!_isExpanded && (widget.onSearchPressed != null || (widget.onCheckForUpdates != null && kReleaseMode)) ) // Mostrar ícones de ação se colapsado e houver ações
+             _buildMenuActions(context),
+
+
+          // 6. Logout
           const Divider(height: 0, thickness: 1, color: AppTheme.kWinDivider),
-          Padding(
-             padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: _buildLogoutButton(context),
-          ),
+          _buildLogoutButton(context),
+          const SizedBox(height: 4), // Pequeno espaço no final
         ],
       ),
     );

@@ -1,3 +1,4 @@
+// services/chamado_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -5,37 +6,41 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 // --- COLEÇÕES ---
 const String kCollectionChamados = 'chamados';
-const String kCollectionUsers = 'users'; // Adicionada para clareza
+const String kCollectionUsers = 'users';
 const String kSubCollectionComentarios = 'comentarios';
+const String kCollectionConfig = 'configuracoes'; // Adicionado
+const String kDocOpcoes = 'opcoesChamado';    // Adicionado
+const String kDocLocalidades = 'localidades'; // Adicionado
 
 // --- CAMPOS COMUNS DO CHAMADO ---
 const String kFieldTipoSolicitante = 'tipo_solicitante';
 const String kFieldNomeSolicitante = 'nome_solicitante';
+const String kFieldEmailSolicitante = 'email_solicitante'; // <<<--- ADICIONADO
 const String kFieldCelularContato = 'celular_contato';
 const String kFieldCelularContatoUnmasked = 'celular_contato_unmasked';
-const String kFieldEquipamentoSolicitacao = 'equipamento_solicitacao';
+const String kFieldEquipamentoSolicitacao = 'equipamento_solicitacao'; // Renomeado de selecionado
 const String kFieldEquipamentoOutro = 'equipamento_outro_descricao';
-const String kFieldConectadoInternet = 'equipamento_conectado_internet';
-const String kFieldMarcaModelo = 'marca_modelo_equipamento';
-const String kFieldPatrimonio = 'numero_patrimonio';
-const String kFieldProblemaOcorre = 'problema_ocorre';
+const String kFieldConectadoInternet = 'equipamento_conectado_internet'; // Renomeado
+const String kFieldMarcaModelo = 'marca_modelo_equipamento'; // Renomeado
+const String kFieldPatrimonio = 'numero_patrimonio'; // Renomeado
+const String kFieldProblemaOcorre = 'problema_ocorre'; // Renomeado de selecionado
 const String kFieldProblemaOutro = 'problema_outro_descricao';
 const String kFieldStatus = 'status';
 const String kFieldPrioridade = 'prioridade';
-const String kFieldTecnicoResponsavel = 'tecnico_responsavel';
+const String kFieldTecnicoResponsavel = 'tecnico_responsavel'; // Renomeado de nome
 const String kFieldTecnicoUid = 'tecnicoUid';
 const String kFieldSolucao = 'solucao';
-const String kFieldDataCriacao = 'data_criacao';
+const String kFieldDataCriacao = 'data_criacao'; // Nome consistente com service
 const String kFieldDataAtualizacao = 'data_atualizacao';
-const String kFieldCreatorUid = 'creatorUid'; // UID do criador do chamado
-const String kFieldCreatorName = 'creatorName'; // Nome do criador do chamado
-const String kFieldAuthUserDisplay = 'authUserDisplayName'; // DisplayName do Auth no momento da criação
-const String kFieldAuthUserEmail = 'authUserEmail'; // Email do Auth no momento da criação
+const String kFieldCreatorUid = 'creatorUid';
+const String kFieldCreatorName = 'creatorName';
+const String kFieldAuthUserDisplay = 'authUserDisplayName';
+const String kFieldAuthUserEmail = 'authUserEmail';
 const String kFieldAdminInativo = 'isAdministrativamenteInativo';
 
 // --- CAMPOS ESPECÍFICOS ESCOLA ---
 const String kFieldCidade = 'cidade';
-const String kFieldInstituicao = 'instituicao'; // Usado para nome da escola selecionada
+const String kFieldInstituicao = 'instituicao';
 const String kFieldInstituicaoManual = 'instituicao_manual';
 const String kFieldCargoFuncao = 'cargo_funcao';
 const String kFieldAtendimentoPara = 'atendimento_para';
@@ -45,8 +50,7 @@ const String kFieldObservacaoCargo = 'observacao_cargo';
 const String kFieldSetorSuper = 'setor_superintendencia';
 const String kFieldCidadeSuperintendencia = 'cidade_superintendencia';
 
-// --- CAMPO UNIFICADO PARA LÓGICA DE VISUALIZAÇÃO INSTITUCIONAL (NOVO) ---
-// Este campo no documento do CHAMADO armazenará a escola ou setor para consulta.
+// --- CAMPO UNIFICADO PARA LÓGICA DE VISUALIZAÇÃO INSTITUCIONAL ---
 const String kFieldUnidadeOrganizacionalChamado = 'unidadeOrganizacionalChamado';
 
 // --- CAMPOS DE FINALIZAÇÃO/CONFIRMAÇÃO ---
@@ -54,7 +58,7 @@ const String kFieldDataAtendimento = 'data_atendimento';
 const String kFieldRequerenteConfirmou = 'requerente_confirmou';
 const String kFieldRequerenteConfirmouData = 'requerente_confirmou_data';
 const String kFieldRequerenteConfirmouUid = 'requerente_confirmou_uid';
-const String kFieldNomeRequerenteConfirmador = 'nomeRequerenteConfirmador'; // Adicionado para PDF
+const String kFieldNomeRequerenteConfirmador = 'nomeRequerenteConfirmador';
 
 const String kFieldAdminFinalizou = 'adminFinalizou';
 const String kFieldAdminFinalizouData = 'adminFinalizouData';
@@ -65,16 +69,24 @@ const String kFieldSolucaoPorUid = 'solucaoPorUid';
 const String kFieldSolucaoPorNome = 'solucaoPorNome';
 const String kFieldDataDaSolucao = 'dataDaSolucao';
 
+// --- CAMPOS DO DOCUMENTO DO USUÁRIO (na coleção 'users') ---
+const String kFieldUserRole = 'role_temp';
+const String kFieldUserInstituicao = 'institution';
+const String kFieldUserAssinaturaUrl = 'assinatura_url';
+
 // --- STATUS ---
 const String kStatusAberto = 'Aberto';
+const String kStatusEmAndamento = 'Em Andamento'; // <<<--- ADICIONADO
+const String kStatusPendente = 'Pendente';       // <<<--- ADICIONADO
 const String kStatusPadraoSolicionado = 'Solucionado';
-const String kStatusFinalizado = 'Finalizado'; // Status para arquivado/concluído
-const String kStatusCancelado = 'Cancelado'; // Outro status de encerramento
-
-// --- CAMPOS DO DOCUMENTO DO USUÁRIO (na coleção 'users') ---
-const String kFieldUserRole = 'role_temp'; // Ou o nome do seu campo de role
-const String kFieldUserInstituicao = 'institution'; // IMPORTANTE: Nome do campo no DOC do USUÁRIO
-const String kFieldUserAssinaturaUrl = 'assinatura_url';
+const String kStatusFinalizado = 'Finalizado';
+const String kStatusCancelado = 'Cancelado';
+const String kStatusAguardandoAprovacao = 'Aguardando Aprovação'; // <<<--- ADICIONADO
+const String kStatusAguardandoPeca = 'Aguardando Peça';           // <<<--- ADICIONADO
+const String kStatusChamadoDuplicado = 'Chamado Duplicado';       // <<<--- ADICIONADO
+const String kStatusAguardandoEquipamento = 'Aguardando Equipamento'; // <<<--- ADICIONADO
+const String kStatusAtribuidoGSIOR = 'Atribuido para GSIOR';     // <<<--- ADICIONADO
+const String kStatusGarantiaFabricante = 'Garantia Fabricante';   // <<<--- ADICIONADO
 
 
 class ChamadoService {
@@ -85,25 +97,25 @@ class ChamadoService {
     filter: {"#": RegExp(r'[0-9]')},
   );
 
-  Future<String> criarChamado({
+Future<String> criarChamado({
     required String? tipoSelecionado,
     required String celularContato,
-    required String? equipamentoSelecionado,
+    required String? equipamentoSelecionado, // Corresponde a kFieldEquipamentoSolicitacao
     required String? equipamentoOutro,
-    required String? internetConectadaSelecionado,
-    required String marcaModelo,
-    required String patrimonio,
-    required String? problemaSelecionado,
+    required String? internetConectadaSelecionado, // Corresponde a kFieldConectadoInternet
+    required String marcaModelo, // Corresponde a kFieldMarcaModelo
+    required String patrimonio, // Corresponde a kFieldPatrimonio
+    required String? problemaSelecionado, // Corresponde a kFieldProblemaOcorre
     required String? problemaOutro,
     required String? cidadeSelecionada,
-    required String? instituicaoSelecionada, // Este é o nome da escola ou null
+    required String? instituicaoSelecionada, // Corresponde a kFieldInstituicao
     required String? instituicaoManual,
-    required String? cargoSelecionado,
-    required String? atendimentoParaSelecionado,
+    required String? cargoSelecionado, // Corresponde a kFieldCargoFuncao
+    required String? atendimentoParaSelecionado, // Corresponde a kFieldAtendimentoPara
     required bool isProfessorSelecionado,
-    required String? setorSuperSelecionado, // Este é o nome do setor ou null
-    required String cidadeSuper,
-    required String tecnicoResponsavel, // Mantido, mas pode ser opcional dependendo da lógica
+    required String? setorSuperSelecionado, // Corresponde a kFieldSetorSuper
+    required String cidadeSuper, // Corresponde a kFieldCidadeSuperintendencia
+    required String tecnicoResponsavel, // Corresponde a kFieldTecnicoResponsavel
     String? tecnicoUid,
   }) async {
     final user = _auth.currentUser;
@@ -116,16 +128,15 @@ class ChamadoService {
     final String creatorPhone = celularContato.trim();
     final String unmaskedPhone = _phoneMaskFormatter.unmaskText(creatorPhone);
 
-    // Determinar a unidade organizacional para o chamado
     String? unidadeOrganizacionalDoChamado;
     if (tipoSelecionado == 'ESCOLA') {
       if (cidadeSelecionada == "OUTRO" && instituicaoManual != null && instituicaoManual.trim().isNotEmpty) {
-        unidadeOrganizacionalDoChamado = instituicaoManual.trim(); // Usar o nome manual se "OUTRO"
+        unidadeOrganizacionalDoChamado = instituicaoManual.trim();
       } else {
-        unidadeOrganizacionalDoChamado = instituicaoSelecionada; // Nome da escola selecionada
+        unidadeOrganizacionalDoChamado = instituicaoSelecionada;
       }
     } else if (tipoSelecionado == 'SUPERINTENDENCIA') {
-      unidadeOrganizacionalDoChamado = setorSuperSelecionado; // Nome do setor da SUPER
+      unidadeOrganizacionalDoChamado = setorSuperSelecionado;
     }
 
     final dadosChamado = <String, dynamic>{
@@ -143,11 +154,11 @@ class ChamadoService {
       kFieldTecnicoResponsavel: tecnicoResponsavel.trim().isEmpty ? null : tecnicoResponsavel.trim(),
       if (tecnicoUid != null && tecnicoUid.trim().isNotEmpty) kFieldTecnicoUid: tecnicoUid.trim(),
       kFieldStatus: kStatusAberto,
-      kFieldPrioridade: 'Média', // Valor padrão, pode ser ajustado
+      kFieldPrioridade: 'Média',
       kFieldDataCriacao: FieldValue.serverTimestamp(),
       kFieldDataAtualizacao: FieldValue.serverTimestamp(),
       kFieldCreatorUid: creatorUid,
-      kFieldCreatorName: nomeFinalSolicitante,
+      kFieldCreatorName: nomeFinalSolicitante, // Pode ser redundante se kFieldNomeSolicitante já existe
       kFieldAuthUserDisplay: user.displayName,
       kFieldAuthUserEmail: user.email,
       kFieldAdminInativo: false,
@@ -156,6 +167,7 @@ class ChamadoService {
       kFieldRequerenteConfirmou: false,
       kFieldRequerenteConfirmouData: null,
       kFieldRequerenteConfirmouUid: null,
+      kFieldNomeRequerenteConfirmador: null, // Inicialmente nulo
       kFieldAdminFinalizou: false,
       kFieldAdminFinalizouData: null,
       kFieldAdminFinalizouUid: null,
@@ -163,19 +175,17 @@ class ChamadoService {
       kFieldSolucaoPorUid: null,
       kFieldSolucaoPorNome: null,
       kFieldDataDaSolucao: null,
-      kFieldUnidadeOrganizacionalChamado: unidadeOrganizacionalDoChamado, // NOVO CAMPO ADICIONADO
+      kFieldUnidadeOrganizacionalChamado: unidadeOrganizacionalDoChamado,
 
       if (tipoSelecionado == 'ESCOLA') ...{
         kFieldCidade: cidadeSelecionada,
         kFieldCargoFuncao: cargoSelecionado,
         kFieldAtendimentoPara: atendimentoParaSelecionado,
         if (isProfessorSelecionado) kFieldObservacaoCargo: 'Solicitante é Professor...',
-        // kFieldInstituicao e kFieldInstituicaoManual são mantidos para fins de exibição detalhada,
-        // mas kFieldUnidadeOrganizacionalChamado é o campo chave para a query.
         kFieldInstituicao: (cidadeSelecionada == "OUTRO") ? 'OUTRO (Ver Manual)' : instituicaoSelecionada,
         kFieldInstituicaoManual: (cidadeSelecionada == "OUTRO") ? instituicaoManual?.trim() : null,
       } else if (tipoSelecionado == 'SUPERINTENDENCIA') ...{
-        kFieldSetorSuper: setorSuperSelecionado, // Mantido para exibição
+        kFieldSetorSuper: setorSuperSelecionado,
         kFieldCidadeSuperintendencia: cidadeSuper.trim(),
       },
     };

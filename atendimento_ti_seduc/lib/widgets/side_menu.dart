@@ -1,3 +1,4 @@
+// lib/widgets/side_menu.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../config/theme/app_theme.dart'; // Ajuste o caminho se necessário
@@ -24,7 +25,8 @@ class SideMenu extends StatefulWidget {
   final bool isAdminUser;
   final User? currentUser;
   final VoidCallback? onCheckForUpdates;
-  final VoidCallback? onSearchPressed;
+  final ValueChanged<String>? onSearchQueryChanged; // Callback para a query
+  final String initialSearchQuery;                 // Query inicial
 
   const SideMenu({
     super.key,
@@ -34,7 +36,8 @@ class SideMenu extends StatefulWidget {
     required this.isAdminUser,
     this.currentUser,
     this.onCheckForUpdates,
-    this.onSearchPressed,
+    this.onSearchQueryChanged,
+    this.initialSearchQuery = "",
   });
 
   @override
@@ -42,22 +45,26 @@ class SideMenu extends StatefulWidget {
 }
 
 class _SideMenuState extends State<SideMenu> {
-  bool _isExpanded = true;
+  bool _isExpanded = true; // Manter expandido para o campo de busca ser visível
   final double _collapsedWidth = 70.0;
   final double _expandedWidth = 256.0;
+  late TextEditingController _searchController;
 
   late List<MenuItemData> _navigationRailItems;
   static const int perfilScreenIndex = 3;
-
-  // Defina uma altura máxima razoável para a logo
-  static const double _maxLogoContainerHeight = 260.0; // Reduzido para teste, ajuste conforme necessário
-  // Defina um padding vertical para a logo
+  static const double _maxLogoContainerHeight = 120.0;
   static const double _logoVerticalPadding = 8.0;
 
   @override
   void initState() {
     super.initState();
     _updateNavigationRailItems();
+    _searchController = TextEditingController(text: widget.initialSearchQuery);
+    _searchController.addListener(() {
+      // Descomente para depuração:
+      // print("SideMenu Search Input: ${_searchController.text}");
+      widget.onSearchQueryChanged?.call(_searchController.text);
+    });
   }
 
   @override
@@ -66,6 +73,27 @@ class _SideMenuState extends State<SideMenu> {
     if (oldWidget.isAdminUser != widget.isAdminUser) {
       _updateNavigationRailItems();
     }
+    // Atualiza o controller se a query inicial mudar externamente
+    // e o texto atual do controller for diferente.
+    if (widget.initialSearchQuery != oldWidget.initialSearchQuery &&
+        widget.initialSearchQuery != _searchController.text) {
+      // Usar WidgetsBinding para atualizar após o frame atual, se necessário.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _searchController.text = widget.initialSearchQuery;
+          // Opcionalmente, mover o cursor para o final se desejar:
+          // _searchController.selection = TextSelection.fromPosition(
+          //   TextPosition(offset: _searchController.text.length),
+          // );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _updateNavigationRailItems() {
@@ -75,15 +103,70 @@ class _SideMenuState extends State<SideMenu> {
       MenuItemData(icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
       MenuItemData(icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5),
     ];
-
     if (widget.isAdminUser) {
       _navigationRailItems.add(MenuItemData(icon: Icons.manage_accounts_outlined, title: 'Gerenciar Usuários', index: 4, isAdminOnly: true));
     }
   }
 
-  Widget _buildLogoSection(BuildContext context) {
-    if (!_isExpanded) return const SizedBox.shrink(); // Não mostra logo se colapsado
+  Widget _buildSearchField(BuildContext context) {
+    // Se o menu estiver recolhido, mostra um botão para expandir e pesquisar
+    if (!_isExpanded) {
+      return IconButton(
+        icon: const Icon(Icons.search_outlined),
+        tooltip: 'Pesquisar Chamados',
+        color: AppTheme.kWinSecondaryText,
+        iconSize: 26,
+        onPressed: () {
+          setState(() {
+            _isExpanded = true; // Expande para mostrar o campo de busca
+          });
+        },
+      );
+    }
 
+    // Se o menu estiver expandido, mostra o TextField
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 12.0),
+      child: TextField(
+        controller: _searchController,
+        style: TextStyle(color: AppTheme.kWinPrimaryText, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Pesquisar chamado...',
+          hintStyle: TextStyle(color: AppTheme.kWinSecondaryText.withOpacity(0.7), fontSize: 13),
+          prefixIcon: Icon(Icons.search_outlined, color: AppTheme.kWinSecondaryText.withOpacity(0.8), size: 20),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
+          filled: true,
+          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest, // Cor segura
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: BorderSide(color: AppTheme.kWinAccent, width: 1.5),
+          ),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.clear_rounded, color: AppTheme.kWinSecondaryText, size: 18),
+                  onPressed: () {
+                    _searchController.clear(); // O listener chamará onSearchQueryChanged
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoSection(BuildContext context) {
+    if (!_isExpanded) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: _logoVerticalPadding, horizontal: 12.0),
       child: SizedBox(
@@ -120,7 +203,7 @@ class _SideMenuState extends State<SideMenu> {
       },
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2, // 40 = diâmetro do avatar
+          horizontal: _isExpanded ? 16.0 : (_collapsedWidth - 40) / 2,
           vertical: 10.0,
         ),
         child: _isExpanded
@@ -177,11 +260,7 @@ class _SideMenuState extends State<SideMenu> {
   }
 
   Widget _buildMenuActions(BuildContext context) {
-    // Esta função pode ser simplificada ou ter seus itens com altura controlada
     List<Widget> actions = [];
-    if (widget.onSearchPressed != null) {
-      actions.add(_buildActionItem(context, icon: Icons.search_outlined, label: 'Buscar', onPressed: widget.onSearchPressed));
-    }
     if (widget.onCheckForUpdates != null && kReleaseMode) {
       actions.add(_buildActionItem(context, icon: Icons.update_outlined, label: 'Verificar Atualizações', onPressed: widget.onCheckForUpdates));
     }
@@ -201,7 +280,7 @@ class _SideMenuState extends State<SideMenu> {
         ),
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Padding vertical reduzido
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           alignment: Alignment.centerLeft,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
         ),
@@ -211,7 +290,7 @@ class _SideMenuState extends State<SideMenu> {
         icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 24),
         tooltip: label,
         onPressed: onPressed,
-        padding: const EdgeInsets.all(12), // Padding para IconButton
+        padding: const EdgeInsets.all(12),
       );
     }
   }
@@ -222,7 +301,7 @@ class _SideMenuState extends State<SideMenu> {
 
     if (_isExpanded) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0), // Padding vertical
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         child: TextButton.icon(
           icon: Icon(Icons.logout_rounded, color: logoutIconColor, size: 22),
           label: Text(
@@ -233,7 +312,7 @@ class _SideMenuState extends State<SideMenu> {
           ),
           onPressed: widget.onLogout,
           style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), // Padding vertical reduzido
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             alignment: Alignment.centerLeft,
           ),
@@ -247,7 +326,7 @@ class _SideMenuState extends State<SideMenu> {
           icon: Icon(Icons.logout_rounded, color: logoutIconColor),
           iconSize: 24,
           onPressed: widget.onLogout,
-          padding: const EdgeInsets.all(12), // Padding para IconButton
+          padding: const EdgeInsets.all(12),
         ),
       );
     }
@@ -256,11 +335,16 @@ class _SideMenuState extends State<SideMenu> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-
     int railSelectedIndex = -1;
-    if (widget.selectedIndex != perfilScreenIndex) {
+    if (widget.selectedIndex != perfilScreenIndex && widget.selectedIndex < _navigationRailItems.length) {
         railSelectedIndex = _navigationRailItems.indexWhere((item) => item.index == widget.selectedIndex);
     }
+     if (railSelectedIndex == -1 && widget.selectedIndex < _navigationRailItems.length) {
+      // Fallback se o índice não for encontrado mas for um índice válido para os itens
+      // Isso pode acontecer se o perfilScreenIndex for o selecionado.
+      // No entanto, a lógica original já trata railSelectedIndex = -1 para o perfil.
+    }
+
 
     return Container(
       width: _isExpanded ? _expandedWidth : _collapsedWidth,
@@ -272,7 +356,6 @@ class _SideMenuState extends State<SideMenu> {
       ),
       child: Column(
         children: [
-          // 1. Botão de Expandir/Recolher
           Container(
             height: 56,
             alignment: _isExpanded ? Alignment.centerRight : Alignment.center,
@@ -289,21 +372,15 @@ class _SideMenuState extends State<SideMenu> {
               },
             ),
           ),
-
-          // 2. Seção do Logo (somente se expandido)
           _buildLogoSection(context),
-
-          // 3. Seção do Perfil do Usuário
+          _buildSearchField(context), // Campo de pesquisa
           _buildUserProfileSection(context),
-          
           const Divider(height: 1, thickness: 1, color: AppTheme.kWinDivider),
-
-          // 4. Itens de Navegação Principais
           Expanded(
             child: NavigationRail(
               selectedIndex: railSelectedIndex >= 0 ? railSelectedIndex : null,
               onDestinationSelected: (selectedIndexInRail) {
-                  if (selectedIndexInRail < _navigationRailItems.length) {
+                  if (selectedIndexInRail >=0 && selectedIndexInRail < _navigationRailItems.length) {
                     widget.onDestinationSelected(_navigationRailItems[selectedIndexInRail].index);
                   }
               },
@@ -311,20 +388,20 @@ class _SideMenuState extends State<SideMenu> {
               backgroundColor: Colors.transparent,
               minWidth: _collapsedWidth,
               minExtendedWidth: _expandedWidth,
-              labelType: NavigationRailLabelType.none,
-              selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 24), // Tamanho do ícone ajustado
-              unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 22), // Tamanho do ícone ajustado
-              selectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith( // Usando bodySmall para labels
+              labelType: _isExpanded ? NavigationRailLabelType.none : NavigationRailLabelType.none, // Ajuste conforme preferência
+              selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 24),
+              unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 22),
+              selectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.kWinAccent,
               ),
-              unselectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith( // Usando bodySmall
+              unselectedLabelTextStyle: theme.textTheme.bodySmall?.copyWith(
                 color: AppTheme.kWinPrimaryText,
               ),
               useIndicator: true,
               indicatorColor: AppTheme.kWinAccent.withOpacity(0.12),
               indicatorShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6.0) // Raio menor
+                  borderRadius: BorderRadius.circular(6.0)
               ),
               destinations: _navigationRailItems.map((item) {
                 return NavigationRailDestination(
@@ -335,26 +412,22 @@ class _SideMenuState extends State<SideMenu> {
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0), // Padding vertical reduzido
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                 );
               }).toList(),
             ),
           ),
-          
-          // 5. Ações (Busca, Atualização)
-          if (_isExpanded) // Mostrar ações apenas se expandido e se houver ações
+          if (_isExpanded && (widget.onCheckForUpdates != null && kReleaseMode))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: _buildMenuActions(context),
             )
-          else if (!_isExpanded && (widget.onSearchPressed != null || (widget.onCheckForUpdates != null && kReleaseMode)) ) // Mostrar ícones de ação se colapsado e houver ações
-             _buildMenuActions(context),
+          else if (!_isExpanded && (widget.onCheckForUpdates != null && kReleaseMode))
+              _buildMenuActions(context),
 
-
-          // 6. Logout
           const Divider(height: 0, thickness: 1, color: AppTheme.kWinDivider),
           _buildLogoutButton(context),
-          const SizedBox(height: 4), // Pequeno espaço no final
+          const SizedBox(height: 4),
         ],
       ),
     );

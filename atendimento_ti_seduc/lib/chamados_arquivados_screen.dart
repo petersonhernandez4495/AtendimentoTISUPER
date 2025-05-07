@@ -26,7 +26,8 @@ const double kSpacingMedium = 12.0;
 const double kSpacingLarge = 16.0;
 
 class ListaChamadosArquivadosScreen extends StatefulWidget {
-  const ListaChamadosArquivadosScreen({super.key});
+  final String searchQuery;
+  const ListaChamadosArquivadosScreen({super.key, this.searchQuery = "",});
 
   @override
   State<ListaChamadosArquivadosScreen> createState() =>

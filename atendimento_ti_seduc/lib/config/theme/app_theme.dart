@@ -1,135 +1,198 @@
-// lib/config/theme/app_theme.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui';
 
 class AppTheme {
-  AppTheme._();
+  AppTheme._(); 
 
-  // --- Constantes de Cores ---
-  static const Color kBackgroundGradientStart = Color(0xFF121212);
-  static const Color kBackgroundGradientEnd = Colors.black;
-  static const Color kSurfaceColor = Color(0xA02A2A3E); // Cor original com opacidade (mantida para outros usos)
-  static const Color kSurfaceVariant = Color(0xAA546E7A);
-  static const Color kPrimaryColor = Color(0xFF7B1FA2);
-  static const Color kSecondaryColor = Color(0xFF9C27B0);
-  static const Color kTextColor = Colors.white;
-  static const Color kSecondaryTextColor = Colors.white70;
-  static const Color kErrorColor = Colors.redAccent;
-  static const Color kGradientStartColor = Color(0xFFE91E63);
-  static const Color kGradientEndColor = Color(0xFFFF8A65);
+  static const Color kWinBackground = Color(0xFFD3D3D3); // Exemplo de cinza mais escuro
+  static const Color kWinSurface = Color(0xFFFFFFFF);   
+  static const Color kWinPrimaryText = Color(0xFF201F1E); 
+  static const Color kWinSecondaryText = Color(0xFF555555); 
+  static const Color kWinAccent = Color(0xFF0078D4);     
+  static const Color kWinError = Color(0xFFD32F2F);      
+  static const Color kWinInputBorder = Color(0xFFACACAC); 
+  static const Color kWinInputFillOpaque = Color(0xFFFFFFFF); 
+  static const Color kWinDivider = Color(0xFFD1D1D1);    
+  static const Color kWinLighterAccent = Color(0xFF5094E0); 
 
-  // --- NOVA COR OPACA PARA INPUTS ---
-  static const Color kInputFillColor = Color(0xFF2A2A3E); // Cor base de kSurfaceColor, mas com alfa FF (opaco)
-
+  static const Color kBackgroundGradientStart = kWinBackground;
+  static const Color kBackgroundGradientEnd = kWinBackground;
+  static const Color kSurfaceColor = kWinSurface; 
+  static const Color kSurfaceVariant = Color(0xFFE0E0E0); 
+  static const Color kPrimaryColor = kWinAccent;        
+  static const Color kSecondaryColor = kWinLighterAccent;  
+  static const Color kTextColor = kWinPrimaryText;      
+  static const Color kSecondaryTextColor = kWinSecondaryText; 
+  static const Color kErrorColor = kWinError;           
+  static const Color kInputFillColor = kWinInputFillOpaque;
+  static const Color kGradientStartColor = kWinAccent; 
+  static const Color kGradientEndColor = kWinLighterAccent; 
 
   static final ThemeData darkTheme = ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: Colors.transparent, // Mantido transparente para o gradiente do background funcionar
-    primaryColor: kPrimaryColor,
-    fontFamily: GoogleFonts.poppins().fontFamily,
-    colorScheme: const ColorScheme.dark(
-      primary: kPrimaryColor,
-      secondary: kSecondaryColor,
-      surface: kSurfaceColor, // Mantém kSurfaceColor para superfícies gerais (Cards, Dialogs, etc.)
-      background: kBackgroundGradientStart,
-      error: kErrorColor,
-      onPrimary: kTextColor,
-      onSecondary: kTextColor,
-      onSurface: kTextColor,
-      onBackground: kTextColor,
-      onError: kTextColor,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: kWinBackground,
+    primaryColor: kPrimaryColor, 
+    fontFamily: GoogleFonts.openSans().fontFamily,
+    colorScheme: ColorScheme.light( 
+      primary: kPrimaryColor,       
+      secondary: kSecondaryColor,   
+      surface: kSurfaceColor,       
+      background: kWinBackground,
+      error: kErrorColor,           
+      onPrimary: Colors.white,      
+      onSecondary: Colors.white,    
+      onSurface: kTextColor,        
+      onBackground: kTextColor,     
+      onError: Colors.white,        
       surfaceVariant: kSurfaceVariant,
       onSurfaceVariant: kTextColor,
     ),
-    textTheme: GoogleFonts.poppinsTextTheme(
-      ThemeData.dark().textTheme,
+    textTheme: GoogleFonts.openSansTextTheme(
+      ThemeData.light().textTheme,
     ).copyWith(
-        headlineSmall: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.bold),
-        headlineMedium: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.bold),
-        titleLarge: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.bold),
-        bodyLarge: const TextStyle(color: kTextColor),
-        bodyMedium: const TextStyle(color: kSecondaryTextColor),
-        labelLarge: const TextStyle(color: kTextColor, fontWeight: FontWeight.bold),
+      headlineSmall: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 22),
+      headlineMedium: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 26),
+      titleLarge: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 20),
+      bodyLarge: TextStyle(color: kTextColor, fontSize: 14),
+      bodyMedium: TextStyle(color: kSecondaryTextColor, fontSize: 14),
+      labelLarge: TextStyle(color: kTextColor, fontWeight: FontWeight.normal, fontSize: 14),
     ),
     cardTheme: CardTheme(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      elevation: 1.0,
+      color: kSurfaceColor, 
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16.0),
+        borderRadius: BorderRadius.circular(4.0),
+        side: const BorderSide(color: kWinDivider, width: 1),
       ),
-      // Se quiser que os cards usem a cor opaca também, mude aqui:
-      // color: kInputFillColor, // Exemplo: Deixa cards opacos também
-      // Se quiser que usem a cor com opacidade original:
-      // color: kSurfaceColor, // Default pelo colorScheme.surface
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: kPrimaryColor,
-        foregroundColor: kTextColor,
+        backgroundColor: kPrimaryColor, 
+        foregroundColor: Colors.white, 
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
+          borderRadius: BorderRadius.circular(4.0),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-        textStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        textStyle: GoogleFonts.openSans(fontWeight: FontWeight.normal, fontSize: 14),
+        elevation: 2,
       ),
     ),
+     outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kPrimaryColor, 
+        side: BorderSide(color: kPrimaryColor.withOpacity(0.7), width: 1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4.0),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        textStyle: GoogleFonts.openSans(fontWeight: FontWeight.normal, fontSize: 14),
+      )
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: kPrimaryColor, 
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4.0),
+        ),
+        textStyle: GoogleFonts.openSans(fontWeight: FontWeight.normal, fontSize: 14),
+      )
+    ),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.transparent, // Mantém transparente para gradiente
-      elevation: 0,
-      iconTheme: const IconThemeData(color: kTextColor),
-      titleTextStyle: GoogleFonts.poppins(
-        color: kTextColor,
+      backgroundColor: kWinBackground,
+      elevation: 0, 
+      iconTheme: IconThemeData(color: kTextColor), 
+      titleTextStyle: GoogleFonts.openSans(
+        color: kTextColor, 
         fontSize: 18,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.normal, 
       ),
+      surfaceTintColor: Colors.transparent,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: kInputFillColor, // <-- **MODIFICAÇÃO PRINCIPAL AQUI**
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide.none,
+      fillColor: kInputFillColor, 
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+      border: OutlineInputBorder( 
+        borderRadius: BorderRadius.circular(4.0),
+        borderSide: const BorderSide(color: kWinInputBorder),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide.none,
+      enabledBorder: OutlineInputBorder( 
+        borderRadius: BorderRadius.circular(4.0),
+        borderSide: const BorderSide(color: kWinInputBorder),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: const BorderSide(color: kPrimaryColor, width: 1.5),
+      focusedBorder: OutlineInputBorder( 
+        borderRadius: BorderRadius.circular(4.0),
+        borderSide: BorderSide(color: kPrimaryColor, width: 1.5), 
       ),
-      labelStyle: const TextStyle(color: kSecondaryTextColor),
-      hintStyle: const TextStyle(color: kSecondaryTextColor),
+      labelStyle: TextStyle(color: kSecondaryTextColor), 
+      hintStyle: TextStyle(color: kSecondaryTextColor.withOpacity(0.8)),
+      errorStyle: TextStyle(color: kErrorColor), 
     ),
-    iconTheme: const IconThemeData(
-      color: kSecondaryTextColor,
-      size: 24.0,
+    iconTheme: IconThemeData( 
+      color: kSecondaryTextColor, 
+      size: 22.0,
     ),
-     // Adapta a cor do dropdown para o tema escuro
-    canvasColor: const Color(0xFF2A2A3E), // Cor de fundo para o menu dropdown (pode ajustar)
+    dividerTheme: const DividerThemeData( 
+      color: kWinDivider,
+      thickness: 1,
+    ),
+    canvasColor: kSurfaceColor, 
+    chipTheme: ChipThemeData( 
+      backgroundColor: const Color(0xFFE0E0E0),
+      labelStyle: TextStyle(color: kTextColor.withOpacity(0.8), fontSize: 12), 
+      secondaryLabelStyle: TextStyle(color: kSecondaryTextColor, fontSize: 12), 
+      selectedColor: kPrimaryColor, 
+      disabledColor: Colors.grey.shade300,
+      checkmarkColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      iconTheme: IconThemeData(color: kSecondaryTextColor, size: 16), 
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: kPrimaryColor, 
+      foregroundColor: Colors.white,
+      elevation: 2,
+    )
   );
 
-  // Função de Cor de Prioridade (Inalterada)
   static Color? getPriorityColor(String prioridade) {
     switch (prioridade.toLowerCase()) {
       case 'urgente':
       case 'crítica':
-        return Colors.redAccent[400];
+        return Colors.red.shade600;
       case 'alta':
-        return Colors.orangeAccent[400];
+        return Colors.orange.shade700;
       case 'média':
       case 'media':
-        return Colors.yellowAccent[400];
+        return Colors.amber.shade700; 
       case 'baixa':
-        return Colors.greenAccent[400];
+        return Colors.green.shade600;
       default:
-        return null;
+        return Colors.grey.shade600; 
     }
   }
 
-  // Função Helper de Cor de Status (Inalterada)
-  static Color? getStatusColor(String status) { switch (status.toLowerCase()) { case 'aberto': return Colors.blue[400]; case 'em andamento': return Colors.orange[600]; case 'pendente': return Colors.deepPurple[400]; case 'resolvido': return Colors.green[500]; case 'fechado': return Colors.grey[600]; default: return Colors.grey[500]; } }
+  static Color? getStatusColor(String status) { 
+    switch (status.toLowerCase()) {
+      case 'aberto':
+        return Colors.blue.shade600; 
+      case 'em andamento': 
+      case 'em análise':   
+        return Colors.orange.shade700;
+      case 'pendente':
+        return Colors.deepPurple.shade400; 
+      case 'solucionado': // ATUALIZADO PARA 'solucionado'
+        return Colors.green.shade600;
+      case 'resolvido': // Mantido caso algum lugar ainda use, mas priorize 'solucionado'
+        return Colors.green.shade600;
+      case 'fechado':
+        return Colors.grey.shade700;
+      default:
+        return Colors.grey.shade500;
+    }
+  }
 }

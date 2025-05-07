@@ -14,16 +14,17 @@ class GradientBackgroundContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // O Container ocupa todo o espaço disponível por padrão quando usado
-      // como body de um Scaffold ou dentro de um Expanded.
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration( // Removido o 'const' para permitir cores dinâmicas do tema
         gradient: LinearGradient(
-          // Usa as cores definidas estaticamente na classe AppTheme
+          // Cores atualizadas para corresponder ao gradiente da ListaChamadosScreen
           colors: [
-            AppTheme.kBackgroundGradientStart,
-            AppTheme.kBackgroundGradientEnd,
+            AppTheme.kWinBackground, // A cor cinza clara definida no seu AppTheme.dart
+            Colors.white,           // Transição para branco puro
           ],
-          // Define a direção do gradiente (pode ser alterada aqui se necessário)
+          // Opcional: adicione os 'stops' se quiser controlar a transição do gradiente
+          // como fizemos na ListaChamadosScreen. Se omitido, a transição é linear.
+          stops: const [0.0, 0.8], // Exemplo: Cinza no topo, transição completa para branco em 70%
+                                  // Ajuste ou remova esta linha conforme sua preferência.
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Import necessário para Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -11,311 +11,324 @@ class CadastroScreen extends StatefulWidget {
 
 class _CadastroScreenState extends State<CadastroScreen> {
   final _formKey = GlobalKey<FormState>();
-  // Controllers para todos os campos
+  // Controllers
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _jobTitleController = TextEditingController();
-  final _institutionController = TextEditingController();
+  // Controller de instituição não é mais necessário
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // --- REMOVIDO: Estado para o campo Role ---
-  // String? _selectedRole;
-  // final List<String> _roles = ['admin', 'requester'];
-  // --- FIM DA REMOÇÃO ---
+  // Estados para o Dropdown de Instituição
+  List<String> _listaInstituicoes = [];
+  String? _instituicaoSelecionada;
+  bool _isLoadingInstituicoes = true;
+  String? _erroCarregarInstituicoes;
 
-  bool _isLoading = false; // Para indicador de carregamento
+  // Estado para o loading do cadastro geral
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarInstituicoes(); // Carrega a lista ao iniciar
+  }
 
   @override
   void dispose() {
-    // Limpar todos os controllers
+    // Limpar controllers
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _jobTitleController.dispose();
-    _institutionController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  // --- Função Cadastrar Atualizada ---
+  // --- FUNÇÃO CORRIGIDA PARA CARREGAR INSTITUIÇÕES ---
+  Future<void> _carregarInstituicoes() async {
+    if (!mounted) return;
+
+    // --- Define as constantes ANTES do try para acesso no catch ---
+    const String nomeColecao = 'configuracoes';
+    const String nomeDocumento = 'localidades';
+    const String nomeCampoMapa = 'escolasPorCidade';
+    // -----------------------------------------------------------
+
+    setState(() {
+      _isLoadingInstituicoes = true;
+      _erroCarregarInstituicoes = null;
+    });
+
+    try {
+      // Usa as constantes definidas acima
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection(nomeColecao)
+          .doc(nomeDocumento)
+          .get();
+
+      List<String> todasInstituicoes = [];
+
+      if (docSnapshot.exists && docSnapshot.data() != null) {
+        final data = docSnapshot.data()!;
+        if (data.containsKey(nomeCampoMapa) && data[nomeCampoMapa] is Map) {
+           final Map<String, dynamic> escolasPorCidadeMap = Map<String, dynamic>.from(data[nomeCampoMapa]);
+
+           for (final listaDeEscolas in escolasPorCidadeMap.values) {
+              if (listaDeEscolas is List) {
+                 todasInstituicoes.addAll(
+                    listaDeEscolas
+                       .map((escola) => escola?.toString())
+                       .where((nome) => nome != null && nome.isNotEmpty)
+                       .cast<String>()
+                 );
+              }
+           }
+           todasInstituicoes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        } else {
+           print("Campo '$nomeCampoMapa' não encontrado ou não é um Mapa no documento '$nomeDocumento'.");
+           if(mounted) _erroCarregarInstituicoes = "Erro: Estrutura de dados de escolas inválida.";
+        }
+      } else {
+        print("Documento '$nomeDocumento' não encontrado na coleção '$nomeColecao'.");
+        if(mounted) _erroCarregarInstituicoes = "Erro: Configuração de localidades não encontrada.";
+      }
+
+      if (mounted) {
+        setState(() {
+          _listaInstituicoes = todasInstituicoes;
+          _isLoadingInstituicoes = false;
+          if (todasInstituicoes.isEmpty && _erroCarregarInstituicoes == null) {
+             _erroCarregarInstituicoes = "Nenhuma instituição encontrada.";
+          }
+        });
+      }
+    } catch (e, s) {
+      // Agora 'nomeColecao' e 'nomeDocumento' estão acessíveis aqui
+      print("Erro ao carregar instituições de '$nomeColecao/$nomeDocumento': $e\nStackTrace: $s");
+      if (mounted) {
+        setState(() {
+          _isLoadingInstituicoes = false;
+          _erroCarregarInstituicoes = "Erro ao carregar instituições.";
+        });
+      }
+    }
+  }
+  // --- FIM DA FUNÇÃO CORRIGIDA ---
+
+
+  // --- Função Cadastrar (Atualizada para usar _instituicaoSelecionada) ---
   Future<void> _cadastrar() async {
-    // 1. Valida o formulário
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
-      // ATENÇÃO: Verifique se o domínio está correto para o seu caso.
-      // Se for usar outro domínio ou permitir qualquer um, ajuste ou remova esta validação.
-      const String dominioPermitido = '@seduc.ro.gov.br';
+      const String dominioPermitido = '@seduc.ro.gov.br'; // Ajuste se necessário
 
-      // --- Validação de Domínio ---
       if (!email.toLowerCase().endsWith(dominioPermitido)) {
-        // Se o email NÃO termina com o domínio permitido:
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Cadastro permitido apenas para emails $dominioPermitido'),
-              backgroundColor: Colors.orange[800], // Cor de aviso
-            ),
-          );
-        }
-        return; // Interrompe o cadastro aqui
-      }
-      // --------------------------
-
-      // 2. Verifica senhas (já validado no form, mas boa prática repetir aqui)
-      if (_passwordController.text != _confirmPasswordController.text) {
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('As senhas não coincidem!'), backgroundColor: Colors.orange),
-          );
+          ScaffoldMessenger.of(context).showSnackBar( SnackBar( content: Text('Cadastro permitido apenas para emails $dominioPermitido'), backgroundColor: Colors.orange[800]));
         }
         return;
       }
 
-      // Ativa o indicador de carregamento
       setState(() { _isLoading = true; });
 
       try {
-        // 3. Cria o usuário no Firebase Authentication
         UserCredential userCredential =
             await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email, // Usa a variável 'email' validada
-          password: _passwordController.text.trim(),
+          email: email,
+          password: _passwordController.text,
         );
 
-        // 4. Atualiza o displayName no Firebase Authentication
         final user = userCredential.user;
         if (user != null) {
           await user.updateDisplayName(_nameController.text.trim());
-          print('Usuário criado e displayName atualizado para: ${_nameController.text.trim()}');
 
-          // 5. SALVAR DADOS EXTRAS NO FIRESTORE na coleção 'users'
           final uid = user.uid;
           final profileData = {
             'uid': uid,
             'name': _nameController.text.trim(),
-            'email': email, // Usa a variável 'email' validada
+            'email': email,
             'phone': _phoneController.text.trim(),
             'jobTitle': _jobTitleController.text.trim(),
-            'institution': _institutionController.text.trim(),
-            // --- REMOVIDO: Salvar a Role selecionada ---
-            // 'role_temp': _selectedRole,
-            // --- FIM DA REMOÇÃO ---
-            'createdAt': FieldValue.serverTimestamp(), // Data/Hora do cadastro
-            // Poderia adicionar 'updatedAt': FieldValue.serverTimestamp() também
-            // Por padrão, um novo usuário pode ter uma role 'requester' ou similar
-            'role': 'requester', // Define uma role padrão
+            'institution': _instituicaoSelecionada, // Usa o valor do dropdown
+            'role': 'requester',
+            'createdAt': FieldValue.serverTimestamp(),
           };
-          // Salva (ou sobrescreve se já existir por algum motivo) o documento com o UID do usuário
+
           await FirebaseFirestore.instance.collection('users').doc(uid).set(profileData);
-          print('Dados extras do usuário (incluindo role padrão) salvos no Firestore para UID: $uid');
 
-        } else {
-          // Se user for nulo após a criação (muito improvável, mas defensivo)
-          print('Usuário criado no Auth, mas userCredential.user é nulo antes de salvar no Firestore.');
-            throw Exception('Falha ao obter usuário após criação.');
-        }
-
-        // 6. Navega para login APÓS tudo dar certo
-        if (mounted) {
-          // Usar pushReplacementNamed para remover a tela de cadastro da pilha
-          Navigator.pushReplacementNamed(context, '/login');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Conta criada com sucesso! Faça login.'), backgroundColor: Colors.green),
-          );
-        }
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/login');
+            ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Conta criada com sucesso! Faça login.'), backgroundColor: Colors.green),);
+          }
+        } else { throw Exception('Falha ao obter usuário após criação.'); }
 
       } on FirebaseAuthException catch (e) {
-        // Trata erros específicos do Firebase Auth
         String errorMessage = 'Ocorreu um erro ao criar a conta.';
         if (e.code == 'email-already-in-use') { errorMessage = 'Este email já está sendo usado.'; }
         else if (e.code == 'weak-password') { errorMessage = 'A senha deve ter pelo menos 6 caracteres.'; }
         else if (e.code == 'invalid-email') { errorMessage = 'O formato do email é inválido.'; }
-        // Adicione outros códigos de erro conforme necessário
-        else { errorMessage = e.message ?? errorMessage; } // Usa a mensagem do Firebase se disponível
-        print('Erro FirebaseAuth: ${e.code} - ${e.message}');
-         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-          );
-         }
+        else { errorMessage = e.message ?? errorMessage; }
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text(errorMessage), backgroundColor: Colors.red)); }
       } catch (e) {
-         // Trata outros erros (incluindo falha ao salvar no Firestore ou Exception lançada)
-         print('Erro inesperado no cadastro: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ocorreu um erro inesperado: ${e.toString()}'), backgroundColor: Colors.red),
-            );
-          }
+         if (mounted) { ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text('Ocorreu um erro inesperado: ${e.toString()}'), backgroundColor: Colors.red)); }
       } finally {
-        // Desativa o indicador de carregamento, independentemente de sucesso ou erro
          if (mounted) { setState(() { _isLoading = false; }); }
       }
     } else {
-      // Se o formulário não for válido (algum campo falhou na validação)
       print("Formulário inválido.");
-      // O próprio TextFormField já mostrará a mensagem de erro definida no validator
     }
-  } // Fim da função _cadastrar
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cadastro de Nova Conta'),
-        // backgroundColor: Colors.blueGrey[800], // Exemplo de cor
       ),
-      // Definir uma cor de fundo pode melhorar a aparência
-      // backgroundColor: Colors.grey[100],
       body: Center(
-        child: SingleChildScrollView( // Permite rolar se o conteúdo não couber
-          padding: const EdgeInsets.all(20.0), // Espaçamento geral
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
           child: Form(
-            key: _formKey, // Chave para gerenciar o estado do formulário
-            // autovalidateMode: AutovalidateMode.onUserInteraction, // Valida enquanto o usuário digita (opcional)
+            key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente (no Center)
-              crossAxisAlignment: CrossAxisAlignment.stretch, // Estica os widgets horizontalmente
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 // --- Campo Nome ---
                 TextFormField(
                   controller: _nameController,
-                  enabled: !_isLoading, // Desabilita enquanto carrega
+                  enabled: !_isLoading,
                   decoration: const InputDecoration(
-                    labelText: 'Nome Completo *', // Indica campo obrigatório
+                    labelText: 'Nome Completo *',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person),
                   ),
-                  textCapitalization: TextCapitalization.words, // Primeira letra de cada palavra maiúscula
+                  textCapitalization: TextCapitalization.words,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Por favor, digite seu nome completo.';
-                    }
-                    return null; // Válido
+                    if (value == null || value.trim().isEmpty) { return 'Por favor, digite seu nome completo.'; }
+                    return null;
                   },
                 ),
-                const SizedBox(height: 16.0), // Espaçamento padrão
+                const SizedBox(height: 16.0),
 
                 // --- Campo Email ---
                   TextFormField(
                     controller: _emailController,
                     enabled: !_isLoading,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email Institucional *', // O domínio é validado na função
-                      hintText: 'exemplo${'@seduc.ro.gov.br'}', // Exibe o domínio esperado
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.email),
+                    decoration: const InputDecoration(
+                      labelText: 'Email Institucional *',
+                      hintText: 'exemplo@seduc.ro.gov.br',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
                     ),
                     validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Por favor, digite seu email.';
-                      }
-                      // Validação básica de formato (contém @ e .)
-                      if (!value.contains('@') || !value.contains('.')) {
-                        return 'Formato de email inválido.';
-                      }
-                      // A validação específica do domínio é feita na função _cadastrar
-                      return null; // Válido
+                      if (value == null || value.trim().isEmpty) { return 'Por favor, digite seu email.'; }
+                      if (!value.contains('@') || !value.contains('.')) { return 'Formato de email inválido.'; }
+                      return null;
                     },
                   ),
                 const SizedBox(height: 16.0),
 
-                  // --- CAMPO TELEFONE ---
-                  TextFormField(
+                // --- Campo Telefone ---
+                 TextFormField(
                   controller: _phoneController,
                   enabled: !_isLoading,
                   keyboardType: TextInputType.phone,
-                  // TODO: Considerar usar um MaskTextInputFormatter para formatar (ex: (##) #####-####)
-                  // inputFormatters: [_phoneMaskFormatter], // Se usar máscara
                   decoration: const InputDecoration(
                     labelText: 'Telefone *',
-                    hintText: '(XX) XXXXX-XXXX', // Exemplo de formato
+                    hintText: '(XX) XXXXX-XXXX',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.phone),
                   ),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Digite seu telefone para contato.';
-                    }
-                    // Poderia adicionar validação de formato/comprimento aqui se necessário
-                    // Ex: if (!_phoneMaskFormatter.isFill()) return 'Telefone incompleto';
-                    return null; // Válido
+                    if (value == null || value.trim().isEmpty) { return 'Digite seu telefone para contato.'; }
+                    return null;
                   },
-                  ),
+                 ),
                 const SizedBox(height: 16.0),
 
-                // --- CAMPO CARGO/FUNÇÃO ---
+                // --- Campo Cargo/Função ---
                 TextFormField(
                   controller: _jobTitleController,
                   enabled: !_isLoading,
-                  textCapitalization: TextCapitalization.sentences, // Primeira letra da sentença maiúscula
+                  textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
                     labelText: 'Cargo / Função *',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.work_outline),
                   ),
                     validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Digite seu cargo ou função.';
-                      }
-                      return null; // Válido
+                      if (value == null || value.trim().isEmpty) { return 'Digite seu cargo ou função.'; }
+                      return null;
                     },
                 ),
                 const SizedBox(height: 16.0),
 
-                  // --- CAMPO INSTITUIÇÃO/LOTAÇÃO ---
-                  TextFormField(
-                  controller: _institutionController,
-                  enabled: !_isLoading,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
+                // --- Dropdown de Instituição ---
+                DropdownButtonFormField<String>(
+                  value: _instituicaoSelecionada,
+                  isExpanded: true,
+                  hint: _isLoadingInstituicoes
+                      ? const Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 8), Text('Carregando...')])
+                      : (_erroCarregarInstituicoes != null
+                          ? Text(_erroCarregarInstituicoes!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14))
+                          : const Text('Selecione sua instituição *')),
+                  decoration: InputDecoration(
                     labelText: 'Instituição / Lotação *',
-                    hintText: 'Ex: Escola XYZ, Superintendência ABC',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.account_balance_outlined),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.account_balance_outlined),
+                    errorText: _erroCarregarInstituicoes != null && !_isLoadingInstituicoes && _listaInstituicoes.isEmpty
+                               ? _erroCarregarInstituicoes // Mostra erro aqui se a lista não carregou
+                               : null,
                   ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Digite sua instituição ou local de lotação.';
-                      }
-                      return null; // Válido
-                    },
+                  items: _isLoadingInstituicoes || _erroCarregarInstituicoes != null
+                      ? []
+                      : _listaInstituicoes.map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                  onChanged: (_isLoading || _isLoadingInstituicoes || _erroCarregarInstituicoes != null)
+                      ? null
+                      : (String? newValue) {
+                          setState(() { _instituicaoSelecionada = newValue; });
+                        },
+                  validator: (value) {
+                    if (value == null) {
+                      if (_isLoadingInstituicoes || _erroCarregarInstituicoes != null) return null; // Não valida se carregando/erro
+                      return 'Por favor, selecione sua instituição.';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16.0),
-
-                // --- REMOVIDO: Dropdown para Role ---
-                // const SizedBox(height: 16.0),
-                // --- FIM DA REMOÇÃO ---
 
                 // --- Campo Senha ---
                 TextFormField(
                   controller: _passwordController,
                   enabled: !_isLoading,
-                  obscureText: true, // Esconde o texto digitado
+                  obscureText: true,
                   decoration: const InputDecoration(
                     labelText: 'Senha *',
                     hintText: 'Mínimo 6 caracteres',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.lock),
-                    // TODO: Adicionar botão para mostrar/esconder senha (melhora UX)
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, digite uma senha.';
-                    }
-                    if (value.length < 6) {
-                      return 'A senha deve ter no mínimo 6 caracteres.';
-                    }
-                    return null; // Válido
+                    if (value == null || value.isEmpty) { return 'Por favor, digite uma senha.'; }
+                    if (value.length < 6) { return 'A senha deve ter no mínimo 6 caracteres.'; }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
-                  // --- CAMPO CONFIRMAR SENHA ---
-                  TextFormField(
+                // --- Campo Confirmar Senha ---
+                 TextFormField(
                   controller: _confirmPasswordController,
                   enabled: !_isLoading,
                   obscureText: true,
@@ -325,47 +338,29 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor, confirme sua senha.';
-                      }
-                      // Compara com o valor atual do controller da senha
-                      if (value != _passwordController.text) {
-                        return 'As senhas não coincidem.';
-                      }
-                      return null; // Válido
+                      if (value == null || value.isEmpty) { return 'Por favor, confirme sua senha.'; }
+                      if (value != _passwordController.text) { return 'As senhas não coincidem.'; }
+                      return null;
                     },
-                ),
-                const SizedBox(height: 24.0), // Espaço maior antes do botão
+                 ),
+                const SizedBox(height: 24.0),
 
                 // --- Botão Cadastrar ---
                 ElevatedButton(
-                  // Desabilita o botão se estiver carregando (_isLoading == true)
                   onPressed: _isLoading ? null : _cadastrar,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0), // Botão mais alto
-                    textStyle: const TextStyle(fontSize: 16) // Tamanho do texto
-                    // backgroundColor: Colors.deepPurple, // Exemplo de cor primária
-                    // foregroundColor: Colors.white, // Cor do texto/ícone no botão
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    textStyle: const TextStyle(fontSize: 16)
                   ),
                   child: _isLoading
-                      // Se estiver carregando, mostra um indicador de progresso
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
-                        )
-                      // Se não, mostra o texto 'Cadastrar'
+                      ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
                       : const Text('Cadastrar'),
                 ),
                 const SizedBox(height: 16.0),
 
                 // --- Botão Voltar para Login ---
                 TextButton(
-                  // Desabilita se estiver carregando
-                  onPressed: _isLoading ? null : () {
-                      // Volta para a tela anterior (presume-se que seja a de login)
-                      Navigator.pop(context);
-                  },
+                  onPressed: _isLoading ? null : () { Navigator.pop(context); },
                   child: const Text('Já tem uma conta? Faça login'),
                 ),
               ],

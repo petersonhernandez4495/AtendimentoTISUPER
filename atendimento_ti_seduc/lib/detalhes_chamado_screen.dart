@@ -1,16 +1,24 @@
-import 'dart:math'; // Para 'min'
+// lib/detalhes_chamado_screen.dart (Código Completo Corrigido - v2)
+
+import 'dart:math';
+import 'dart:typed_data';
+import 'dart:io'; // Para File
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart'; // Para getTemporaryDirectory
+import 'package:open_filex/open_filex.dart'; // Para OpenFilex
+import 'package:pdf/pdf.dart'; // Para PdfPageFormat
+import 'package:printing/printing.dart'; // Para Printing
 
-// Ajuste estes caminhos conforme a estrutura do seu projeto
 import 'agendamento_visita_screen.dart';
 import '../pdf_generator.dart' as pdfGen;
 import '../config/theme/app_theme.dart';
 import '../services/chamado_service.dart';
 
-// Constantes de Espaçamento (MAIS COMPACTAS)
+const String kFieldNomeRequerenteConfirmador = 'nomeRequerenteConfirmador';
+
 const double kSpacingXXSmall = 2.0;
 const double kSpacingXSmall = 4.0;
 const double kSpacingSmall = 8.0;
@@ -27,16 +35,7 @@ class DetalhesChamadoScreen extends StatefulWidget {
 }
 
 class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
-  // ... (Todo o conteúdo de _DetalhesChamadoScreenState permanece o MESMO da versão anterior)
-  // Incluindo: _chamadoService, _auth, _currentUser, _isAdmin, _isAdminStatusChecked,
-  // _listaPrioridades, _listaStatusEdicao, _comentarioController, _isSendingComment,
-  // _isUpdatingVisibility, _isFinalizandoAdmin, initState, dispose, _checkAdminStatus,
-  // _mostrarDialogoEdicao, _handlePdfShare, _baixarPdf, _adicionarComentario,
-  // _toggleInatividadeAdmin, _adminFinalizarChamado, build (Scaffold e StreamBuilders principais),
-  // _buildAgendaSection, _getVisitaStatusIcon, _getVisitaStatusColor,
-  // _buildCommentsSection, _buildCommentInputArea.
-  // A ÚNICA MUDANÇA SERÁ DENTRO DA CLASSE _ChamadoInfoBody.
-final ChamadoService _chamadoService = ChamadoService();
+  final ChamadoService _chamadoService = ChamadoService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   User? _currentUser;
   bool _isAdmin = false;
@@ -67,8 +66,23 @@ final ChamadoService _chamadoService = ChamadoService();
     super.dispose();
   }
 
+  Future<String?> _getSignatureUrlFromFirestore(String? userId) async {
+    if (userId == null || userId.isEmpty) return null;
+    try {
+      DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data() != null) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        return userData['assinatura_url'] as String?;
+      }
+    } catch (e) {
+      print("DetalhesChamadoScreen: Erro ao buscar URL da assinatura para $userId: $e");
+    }
+    return null;
+  }
+
   Future<void> _checkAdminStatus() async {
-    if (!_isAdminStatusChecked && mounted) {
+     if (!_isAdminStatusChecked && mounted) {
       bool isAdminResult = false;
       if (_currentUser != null) {
         final userId = _currentUser!.uid;
@@ -86,9 +100,7 @@ final ChamadoService _chamadoService = ChamadoService();
           if (userData != null && userData.containsKey('role_temp')) {
               isAdminResult = (userData['role_temp'] == 'admin');
           }
-        } catch (e, s) {
-          print("Erro fatal ao buscar role em DetalhesChamadoScreen: $e\n$s");
-        }
+        } catch (e) { /* erro */ }
       }
       if (mounted) {
         setState(() { _isAdmin = isAdminResult; _isAdminStatusChecked = true; });
@@ -196,6 +208,13 @@ final ChamadoService _chamadoService = ChamadoService();
     );
 
     if (confirmou == true && mounted) {
+      final User? usuarioLogado = _auth.currentUser;
+      if (usuarioLogado == null) {
+        if (mounted) scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Erro: Sessão de usuário inválida.'), backgroundColor: Colors.red,));
+        solutionControllerDialog.dispose();
+        return;
+      }
+
       try {
         final tecnicoFinal = tecnicoResponsavel.trim();
         final String? solucaoFinal = statusSelecionado.toLowerCase() == kStatusPadraoSolicionado.toLowerCase() ? solutionControllerDialog.text.trim() : null;
@@ -204,6 +223,7 @@ final ChamadoService _chamadoService = ChamadoService();
         await _chamadoService.atualizarDetalhesAdmin(
           chamadoId: widget.chamadoId,
           status: statusSelecionado,
+          solucionadorUser: usuarioLogado,
           prioridade: prioridadeSelecionada,
           tecnicoResponsavel: tecnicoFinal.isEmpty ? null : tecnicoFinal,
           tecnicoUid: tecnicoUid.trim().isEmpty ? null : tecnicoUid.trim(),
@@ -219,23 +239,238 @@ final ChamadoService _chamadoService = ChamadoService();
   }
 
   Future<void> _handlePdfShare(Map<String, dynamic> currentData) async {
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-    await pdfGen.generateAndSharePdfForTicket( context: context, chamadoId: widget.chamadoId, dadosChamado: currentData, );
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Usar um BuildContext que sabemos que ainda estará válido para o diálogo
+    BuildContext currentContext = context;
+
+    showDialog(
+      context: currentContext, // Usar o contexto salvo
+      barrierDismissible: false,
+      builder: (dialogCtx) => PopScope(
+          canPop: false,
+          child: const Center(child: CircularProgressIndicator())
+      ),
+    );
+
+    String? adminSigUrl;
+    final String? adminSolucionouUid = currentData[kFieldSolucaoPorUid] as String?;
+    if (adminSolucionouUid != null && adminSolucionouUid.isNotEmpty) {
+      adminSigUrl = await _getSignatureUrlFromFirestore(adminSolucionouUid);
+    }
+
+    String? requesterSigUrl;
+    final bool requerenteConfirmou = currentData[kFieldRequerenteConfirmou] as bool? ?? false;
+    final String? uidDoRequerenteQueConfirmou = currentData[kFieldRequerenteConfirmouUid] as String?;
+    if (requerenteConfirmou && uidDoRequerenteQueConfirmou != null && uidDoRequerenteQueConfirmou.isNotEmpty) {
+      requesterSigUrl = await _getSignatureUrlFromFirestore(uidDoRequerenteQueConfirmou);
+    }
+
+    Uint8List? pdfBytes;
+    try {
+      pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
+        chamadoId: widget.chamadoId,
+        dadosChamado: currentData,
+        adminSignatureUrl: adminSigUrl,
+        requesterSignatureUrl: requesterSigUrl,
+      );
+    } catch (e) {
+      // Fecha diálogo de progresso em caso de erro
+      if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+        Navigator.of(currentContext, rootNavigator: true).pop();
+      }
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao gerar PDF para compartilhamento: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    // Fecha diálogo de progresso ANTES de compartilhar
+    if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+      Navigator.of(currentContext, rootNavigator: true).pop();
+    }
+
+    if (pdfBytes != null && mounted) {
+      try {
+        await Printing.sharePdf(bytes: pdfBytes, filename: 'chamado_${widget.chamadoId.substring(0,6)}.pdf');
+      } catch (e) {
+         if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('Erro ao compartilhar PDF: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } else if (mounted) {
+       scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Falha ao gerar PDF para compartilhamento.'), backgroundColor: Colors.orange),
+      );
     }
   }
 
   Future<void> _baixarPdf(Map<String, dynamic> dadosChamado) async {
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-    await pdfGen.generateAndOpenPdfForTicket( context: context, chamadoId: widget.chamadoId, dadosChamado: dadosChamado, );
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContext = context; // Salva o contexto
+
+    // Mostrar indicador de progresso
+    showDialog(
+      context: currentContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+    );
+
+    Uint8List? pdfBytes;
+    try {
+      String? adminSigUrl;
+      final String? adminSolucionouUid = dadosChamado[kFieldSolucaoPorUid] as String?;
+      if (adminSolucionouUid != null && adminSolucionouUid.isNotEmpty) {
+        adminSigUrl = await _getSignatureUrlFromFirestore(adminSolucionouUid);
+      }
+
+      String? requesterSigUrl;
+      final bool requerenteConfirmou = dadosChamado[kFieldRequerenteConfirmou] as bool? ?? false;
+      final String? uidDoRequerenteQueConfirmou = dadosChamado[kFieldRequerenteConfirmouUid] as String?;
+      if (requerenteConfirmou && uidDoRequerenteQueConfirmou != null && uidDoRequerenteQueConfirmou.isNotEmpty) {
+        requesterSigUrl = await _getSignatureUrlFromFirestore(uidDoRequerenteQueConfirmou);
+      }
+
+      pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
+        chamadoId: widget.chamadoId,
+        dadosChamado: dadosChamado,
+        adminSignatureUrl: adminSigUrl,
+        requesterSignatureUrl: requesterSigUrl,
+      );
+
+    } catch (e) {
+       // Fecha diálogo de progresso em caso de erro
+      if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+         Navigator.of(currentContext, rootNavigator: true).pop();
+      }
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+     // Fecha diálogo de progresso APÓS geração bem-sucedida
+    if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+       Navigator.of(currentContext, rootNavigator: true).pop();
+    }
+
+    // Mostra diálogo de opções
+    if (pdfBytes != null && mounted) {
+      showDialog(
+        context: context, // Usa o contexto original do State para mostrar o novo diálogo
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Opções do PDF'),
+            content: const Text('O que você gostaria de fazer?'),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            actions: <Widget>[
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Imprimir / Salvar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _imprimirPdf(pdfBytes!);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new_outlined),
+                    label: const Text('Abrir / Visualizar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _abrirPdfLocalmente(pdfBytes!, widget.chamadoId);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    child: const Text('Cancelar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      );
+    } else if (mounted) {
+       scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Falha ao gerar PDF.'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
+  Future<void> _imprimirPdf(Uint8List pdfBytes) async {
+    if(!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context); // Adicionado para mostrar erros
+    try {
+      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdfBytes);
+    } catch (e) {
+      if(mounted) {
+        scaffoldMessenger.showSnackBar( // Usa o scaffoldMessenger
+          SnackBar(content: Text('Erro ao preparar impressão: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _abrirPdfLocalmente(Uint8List pdfBytes, String chamadoId) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContextForDialog = context; // Salva contexto para diálogo de progresso
+
+    showDialog(
+      context: currentContextForDialog,
+      barrierDismissible: false,
+      builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+    );
+
+    try {
+      final outputDir = await getTemporaryDirectory();
+      final filename = 'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}.pdf';
+      final outputFile = File("${outputDir.path}/$filename");
+      await outputFile.writeAsBytes(pdfBytes);
+
+      // Fecha diálogo de progresso ANTES de tentar abrir
+      if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+          Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+      }
+
+      final result = await OpenFilex.open(outputFile.path);
+
+      if (result.type != ResultType.done && mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('Não foi possível abrir o PDF: ${result.message}')),
+          );
+      }
+    } catch(e) {
+        // Fecha diálogo de progresso em caso de erro
+        if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+          Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+        }
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text('Erro ao abrir PDF localmente: $e'), backgroundColor: Colors.red),
+          );
+        }
     }
   }
 
   Future<void> _adicionarComentario() async {
-    final t = _comentarioController.text.trim();
+     final t = _comentarioController.text.trim();
     if (t.isEmpty) return;
     final u = _auth.currentUser;
     if (u == null) {
@@ -303,7 +538,6 @@ final ChamadoService _chamadoService = ChamadoService();
                 backgroundColor: Colors.red)
             );
         }
-        print("Erro ao chamar definirInatividadeAdministrativa: $e");
     } finally {
         if (mounted) {
             setState(() { _isUpdatingVisibility = false; });
@@ -312,7 +546,7 @@ final ChamadoService _chamadoService = ChamadoService();
   }
 
   Future<void> _adminFinalizarChamado(Map<String, dynamic> dadosChamadoExibido) async {
-    if (!_isAdmin || !mounted) return;
+     if (!_isAdmin || !mounted) return;
     final User? adminUser = _auth.currentUser;
     if (adminUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Usuário administrador não autenticado para esta ação.')));
@@ -321,25 +555,32 @@ final ChamadoService _chamadoService = ChamadoService();
     final bool requerenteJaConfirmou = dadosChamadoExibido[kFieldRequerenteConfirmou] as bool? ?? false;
     if (!requerenteJaConfirmou) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aguardando confirmação do requerente antes de finalizar.'), backgroundColor: Colors.orange)
+        const SnackBar(content: Text('Aguardando confirmação do requerente antes de arquivar.'), backgroundColor: Colors.orange)
+      );
+      return;
+    }
+    final String statusAtual = dadosChamadoExibido[kFieldStatus] as String? ?? '';
+    if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()){
+        ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('O chamado precisa estar "$kStatusPadraoSolicionado" para ser arquivado.'), backgroundColor: Colors.orange)
       );
       return;
     }
     final bool adminJaFinalizou = dadosChamadoExibido[kFieldAdminFinalizou] as bool? ?? false;
     if (adminJaFinalizou) {
         ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Este chamado já foi finalizado pelo administrador.'), backgroundColor: Colors.blue)
+        const SnackBar(content: Text('Este chamado já foi arquivado.'), backgroundColor: Colors.blue)
       );
       return;
     }
     bool confirmarAdmin = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Finalização Administrativa'),
-        content: const Text('Você confirma a solução deste chamado e deseja finalizá-lo administrativamente? Esta ação registrará sua "assinatura" (identificação).'),
+        title: const Text('Confirmar Arquivamento do Chamado'),
+        content: const Text('Deseja mover este chamado para o arquivo? Esta ação registrará sua identificação como o responsável pelo arquivamento.'),
         actions: [
           TextButton(child: const Text('Cancelar'), onPressed: () => Navigator.of(ctx).pop(false)),
-          ElevatedButton(child: const Text('Confirmar e Finalizar'), onPressed: () => Navigator.of(ctx).pop(true)),
+          ElevatedButton(child: const Text('Confirmar e Arquivar'), onPressed: () => Navigator.of(ctx).pop(true)),
         ],
       ),
     ) ?? false;
@@ -350,13 +591,13 @@ final ChamadoService _chamadoService = ChamadoService();
         await _chamadoService.adminConfirmarSolucaoFinal(widget.chamadoId, adminUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Chamado finalizado pelo administrador!'), backgroundColor: Colors.green)
+            const SnackBar(content: Text('Chamado arquivado com sucesso!'), backgroundColor: Colors.green)
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao finalizar chamado: ${e.toString()}'), backgroundColor: Colors.red)
+            SnackBar(content: Text('Erro ao arquivar chamado: ${e.toString()}'), backgroundColor: Colors.red)
           );
         }
       } finally {
@@ -366,7 +607,6 @@ final ChamadoService _chamadoService = ChamadoService();
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -394,7 +634,7 @@ final ChamadoService _chamadoService = ChamadoService();
                       IconButton(
                         icon: const Icon(Icons.edit_note_outlined),
                         tooltip: 'Editar Chamado (Admin)',
-                        onPressed: _isUpdatingVisibility ? null : () => _mostrarDialogoEdicao(currentData),
+                        onPressed: _isUpdatingVisibility || _isFinalizandoAdmin ? null : () => _mostrarDialogoEdicao(currentData),
                       ),
                     if (podeInteragir) ...[
                       IconButton(
@@ -430,7 +670,7 @@ final ChamadoService _chamadoService = ChamadoService();
                 final bool isInativoAdmin = data[kFieldAdminInativo] ?? false;
 
                 return _ChamadoInfoBody(
-                  key: ValueKey(widget.chamadoId + (data[kFieldDataAtualizacao]?.toString() ?? '')),
+                  key: ValueKey(widget.chamadoId + (data[kFieldDataAtualizacao]?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString())),
                   data: data,
                   isAdmin: _isAdmin,
                   isInativoAdmin: isInativoAdmin,
@@ -525,7 +765,7 @@ final ChamadoService _chamadoService = ChamadoService();
   }
 
   Widget _buildCommentsSection() {
-    return StreamBuilder<QuerySnapshot>(
+     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection(kCollectionChamados).doc(widget.chamadoId).collection('comentarios').orderBy('timestamp', descending: true).limit(50).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) { return const Padding(padding: EdgeInsets.all(kSpacingSmall), child: Text("Erro ao carregar comentários.")); }
@@ -629,7 +869,7 @@ final ChamadoService _chamadoService = ChamadoService();
   }
 }
 
-// Classe _ChamadoInfoBody com o layout de colunas ajustado
+
 class _ChamadoInfoBody extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isAdmin;
@@ -657,12 +897,12 @@ class _ChamadoInfoBody extends StatelessWidget {
   });
 
   Widget _buildSectionTitle(BuildContext context, String title, {Color? titleColor, bool addTopPadding = true}) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
+     final TextTheme textTheme = Theme.of(context).textTheme;
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: EdgeInsets.only(
-        bottom: kSpacingSmall, // Espaçamento abaixo do título
-        top: addTopPadding ? kSpacingMedium : 0, // Espaçamento acima do título, condicional
+        bottom: kSpacingSmall,
+        top: addTopPadding ? kSpacingMedium : kSpacingXSmall,
       ),
       child: Text(
         title,
@@ -673,14 +913,14 @@ class _ChamadoInfoBody extends StatelessWidget {
   }
 
   Widget _buildSectionDivider(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: kSpacingSmall), // Reduzido
-      child: Divider(height: 1, thickness: 0.5, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)), // Mais sutil
+     return Padding(
+      padding: const EdgeInsets.symmetric(vertical: kSpacingSmall),
+      child: Divider(height: 1, thickness: 0.5, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)),
     );
   }
 
   Widget _buildInfoRow(BuildContext context, {required String label, String? value, Widget? valueWidget, bool isValueSelectable = true, int valueMaxLines = 2, double labelWidth = 120.0}) {
-    final ThemeData t = Theme.of(context);
+     final ThemeData t = Theme.of(context);
     final TextTheme tt = t.textTheme;
     final ColorScheme cs = t.colorScheme;
     final String displayValue = value?.trim().isEmpty ?? true ? '--' : value!.trim();
@@ -704,25 +944,25 @@ class _ChamadoInfoBody extends StatelessWidget {
           const SizedBox(width: kSpacingSmall),
           Expanded(
             child: valueWidget ?? (isValueSelectable
-              ? SelectableText(
-                  displayValue,
-                  style: tt.bodyMedium?.copyWith(
-                    color: cs.onSurface,
-                    height: 1.25,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  maxLines: valueMaxLines,
-                )
-              : Text(
-                  displayValue,
-                  style: tt.bodyMedium?.copyWith(
-                    color: cs.onSurface,
-                    height: 1.25,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  maxLines: valueMaxLines,
-                  overflow: TextOverflow.ellipsis,
-                )
+                ? SelectableText(
+                    displayValue,
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurface,
+                      height: 1.25,
+                      fontWeight: FontWeight.normal,
+                    ),
+                    maxLines: valueMaxLines,
+                  )
+                : Text(
+                    displayValue,
+                    style: tt.bodyMedium?.copyWith(
+                      color: cs.onSurface,
+                      height: 1.25,
+                      fontWeight: FontWeight.normal,
+                    ),
+                    maxLines: valueMaxLines,
+                    overflow: TextOverflow.ellipsis,
+                  )
             ),
           ),
         ],
@@ -782,7 +1022,6 @@ class _ChamadoInfoBody extends StatelessWidget {
     final ColorScheme colorScheme = theme.colorScheme;
     final TextTheme textTheme = theme.textTheme;
 
-    // Extração de dados (como no seu código original)
     final String tipoSolicitante = data[kFieldTipoSolicitante]?.toString() ?? 'N/I';
     final String nomeSolicitante = data[kFieldNomeSolicitante]?.toString() ?? 'N/I';
     final String celularContato = data[kFieldCelularContato]?.toString() ?? 'N/I';
@@ -810,11 +1049,15 @@ class _ChamadoInfoBody extends StatelessWidget {
     final String? solucao = data[kFieldSolucao] as String?;
     final bool requerenteConfirmou = data[kFieldRequerenteConfirmou] as bool? ?? false;
     final String dtConfirmacaoReq = formatTimestampSafe(data[kFieldRequerenteConfirmouData] as Timestamp?);
-    final String? nomeRequerenteConfirmador = data['nomeRequerenteConfirmador'] as String? ??
+    final String? nomeRequerenteConfirmador = data[kFieldNomeRequerenteConfirmador] as String? ??
                                           (data[kFieldRequerenteConfirmouUid] != null ? 'Solicitante (UID: ${ (data[kFieldRequerenteConfirmouUid] as String).substring(0, min(6, (data[kFieldRequerenteConfirmouUid] as String).length)) }...)' : null);
     final bool adminFinalizou = data[kFieldAdminFinalizou] as bool? ?? false;
     final String? adminFinalizouNome = data[kFieldAdminFinalizouNome] as String?;
     final String adminFinalizouDataStr = formatTimestampSafe(data[kFieldAdminFinalizouData] as Timestamp?);
+
+    final String? solucionadoPorNome = data[kFieldSolucaoPorNome] as String?;
+    final String dataDaSolucaoStr = formatTimestampSafe(data[kFieldDataDaSolucao] as Timestamp?);
+
 
     String displayInstituicao = instituicao ?? 'N/I';
     if (cidade == "OUTRO" && instituicaoManual != null && instituicaoManual.isNotEmpty) { displayInstituicao = instituicaoManual; }
@@ -832,7 +1075,7 @@ class _ChamadoInfoBody extends StatelessWidget {
     Widget solicitacaoSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, 'Dados da Solicitação', addTopPadding: false), // Primeiro título não precisa de tanto top padding
+        _buildSectionTitle(context, 'Dados da Solicitação', addTopPadding: false),
         _buildInfoRow(context, label: 'Solicitante', value: nomeSolicitante),
         _buildInfoRow(context, label: 'Contato', value: celularContato),
         _buildInfoRow(context, label: 'Tipo', value: tipoSolicitante),
@@ -852,8 +1095,8 @@ class _ChamadoInfoBody extends StatelessWidget {
     Widget problemaDatasSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(context, 'Detalhes do Problema', addTopPadding: false), // Primeiro título na coluna não precisa de tanto top padding
-        _buildInfoRow(context, label: 'Problema', value: displayProblema, valueMaxLines: 4), // Reduzido maxLines
+        _buildSectionTitle(context, 'Detalhes do Problema', addTopPadding: false),
+        _buildInfoRow(context, label: 'Problema', value: displayProblema, valueMaxLines: 4),
         _buildInfoRow(context, label: 'Equipamento', value: displayEquipamento, valueMaxLines: 3),
         if (marcaModelo.isNotEmpty) _buildInfoRow(context, label: 'Marca/Modelo', value: marcaModelo),
         _buildInfoRow(context, label: 'Patrimônio', value: patrimonio),
@@ -866,7 +1109,6 @@ class _ChamadoInfoBody extends StatelessWidget {
         if (authUserDisplay != null && authUserDisplay.isNotEmpty) _buildInfoRow(context, label: 'Registrado por', value: authUserDisplay),
       ],
     );
-
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: kSpacingMedium, vertical: kSpacingSmall),
@@ -888,8 +1130,7 @@ class _ChamadoInfoBody extends StatelessWidget {
 
           LayoutBuilder(
             builder: (context, constraints) {
-              bool useSingleColumn = constraints.maxWidth < 680; // Ponto de quebra para layout responsivo (ajuste conforme necessário)
-
+              bool useSingleColumn = constraints.maxWidth < 680;
               if (useSingleColumn) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,17 +1140,16 @@ class _ChamadoInfoBody extends StatelessWidget {
                   ],
                 );
               } else {
-                // Layout de duas colunas para telas largas
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      flex: 2, // Coluna da esquerda (Dados da Solicitação)
+                      flex: 2,
                       child: solicitacaoSection,
                     ),
-                    const SizedBox(width: kSpacingMedium), // Espaço entre colunas
+                    const SizedBox(width: kSpacingMedium),
                     Expanded(
-                      flex: 3, // Coluna da direita (Detalhes do Problema + Datas)
+                      flex: 3,
                       child: problemaDatasSection,
                     ),
                   ],
@@ -918,9 +1158,12 @@ class _ChamadoInfoBody extends StatelessWidget {
             }
           ),
 
-
           if (solucao != null && solucao.isNotEmpty) ...[
-            _buildSectionTitle(context, 'Solução Apresentada'),
+            _buildSectionTitle(context, 'Solução Registrada'),
+            if (solucionadoPorNome != null && dataDaSolucaoStr != '--') ...[
+                _buildInfoRow(context, label: 'Solucionado por', value: solucionadoPorNome),
+                _buildInfoRow(context, label: 'Data da Solução', value: dataDaSolucaoStr),
+            ],
             Container(
               padding: const EdgeInsets.all(kSpacingSmall - 2),
               width: double.infinity,
@@ -940,7 +1183,7 @@ class _ChamadoInfoBody extends StatelessWidget {
             if (nomeRequerenteConfirmador != null)
               _buildInfoRow(context, label: 'Confirmado por', value: nomeRequerenteConfirmador),
             _buildInfoRow(context, label: 'Data Confirmação', value: dtConfirmacaoReq),
-             const SizedBox(height: kSpacingSmall),
+              const SizedBox(height: kSpacingSmall),
           ],
 
           if (isAdmin) ...[
@@ -950,25 +1193,25 @@ class _ChamadoInfoBody extends StatelessWidget {
                 child: isFinalizandoAdmin
                     ? const CircularProgressIndicator(strokeWidth: 3)
                     : ElevatedButton.icon(
-                        icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
-                        label: const Text('Finalizar Chamado (Admin)'),
+                        icon: const Icon(Icons.archive_outlined, size: 18),
+                        label: const Text('Arquivar Chamado'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700, // Manter cor de destaque
+                          backgroundColor: Colors.blueGrey.shade600,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
                         onPressed: onAdminFinalizarChamado,
                       ),
               ),
-               const SizedBox(height: kSpacingXSmall),
+                const SizedBox(height: kSpacingXSmall),
             ] else if (adminFinalizou) ...[
               _buildSectionDivider(context),
-              _buildSectionTitle(context, 'Finalização Administrativa', titleColor: AppTheme.kWinStatusFinalizadoBackground),
-              _buildInfoRow(context, label: 'Data Finalização', value: adminFinalizouDataStr),
+              _buildSectionTitle(context, 'Detalhes do Arquivamento', titleColor: AppTheme.kWinStatusFinalizadoBackground),
+              _buildInfoRow(context, label: 'Data Arquivamento', value: adminFinalizouDataStr),
               if (adminFinalizouNome != null)
-                _buildInfoRow(context, label: 'Finalizado por', value: adminFinalizouNome),
-              _buildInfoRow(context, label: 'Status Admin', value: 'Chamado Finalizado'),
-               const SizedBox(height: kSpacingSmall),
+                _buildInfoRow(context, label: 'Arquivado por', value: adminFinalizouNome),
+              _buildInfoRow(context, label: 'Status Sistema', value: 'Chamado Arquivado'),
+                const SizedBox(height: kSpacingSmall),
             ],
           ],
 
@@ -979,16 +1222,16 @@ class _ChamadoInfoBody extends StatelessWidget {
                 icon: Icon(isInativoAdmin ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 18),
                 label: Text(isInativoAdmin ? "Reativar p/ Requ." : "Inativar p/ Requ."),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: isInativoAdmin ? colorScheme.primary : Colors.orange.shade800, // Cor diferente para inativar
+                    backgroundColor: isInativoAdmin ? colorScheme.primary : Colors.orange.shade800,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onPressed: () => onToggleInatividade(isInativoAdmin),
               ),
             ),
-             const SizedBox(height: kSpacingXSmall),
+              const SizedBox(height: kSpacingXSmall),
           ] else if (isUpdatingVisibility) ... [
-             const Center(child: Padding(padding: EdgeInsets.all(kSpacingXSmall), child: CircularProgressIndicator(strokeWidth: 3)))
+              const Center(child: Padding(padding: EdgeInsets.all(kSpacingXSmall), child: CircularProgressIndicator(strokeWidth: 3)))
           ],
 
           _buildSectionDivider(context),

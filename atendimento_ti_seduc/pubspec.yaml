@@ -34,6 +34,7 @@ dependencies:
   package_info_plus: ^8.3.0 # Ou versão mais recente (para pegar versão atual)
   url_launcher: ^6.1.14   # Ou versão mais recente (para abrir link download)
   pub_semver: ^2.1.4      # Ou versão mais recente (para comparar versões)
+  printing: ^5.12.0
   # -------------------------------------------------
 
 dev_dependencies:

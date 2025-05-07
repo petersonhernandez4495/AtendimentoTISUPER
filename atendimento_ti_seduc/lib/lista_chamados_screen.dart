@@ -1,7 +1,14 @@
+import 'dart:typed_data';
+import 'dart:io';
+import 'dart:math'; // Import necessário para min()
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 
 import 'pdf_generator.dart' as pdfGen;
 import 'detalhes_chamado_screen.dart';
@@ -23,19 +30,10 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   String? _selectedStatusFilter;
 
   final List<String> _statusOptions = [
-    'Aberto',
-    'Em Andamento',
-    'Pendente',
-    kStatusPadraoSolicionado,
-    kStatusFinalizado,
-    'Fechado',
-    'Cancelado',
-    'Aguardando Aprovação',
-    'Aguardando Peça',
-    'Chamado Duplicado',
-    'Aguardando Equipamento',
-    'Atribuido para GSIOR',
-    'Garantia Fabricante',
+    'Aberto', 'Em Andamento', 'Pendente', kStatusPadraoSolicionado,
+    kStatusFinalizado, 'Fechado', 'Cancelado', 'Aguardando Aprovação',
+    'Aguardando Peça', 'Chamado Duplicado', 'Aguardando Equipamento',
+    'Atribuido para GSIOR', 'Garantia Fabricante',
   ];
 
   final List<Map<String, dynamic>> _sortOptions = [
@@ -51,8 +49,8 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   User? _currentUser;
   bool _isConfirmingAcceptance = false;
   String? _confirmingChamadoId;
-  bool _isDownloadingPdf = false;
-  String? _downloadingPdfId;
+  bool _isGeneratingOrHandlingPdf = false; // Estado unificado para PDF
+  String? _processingPdfId; // ID do chamado cujo PDF está sendo processado
 
   String? _idChamadoFinalizandoDaLista;
   bool _isLoadingFinalizarDaLista = false;
@@ -115,6 +113,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       query = query.where('__inexistente__', isEqualTo: '__aguardando_role__');
     }
 
+    // Adiciona filtro para não mostrar Finalizado/Arquivado nesta tela
+    query = query.where(kFieldStatus, isNotEqualTo: kStatusFinalizado);
+
     if (_selectedStatusFilter != null) {
       query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
     }
@@ -144,21 +145,17 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       String statusA = aData[kFieldStatus]?.toString().toLowerCase() ?? '';
       String statusB = bData[kFieldStatus]?.toString().toLowerCase() ?? '';
       String solvedForSortLower = valorStatusSolucionadoParaSort.toLowerCase();
-      String finalizedLower = kStatusFinalizado.toLowerCase();
 
       bool aIsSolved = (statusA == solvedForSortLower);
       bool bIsSolved = (statusB == solvedForSortLower);
-      bool aIsFinalized = (statusA == finalizedLower);
-      bool bIsFinalized = (statusB == finalizedLower);
 
-      int getGroupOrder(bool isSolved, bool isFinalized) {
-        if (isFinalized) return 2;
+      int getGroupOrder(bool isSolved) {
         if (isSolved) return 1;
         return 0;
       }
 
-      int orderA = getGroupOrder(aIsSolved, aIsFinalized);
-      int orderB = getGroupOrder(bIsSolved, bIsFinalized);
+      int orderA = getGroupOrder(aIsSolved);
+      int orderB = getGroupOrder(bIsSolved);
 
       if (orderA != orderB) {
         return orderA.compareTo(orderB);
@@ -291,68 +288,179 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     }
   }
 
+  // --- FUNÇÃO UNIFICADA PARA GERAR PDF E MOSTRAR OPÇÕES ---
+  Future<void> _gerarPdfEExibirOpcoes(String chamadoId, Map<String, dynamic> dadosChamado) async {
+    if (!mounted) return;
+    // Evita execuções múltiplas se já estiver processando este PDF
+    if (_isGeneratingOrHandlingPdf && _processingPdfId == chamadoId) return;
 
-  Future<void> _handleDownloadPdf(String chamadoId) async {
-    if (!mounted) {
-      return;
-    }
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-
-    Map<String, dynamic>? docData;
-    QueryDocumentSnapshot? foundDoc;
-
-    if (_currentDocs != null) {
-      for (final docInLoop in _currentDocs!) {
-        if (docInLoop.id == chamadoId) {
-          foundDoc = docInLoop;
-          break;
-        }
-      }
-    }
-
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (foundDoc != null) {
-      try {
-        docData = foundDoc.data() as Map<String, dynamic>?;
-      } catch (e) {
-        docData = null;
-      }
-    }
-
-    if (docData == null) {
-      scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Erro: Dados do chamado não encontrados para gerar PDF.'), backgroundColor: Colors.orange));
-      return;
-    }
+    BuildContext currentContext = context; // Salva contexto para diálogos
 
     setState(() {
-      _isDownloadingPdf = true;
-      _downloadingPdfId = chamadoId;
+      _isGeneratingOrHandlingPdf = true;
+      _processingPdfId = chamadoId;
     });
 
+    // Mostra indicador de progresso da GERAÇÃO
+    showDialog(
+      context: currentContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+    );
+
+    Uint8List? pdfBytes;
     try {
-      await pdfGen.generateAndOpenPdfForTicket(
-        context: context,
+      // Gera PDF sem assinaturas dinâmicas (passando null)
+      pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
         chamadoId: chamadoId,
-        dadosChamado: docData,
+        dadosChamado: dadosChamado,
+        adminSignatureUrl: null, // Sem busca dinâmica de assinatura na lista
+        requesterSignatureUrl: null, // Sem busca dinâmica de assinatura na lista
       );
     } catch (e) {
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(SnackBar(content: Text('Erro ao processar PDF: ${e.toString()}'), backgroundColor: Colors.red));
+       if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+         Navigator.of(currentContext, rootNavigator: true).pop(); // Fecha progresso
+       }
+       if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: Colors.red),
+        );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloadingPdf = false;
-          _downloadingPdfId = null;
-        });
-      }
+       if (mounted) {
+         setState(() { // Reseta o estado de loading mesmo se o diálogo de opções não for mostrado
+           _isGeneratingOrHandlingPdf = false;
+           _processingPdfId = null;
+         });
+       }
+    }
+
+    // Fecha diálogo de progresso APÓS geração (se não fechou no erro)
+    if (pdfBytes != null && Navigator.of(currentContext, rootNavigator: true).canPop()) {
+      Navigator.of(currentContext, rootNavigator: true).pop();
+    }
+
+    // Mostra diálogo de opções se a geração foi bem-sucedida
+    if (pdfBytes != null && mounted) {
+      showDialog(
+        context: context, // Usa contexto original para o novo diálogo
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Opções do PDF'),
+            content: const Text('O que você gostaria de fazer?'),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            actions: <Widget>[
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Imprimir / Salvar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _imprimirPdfLista(pdfBytes!); // Chama impressão
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new_outlined),
+                    label: const Text('Abrir / Visualizar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _abrirPdfLocalmenteLista(pdfBytes!, chamadoId); // Chama abrir local
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    child: const Text('Cancelar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      );
+    } else if (mounted && pdfBytes == null) { // Se pdfBytes for null e não houve erro no catch (pouco provável)
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Falha ao gerar bytes do PDF.'), backgroundColor: Colors.orange),
+      );
     }
   }
 
+  // --- FUNÇÕES AUXILIARES PARA AÇÕES DO PDF (Lista) ---
+  Future<void> _imprimirPdfLista(Uint8List pdfBytes) async {
+    if(!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      // Mostra indicador enquanto prepara a impressão
+       showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+       );
+      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdfBytes);
+      // Fecha indicador após comando de impressão ser enviado (layoutPdf pode retornar antes de fechar a UI de impressão)
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+         Navigator.of(context, rootNavigator: true).pop();
+      }
+    } catch (e) {
+       if (mounted && Navigator.of(context, rootNavigator: true).canPop()) { // Fecha em caso de erro
+         Navigator.of(context, rootNavigator: true).pop();
+      }
+       if(mounted) {
+         scaffoldMessenger.showSnackBar(
+           SnackBar(content: Text('Erro ao preparar impressão: $e'), backgroundColor: Colors.red),
+         );
+       }
+    }
+  }
+
+  Future<void> _abrirPdfLocalmenteLista(Uint8List pdfBytes, String chamadoId) async {
+     if (!mounted) return;
+     final scaffoldMessenger = ScaffoldMessenger.of(context);
+     BuildContext dialogContext = context;
+
+     showDialog(
+        context: dialogContext,
+        barrierDismissible: false,
+        builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+     );
+
+     try {
+        final outputDir = await getTemporaryDirectory();
+        final filename = 'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}_lista.pdf';
+        final outputFile = File("${outputDir.path}/$filename");
+        await outputFile.writeAsBytes(pdfBytes);
+
+        if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+        }
+
+        final result = await OpenFilex.open(outputFile.path);
+
+        if (result.type != ResultType.done && mounted) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(content: Text('Não foi possível abrir o PDF: ${result.message}')),
+            );
+        }
+     } catch(e) {
+         if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+         }
+         if (mounted) {
+           scaffoldMessenger.showSnackBar(
+             SnackBar(content: Text('Erro ao abrir PDF localmente: $e'), backgroundColor: Colors.red),
+           );
+         }
+     }
+  }
+
+  // --- Função _showFilterBottomSheet (sem alterações significativas na lógica interna) ---
   void _showFilterBottomSheet() {
     showModalBottomSheet(
       context: context,
@@ -399,25 +507,28 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         Wrap(
                           spacing: 8.0,
                           runSpacing: 4.0,
-                          children: _statusOptions.map((statusValue) {
-                            final bool isSelected = _selectedStatusFilter == statusValue;
-                            return FilterChip(
-                              label: Text(statusValue),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _selectedStatusFilter = selected ? statusValue : null;
-                                });
-                                sheetSetState(() {});
-                              },
-                              selectedColor: colorScheme.primaryContainer,
-                              checkmarkColor: colorScheme.onPrimaryContainer,
-                              labelStyle: TextStyle(color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
-                            );
-                          }).toList(),
+                          children: _statusOptions
+                              .where((status) => status != kStatusFinalizado) // Não mostrar Finalizado aqui
+                              .map((statusValue) {
+                                  final bool isSelected = _selectedStatusFilter == statusValue;
+                                  return FilterChip(
+                                    label: Text(statusValue),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        _selectedStatusFilter = selected ? statusValue : null;
+                                      });
+                                      sheetSetState(() {});
+                                    },
+                                    selectedColor: colorScheme.primaryContainer,
+                                    checkmarkColor: colorScheme.onPrimaryContainer,
+                                    labelStyle: TextStyle(color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant),
+                                  );
+                                }
+                              ).toList(),
                         ),
                         const SizedBox(height: 20),
-                        Text('Filtrar por Data:', style: theme.textTheme.titleMedium),
+                        Text('Filtrar por Data de Criação:', style: theme.textTheme.titleMedium),
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -619,11 +730,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 final chamadoId = document.id;
 
                                 final bool isLoadingConfirmation = _isConfirmingAcceptance && _confirmingChamadoId == chamadoId;
-                                final bool isLoadingPdf = _isDownloadingPdf && _downloadingPdfId == chamadoId;
+                                // Usa o estado unificado de PDF para indicar loading no item
+                                final bool isLoadingPdfItem = _isGeneratingOrHandlingPdf && _processingPdfId == chamadoId;
                                 final bool isLoadingFinalizarItem = _isLoadingFinalizarDaLista && _idChamadoFinalizandoDaLista == chamadoId;
 
                                 final String? dataAtualizacaoKey = data[kFieldDataAtualizacao]?.toString() ?? data[kFieldDataCriacao]?.toString();
 
+                                // --- PASSANDO A NOVA CALLBACK PARA O ITEM ---
                                 return ChamadoListItem(
                                   key: ValueKey(chamadoId + (dataAtualizacaoKey ?? DateTime.now().millisecondsSinceEpoch.toString())),
                                   chamadoId: chamadoId,
@@ -639,11 +752,12 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       MaterialPageRoute(builder: (_) => DetalhesChamadoScreen(chamadoId: id)),
                                     );
                                   },
-                                  onDownloadPdf: _handleDownloadPdf,
-                                  isLoadingPdfDownload: isLoadingPdf,
+                                  isLoadingPdfDownload: isLoadingPdfItem, // Usa o estado unificado
+                                  onGerarPdfOpcoes: _gerarPdfEExibirOpcoes, // Passa a nova função
                                   onFinalizarArquivar: _handleFinalizarArquivarChamado,
                                   isLoadingFinalizarArquivar: isLoadingFinalizarItem,
                                 );
+                                // --- FIM DA MODIFICAÇÃO ---
                               },
                             );
                           },

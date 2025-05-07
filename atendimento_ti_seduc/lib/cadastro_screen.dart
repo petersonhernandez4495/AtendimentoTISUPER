@@ -20,10 +20,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // --- ADICIONADO: Estado para o campo Role (Temporário) ---
-  String? _selectedRole; // Variável para guardar a role selecionada
-  final List<String> _roles = ['admin', 'requester']; // Opções de role
-  // --- FIM DA ADIÇÃO ---
+  // --- REMOVIDO: Estado para o campo Role ---
+  // String? _selectedRole;
+  // final List<String> _roles = ['admin', 'requester'];
+  // --- FIM DA REMOÇÃO ---
 
   bool _isLoading = false; // Para indicador de carregamento
 
@@ -37,13 +37,12 @@ class _CadastroScreenState extends State<CadastroScreen> {
     _institutionController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    // _selectedRole não precisa de dispose
     super.dispose();
   }
 
   // --- Função Cadastrar Atualizada ---
   Future<void> _cadastrar() async {
-    // 1. Valida o formulário (incluindo o novo campo de role)
+    // 1. Valida o formulário
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
       // ATENÇÃO: Verifique se o domínio está correto para o seu caso.
@@ -67,11 +66,11 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
       // 2. Verifica senhas (já validado no form, mas boa prática repetir aqui)
       if (_passwordController.text != _confirmPasswordController.text) {
-         if(mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('As senhas não coincidem!'), backgroundColor: Colors.orange),
-           );
-         }
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('As senhas não coincidem!'), backgroundColor: Colors.orange),
+          );
+        }
         return;
       }
 
@@ -101,15 +100,17 @@ class _CadastroScreenState extends State<CadastroScreen> {
             'phone': _phoneController.text.trim(),
             'jobTitle': _jobTitleController.text.trim(),
             'institution': _institutionController.text.trim(),
-            // --- ADICIONADO: Salvar a Role selecionada ---
-            'role_temp': _selectedRole, // Salva a role do estado
-            // --- FIM DA ADIÇÃO ---
+            // --- REMOVIDO: Salvar a Role selecionada ---
+            // 'role_temp': _selectedRole,
+            // --- FIM DA REMOÇÃO ---
             'createdAt': FieldValue.serverTimestamp(), // Data/Hora do cadastro
             // Poderia adicionar 'updatedAt': FieldValue.serverTimestamp() também
+            // Por padrão, um novo usuário pode ter uma role 'requester' ou similar
+            'role': 'requester', // Define uma role padrão
           };
           // Salva (ou sobrescreve se já existir por algum motivo) o documento com o UID do usuário
           await FirebaseFirestore.instance.collection('users').doc(uid).set(profileData);
-          print('Dados extras do usuário (incluindo role_temp) salvos no Firestore para UID: $uid');
+          print('Dados extras do usuário (incluindo role padrão) salvos no Firestore para UID: $uid');
 
         } else {
           // Se user for nulo após a criação (muito improvável, mas defensivo)
@@ -136,9 +137,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
         else { errorMessage = e.message ?? errorMessage; } // Usa a mensagem do Firebase se disponível
         print('Erro FirebaseAuth: ${e.code} - ${e.message}');
          if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-           );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+          );
          }
       } catch (e) {
          // Trata outros erros (incluindo falha ao salvar no Firestore ou Exception lançada)
@@ -153,9 +154,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
          if (mounted) { setState(() { _isLoading = false; }); }
       }
     } else {
-       // Se o formulário não for válido (algum campo falhou na validação)
-       print("Formulário inválido.");
-       // O próprio TextFormField já mostrará a mensagem de erro definida no validator
+      // Se o formulário não for válido (algum campo falhou na validação)
+      print("Formulário inválido.");
+      // O próprio TextFormField já mostrará a mensagem de erro definida no validator
     }
   } // Fim da função _cadastrar
 
@@ -198,32 +199,32 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 const SizedBox(height: 16.0), // Espaçamento padrão
 
                 // --- Campo Email ---
-                 TextFormField(
-                   controller: _emailController,
-                   enabled: !_isLoading,
-                   keyboardType: TextInputType.emailAddress,
-                   decoration: InputDecoration(
-                     labelText: 'Email Institucional *', // O domínio é validado na função
-                     hintText: 'exemplo${'@seduc.ro.gov.br'}', // Exibe o domínio esperado
-                     border: const OutlineInputBorder(),
-                     prefixIcon: const Icon(Icons.email),
-                   ),
-                   validator: (value) {
-                     if (value == null || value.trim().isEmpty) {
-                       return 'Por favor, digite seu email.';
-                     }
-                     // Validação básica de formato (contém @ e .)
-                     if (!value.contains('@') || !value.contains('.')) {
-                       return 'Formato de email inválido.';
-                     }
-                     // A validação específica do domínio é feita na função _cadastrar
-                     return null; // Válido
-                   },
-                 ),
+                  TextFormField(
+                    controller: _emailController,
+                    enabled: !_isLoading,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email Institucional *', // O domínio é validado na função
+                      hintText: 'exemplo${'@seduc.ro.gov.br'}', // Exibe o domínio esperado
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.email),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Por favor, digite seu email.';
+                      }
+                      // Validação básica de formato (contém @ e .)
+                      if (!value.contains('@') || !value.contains('.')) {
+                        return 'Formato de email inválido.';
+                      }
+                      // A validação específica do domínio é feita na função _cadastrar
+                      return null; // Válido
+                    },
+                  ),
                 const SizedBox(height: 16.0),
 
-                 // --- CAMPO TELEFONE ---
-                 TextFormField(
+                  // --- CAMPO TELEFONE ---
+                  TextFormField(
                   controller: _phoneController,
                   enabled: !_isLoading,
                   keyboardType: TextInputType.phone,
@@ -243,7 +244,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     // Ex: if (!_phoneMaskFormatter.isFill()) return 'Telefone incompleto';
                     return null; // Válido
                   },
-                 ),
+                  ),
                 const SizedBox(height: 16.0),
 
                 // --- CAMPO CARGO/FUNÇÃO ---
@@ -265,8 +266,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                 // --- CAMPO INSTITUIÇÃO/LOTAÇÃO ---
-                 TextFormField(
+                  // --- CAMPO INSTITUIÇÃO/LOTAÇÃO ---
+                  TextFormField(
                   controller: _institutionController,
                   enabled: !_isLoading,
                   textCapitalization: TextCapitalization.words,
@@ -285,37 +286,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- ADICIONADO: Dropdown para Role (Temporário) ---
-                DropdownButtonFormField<String>(
-                  value: _selectedRole, // Valor atualmente selecionado
-                  items: _roles.map((role) { // Mapeia a lista de strings para itens do dropdown
-                    return DropdownMenuItem<String>(
-                      value: role, // O valor que será retornado no onChanged
-                      // Texto exibido para cada opção
-                      child: Text(role == 'admin' ? 'Admin (Perfil Teste)' : 'Requester (Perfil Teste)', overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(), // Converte o resultado do map em uma lista
-                  onChanged: _isLoading ? null : (newValue) { // Chamado quando um item é selecionado
-                    setState(() { // Atualiza o estado para refletir a nova seleção
-                      _selectedRole = newValue;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Perfil (Temporário) *', // Label do campo
-                    border: OutlineInputBorder(), // Borda igual aos outros campos
-                    prefixIcon: Icon(Icons.supervised_user_circle_outlined), // Ícone sugestivo
-                  ),
-                  validator: (value) { // Validação para garantir que um item seja selecionado
-                    if (value == null) {
-                      return 'Selecione um perfil (teste).';
-                    }
-                    return null; // Válido
-                  },
-                  // Mostra o valor selecionado mesmo se o campo estiver desabilitado (durante o loading)
-                  disabledHint: _selectedRole != null ? Text(_selectedRole!) : null,
-                ),
-                const SizedBox(height: 16.0), // Espaçamento depois do dropdown
-                // --- FIM DA ADIÇÃO ---
+                // --- REMOVIDO: Dropdown para Role ---
+                // const SizedBox(height: 16.0),
+                // --- FIM DA REMOÇÃO ---
 
                 // --- Campo Senha ---
                 TextFormField(
@@ -341,8 +314,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                 // --- CAMPO CONFIRMAR SENHA ---
-                 TextFormField(
+                  // --- CAMPO CONFIRMAR SENHA ---
+                  TextFormField(
                   controller: _confirmPasswordController,
                   enabled: !_isLoading,
                   obscureText: true,
@@ -369,10 +342,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   // Desabilita o botão se estiver carregando (_isLoading == true)
                   onPressed: _isLoading ? null : _cadastrar,
                   style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16.0), // Botão mais alto
-                      textStyle: const TextStyle(fontSize: 16) // Tamanho do texto
-                      // backgroundColor: Colors.deepPurple, // Exemplo de cor primária
-                      // foregroundColor: Colors.white, // Cor do texto/ícone no botão
+                    padding: const EdgeInsets.symmetric(vertical: 16.0), // Botão mais alto
+                    textStyle: const TextStyle(fontSize: 16) // Tamanho do texto
+                    // backgroundColor: Colors.deepPurple, // Exemplo de cor primária
+                    // foregroundColor: Colors.white, // Cor do texto/ícone no botão
                   ),
                   child: _isLoading
                       // Se estiver carregando, mostra um indicador de progresso

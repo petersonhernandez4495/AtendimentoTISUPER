@@ -2,21 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'dart:math'; // para min()
+
 import '../config/theme/app_theme.dart';
 import '../services/chamado_service.dart';
+
+// Tipos de Callback (Defina ou importe de um local comum)
+typedef ChamadoActionCallback = void Function(String chamadoId);
+typedef ChamadoDataActionCallback = void Function(String chamadoId, Map<String, dynamic> chamadoData);
 
 class ChamadoListItem extends StatelessWidget {
   final String chamadoId;
   final Map<String, dynamic> chamadoData;
   final User? currentUser;
   final bool isAdmin;
-  final Function(String)? onConfirmar;
-  final Function(String) onNavigateToDetails;
+  final ChamadoActionCallback? onConfirmar;
   final bool isLoadingConfirmation;
   final VoidCallback? onDelete;
-  final Function(String) onDownloadPdf;
-  final bool isLoadingPdfDownload;
-  final Future<void> Function(String chamadoId)? onFinalizarArquivar;
+  final ChamadoActionCallback onNavigateToDetails;
+  final bool isLoadingPdfDownload; // Mantido para indicador visual no item
+  final ChamadoDataActionCallback? onGerarPdfOpcoes; // <<-- NOVA CALLBACK
+  final ChamadoActionCallback? onFinalizarArquivar;
   final bool isLoadingFinalizarArquivar;
 
   const ChamadoListItem({
@@ -25,14 +31,14 @@ class ChamadoListItem extends StatelessWidget {
     required this.chamadoData,
     required this.currentUser,
     required this.isAdmin,
-    this.onConfirmar, // MODIFICADO: Não é mais 'required'
-    required this.onNavigateToDetails,
-    this.isLoadingConfirmation = false, // MODIFICADO: Valor padrão
-    required this.onDownloadPdf,
-    this.isLoadingPdfDownload = false, // MODIFICADO: Valor padrão
+    this.onConfirmar,
+    this.isLoadingConfirmation = false, // Valor padrão
     this.onDelete,
-    this.onFinalizarArquivar, // NOVO PARÂMETRO
-    this.isLoadingFinalizarArquivar = false, // NOVO PARÂMETRO com valor padrão
+    required this.onNavigateToDetails,
+    this.isLoadingPdfDownload = false, // Valor padrão
+    this.onGerarPdfOpcoes, // <<-- NOVA CALLBACK ADICIONADA
+    this.onFinalizarArquivar,
+    this.isLoadingFinalizarArquivar = false, // Valor padrão
   });
 
   String _formatTimestamp(Timestamp? timestamp, [String format = 'dd/MM/yy HH:mm']) {
@@ -47,7 +53,18 @@ class ChamadoListItem extends StatelessWidget {
     final TextTheme textTheme = theme.textTheme;
     final Color textoSecundarioCor = colorScheme.onSurfaceVariant.withOpacity(0.8);
 
-    final String titulo = chamadoData[kFieldProblemaOcorre]?.toString() ?? chamadoData[kFieldEquipamentoSolicitacao]?.toString() ?? 'Chamado Sem Título';
+    // Lógica para extrair dados (igual ao seu código fornecido)
+    String titulo = chamadoData[kFieldProblemaOcorre]?.toString() ?? '';
+     if (titulo.isEmpty || titulo.toLowerCase() == 'outro') {
+       titulo = chamadoData[kFieldProblemaOutro] as String? ?? '';
+    }
+     if (titulo.isEmpty) {
+       titulo = chamadoData[kFieldEquipamentoSolicitacao] as String? ?? 'Problema não especificado';
+       if(titulo.toLowerCase() == 'outro') {
+          titulo = chamadoData[kFieldEquipamentoOutro] as String? ?? 'Problema não especificado';
+       }
+    }
+
     final String prioridade = chamadoData[kFieldPrioridade]?.toString() ?? 'Média';
     final String status = chamadoData[kFieldStatus]?.toString() ?? 'N/I';
     final String creatorName = chamadoData['creatorName']?.toString() ?? chamadoData[kFieldNomeSolicitante]?.toString() ?? 'N/I';
@@ -62,16 +79,20 @@ class ChamadoListItem extends StatelessWidget {
     final String? currentUserId = currentUser?.uid;
 
     final String statusSolucionadoComparacao = kStatusPadraoSolicionado;
+    final String statusFinalizadoComparacao = kStatusFinalizado;
+
+    final bool isSolucionado = status.toLowerCase() == statusSolucionadoComparacao.toLowerCase();
+    final bool isFinalizado = status.toLowerCase() == statusFinalizadoComparacao.toLowerCase();
 
     final bool podeConfirmar = !isAdmin &&
         currentUserId != null &&
         currentUserId == creatorUid &&
-        status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() &&
+        isSolucionado &&
         !requerenteConfirmou &&
         !isInativo &&
         onConfirmar != null;
 
-    final bool mostrarSolucaoAceitaChip = status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && requerenteConfirmou && !isInativo;
+    final bool mostrarSolucaoAceitaChip = isSolucionado && requerenteConfirmou && !isInativo;
     final String? solucao = chamadoData[kFieldSolucao] as String?;
 
     final Color corPrioridade = AppTheme.getPriorityColor(prioridade) ?? colorScheme.primary;
@@ -116,12 +137,16 @@ class ChamadoListItem extends StatelessWidget {
     if (creatorPhone != null && creatorPhone.isNotEmpty) {
       infoSolicitanteCombinada += ' \u00B7 $creatorPhone';
     }
-    
+    final bool isRequerente = currentUserId != null && currentUserId == creatorUid;
     final bool podeFinalizarPelaLista = isAdmin &&
-                                (chamadoData[kFieldStatus] == kStatusPadraoSolicionado) &&
-                                (chamadoData[kFieldRequerenteConfirmou] as bool? ?? false) &&
+                                isSolucionado &&
+                                requerenteConfirmou &&
                                 !(chamadoData[kFieldAdminFinalizou] as bool? ?? false) &&
                                 onFinalizarArquivar != null;
+
+    // Condição para mostrar botão PDF (Admin sempre, Req. se confirmado e não inativo)
+     final bool podeGerarPdf = isAdmin || (isRequerente && requerenteConfirmou && !isInativo);
+
 
     return Opacity(
       opacity: isInativo ? 0.6 : 1.0,
@@ -148,13 +173,13 @@ class ChamadoListItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12.0, 10.0, 8.0, 10.0),
+                padding: const EdgeInsets.fromLTRB(12.0, 10.0, 0.0, 10.0), // Reduzido padding direito
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 5.0,
-                      height: 60, 
+                      height: 60,
                       margin: const EdgeInsets.only(right: 10.0),
                       decoration: BoxDecoration(
                         color: isInativo ? Colors.grey.shade400 : corPrioridade,
@@ -272,112 +297,128 @@ class ChamadoListItem extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (isClickable)
-                      PopupMenuButton<String>(
-                        icon: Icon(Icons.more_vert, color: textoSecundarioCor),
-                        tooltip: "Mais opções",
-                        onSelected: (value) {
-                          if (value == 'details') {
-                            onNavigateToDetails(chamadoId);
-                          } else if (value == 'delete' && isAdmin && onDelete != null) {
-                            onDelete!();
-                          } else if (value == 'download_pdf') {
-                             onDownloadPdf(chamadoId);
-                          } else if (value == 'confirmar_servico' && podeConfirmar && onConfirmar != null) {
-                             onConfirmar!(chamadoId);
-                          } else if (value == 'finalizar_arquivar' && podeFinalizarPelaLista && onFinalizarArquivar != null) {
-                            onFinalizarArquivar!(chamadoId);
-                          }
-                        },
-                        itemBuilder: (BuildContext context) {
-                          List<PopupMenuEntry<String>> items = [];
-                          items.add(const PopupMenuItem<String>(value: 'details', child: Text('Ver Detalhes')));
-                          
-                          items.add(PopupMenuItem<String>(
-                              value: 'download_pdf',
-                              enabled: !isLoadingPdfDownload,
-                              child: isLoadingPdfDownload ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Baixando PDF...')]) : const Text('Baixar PDF'),
-                          ));
+                    // --- Menu de 3 pontos ---
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: textoSecundarioCor), // Ícone movido para fora
+                      tooltip: "Mais opções",
+                      onSelected: (value) {
+                        if (value == 'details') {
+                          onNavigateToDetails(chamadoId);
+                        } else if (value == 'delete' && isAdmin && onDelete != null) {
+                          onDelete!();
+                        } else if (value == 'pdf_opcoes' && onGerarPdfOpcoes != null && podeGerarPdf) { // <<-- CHAMADA DA NOVA CALLBACK
+                          onGerarPdfOpcoes!(chamadoId, chamadoData);
+                        } else if (value == 'confirmar_servico' && podeConfirmar && onConfirmar != null) {
+                           onConfirmar!(chamadoId);
+                        } else if (value == 'finalizar_arquivar' && podeFinalizarPelaLista && onFinalizarArquivar != null) {
+                           onFinalizarArquivar!(chamadoId);
+                        }
+                      },
+                      itemBuilder: (BuildContext context) {
+                        List<PopupMenuEntry<String>> items = [];
+                        items.add(PopupMenuItem<String>(
+                            value: 'details',
+                            child: ListTile(leading: Icon(Icons.visibility_outlined, size: 20, color: colorScheme.onSurfaceVariant), title: Text('Ver Detalhes', style: textTheme.bodyMedium), dense: true, contentPadding: EdgeInsets.zero)
+                        ));
 
-                          if (podeConfirmar) {
-                            items.add(PopupMenuItem<String>(
+                        // --- Adiciona Opção Gerar PDF ---
+                        if (onGerarPdfOpcoes != null) {
+                          items.add(PopupMenuItem<String>(
+                              value: 'pdf_opcoes',
+                              enabled: podeGerarPdf && !isLoadingPdfDownload, // Habilita baseado na condição e loading
+                              child: isLoadingPdfDownload
+                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Gerando PDF...'), dense: true, contentPadding: EdgeInsets.zero)
+                                : ListTile(leading: Icon(Icons.picture_as_pdf_outlined, size: 20, color: podeGerarPdf ? colorScheme.onSurfaceVariant : Colors.grey), title: Text('Gerar PDF', style: textTheme.bodyMedium?.copyWith(color: podeGerarPdf ? null : Colors.grey)), dense: true, contentPadding: EdgeInsets.zero)
+                          ));
+                        }
+                        // --- Fim Opção Gerar PDF ---
+
+                        if (podeConfirmar) {
+                          items.add(PopupMenuItem<String>(
                               value: 'confirmar_servico',
                               enabled: !isLoadingConfirmation,
                               child: isLoadingConfirmation
-                                  ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Confirmando...')])
-                                  : const Text('Aceitar Solução'),
-                            ));
-                          }
+                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Confirmando...'), dense: true, contentPadding: EdgeInsets.zero)
+                                : ListTile(leading: Icon(Icons.check_circle_outline, size: 20, color: Colors.green[700]), title: Text('Aceitar Solução', style: textTheme.bodyMedium), dense: true, contentPadding: EdgeInsets.zero)
+                          ));
+                        }
 
-                          if (podeFinalizarPelaLista) {
-                            items.add(PopupMenuItem<String>(
-                                value: 'finalizar_arquivar',
-                                enabled: !isLoadingFinalizarArquivar,
-                                child: isLoadingFinalizarArquivar
-                                    ? const Row(children: [CircularProgressIndicator(strokeWidth: 2), SizedBox(width: 8), Text('Finalizando...')])
-                                    : const Text('Finalizar e Arquivar'),
-                            ));
-                          }
+                        if (podeFinalizarPelaLista) {
+                          items.add(PopupMenuItem<String>(
+                              value: 'finalizar_arquivar',
+                              enabled: !isLoadingFinalizarArquivar,
+                              child: isLoadingFinalizarArquivar
+                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Finalizando...'), dense: true, contentPadding: EdgeInsets.zero)
+                                : ListTile(leading: Icon(Icons.archive_outlined, size: 20, color: colorScheme.onSurfaceVariant), title: Text('Finalizar e Arquivar', style: textTheme.bodyMedium), dense: true, contentPadding: EdgeInsets.zero)
+                          ));
+                        }
 
-                          if (isAdmin && onDelete != null) {
-                            items.add(const PopupMenuDivider());
-                            items.add(const PopupMenuItem<String>(
+                        if (isAdmin && onDelete != null) {
+                          items.add(const PopupMenuDivider());
+                          items.add(PopupMenuItem<String>(
                               value: 'delete',
-                              child: Text('Excluir Chamado', style: TextStyle(color: Colors.red)),
-                            ));
-                          }
-                          return items;
-                        },
-                      ),
+                              child: ListTile(leading: Icon(Icons.delete_outline, size: 20, color: colorScheme.error), title: Text('Excluir Chamado', style: textTheme.bodyMedium?.copyWith(color: colorScheme.error)), dense: true, contentPadding: EdgeInsets.zero)
+                          ));
+                        }
+                        return items;
+                      },
+                      padding: EdgeInsets.zero,
+                      splashRadius: 20,
+                    ),
+                    // --- Fim Menu de 3 pontos ---
                   ],
                 ),
               ),
-              if (!isInativo && podeConfirmar)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0),
-                  child: Column(
-                    children: [
-                      const Divider(height: 1, thickness: 0.5),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: isLoadingConfirmation
-                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
-                            : OutlinedButton.icon(
-                                icon: const Icon(Icons.check_circle_outline, size: 18),
-                                label: const Text('Aceitar Solução'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.green[800],
-                                  side: BorderSide(color: Colors.green[700]!),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  textStyle: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                onPressed: () {
-                                  if(onConfirmar != null) onConfirmar!(chamadoId);
-                                }
-                              ),
-                      )
-                    ],
-                  ),
-                ),
-              if (!isInativo && status.toLowerCase() == statusSolucionadoComparacao.toLowerCase() && solucao != null && solucao.isNotEmpty && !podeConfirmar && !mostrarSolucaoAceitaChip)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              // Botão de confirmação ou prévia da solução (se aplicável e não inativo)
+              if (!isInativo) ...[
+                 if (podeConfirmar)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 10.0), // Ajustado padding
+                    child: Column(
+                      children: [
                         const Divider(height: 1, thickness: 0.5),
-                        const SizedBox(height: 6),
-                        Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
-                        const SizedBox(height: 2),
-                        Text(
-                          solucao,
-                          style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
+                        const SizedBox(height: 8),
+                        Center(
+                          child: isLoadingConfirmation
+                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+                              : OutlinedButton.icon(
+                                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                                  label: const Text('Aceitar Solução'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.green[800],
+                                    side: BorderSide(color: Colors.green[700]!),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    textStyle: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  onPressed: () {
+                                    if(onConfirmar != null) onConfirmar!(chamadoId);
+                                  }
+                                ),
+                        )
+                      ],
+                    ),
+                  ),
+                // Mostrar prévia da solução se solucionado mas não confirmado/aceito pelo requerente atual
+                 if (isSolucionado && solucao != null && solucao.isNotEmpty && !requerenteConfirmou && !podeConfirmar)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 10.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                          const Divider(height: 1, thickness: 0.5),
+                          const SizedBox(height: 6),
+                          Text("Solução:", style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[600])),
+                          const SizedBox(height: 2),
+                          Text(
+                            solucao,
+                            style: textTheme.bodySmall?.copyWith(color: textoSecundarioCor.withOpacity(0.9)),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    )
                   )
-                )
+              ],
             ],
           ),
         ),

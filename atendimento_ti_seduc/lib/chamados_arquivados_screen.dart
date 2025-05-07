@@ -1,26 +1,27 @@
-// lib/screens/chamados_arquivados_screen.dart (Exemplo de caminho)
+import 'dart:typed_data';
+import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 
-import '../pdf_generator.dart' as pdfGen;
 // --- CORREÇÃO DE IMPORTAÇÃO ---
-// Assumindo que 'detalhes_chamado_screen.dart' está na pasta 'lib/'
-// e este arquivo ('chamados_arquivados_screen.dart') está em 'lib/screens/'
+// Ajuste os caminhos conforme a estrutura do seu projeto
+import '../pdf_generator.dart' as pdfGen;
 import '../detalhes_chamado_screen.dart';
 import '../config/theme/app_theme.dart';
 import '../widgets/chamado_list_item.dart';
 import '../services/chamado_service.dart';
 
-// Constantes de Espaçamento (MAIS COMPACTAS) - movidas para o topo do arquivo ou para um arquivo de constantes global
-const double kSpacingXXSmall = 2.0;
-const double kSpacingXSmall = 4.0;
+// Constantes de Espaçamento
 const double kSpacingSmall = 8.0;
 const double kSpacingMedium = 12.0;
 const double kSpacingLarge = 16.0;
-const double kSpacingXLarge = 20.0;
-
 
 class ListaChamadosArquivadosScreen extends StatefulWidget {
   const ListaChamadosArquivadosScreen({super.key});
@@ -46,8 +47,11 @@ class _ListaChamadosArquivadosScreenState
   bool _isAdmin = false;
   bool _isLoadingRole = true;
   User? _currentUser;
-  bool _isDownloadingPdf = false;
-  String? _downloadingPdfId;
+
+  // --- NOVOS ESTADOS PARA LOADING DO PDF ---
+  bool _isGeneratingOrHandlingPdfArquivados = false;
+  String? _processingPdfIdArquivados;
+  // --- FIM DOS NOVOS ESTADOS ---
 
   @override
   void initState() {
@@ -122,65 +126,180 @@ class _ListaChamadosArquivadosScreenState
     return query;
   }
 
-  Future<void> _handleDownloadPdf(String chamadoId) async {
-    if (!mounted) return;
+  // --- FUNÇÕES AUXILIARES PDF (Arquivados) ---
+  Future<void> _imprimirPdfArquivados(Uint8List pdfBytes) async {
+    if(!mounted) return;
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(key: ValueKey("pdf_loading_dialog_arquivados"))));
+    BuildContext dialogContext = context;
 
-    Map<String, dynamic>? docData;
-    QueryDocumentSnapshot? foundDoc;
-
-    if (_currentDocs != null) {
-      for (final docInLoop in _currentDocs!) {
-        if (docInLoop.id == chamadoId) {
-          foundDoc = docInLoop;
-          break;
-        }
-      }
-    }
-    
-    if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (foundDoc != null && foundDoc.exists) {
-      docData = foundDoc.data() as Map<String, dynamic>?;
-    } else {
-      try {
-        DocumentSnapshot firestoreDoc = await FirebaseFirestore.instance.collection(kCollectionChamados).doc(chamadoId).get();
-        if (firestoreDoc.exists) {
-          docData = firestoreDoc.data() as Map<String, dynamic>?;
-        }
-      } catch (e) {
-        // Erro já tratado no print
-      }
-    }
-
-    if (docData == null) {
-      scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Erro: Dados do chamado arquivado não encontrados para gerar PDF.'), backgroundColor: Colors.orange));
-      if(mounted) setState(() { _isDownloadingPdf = false; _downloadingPdfId = null; });
-      return;
-    }
-
-    if (mounted) setState(() { _isDownloadingPdf = true; _downloadingPdfId = chamadoId;});
-
+    showDialog(
+      context: dialogContext,
+      barrierDismissible: false,
+      builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+    );
     try {
-      await pdfGen.generateAndOpenPdfForTicket(
-        context: context,
-        chamadoId: chamadoId,
-        dadosChamado: docData,
-      );
-    } catch (e, s) {
-      print(" _handleDownloadPdf Arquivados: Exceção ao gerar/abrir PDF $chamadoId: $e\nStackTrace: $s");
-    } finally {
-      if (mounted) {
-        setState(() { _isDownloadingPdf = false; _downloadingPdfId = null;});
+      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdfBytes);
+      if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+         Navigator.of(dialogContext, rootNavigator: true).pop();
       }
+    } catch (e) {
+       if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+         Navigator.of(dialogContext, rootNavigator: true).pop();
+      }
+       if(mounted) {
+         scaffoldMessenger.showSnackBar(
+           SnackBar(content: Text('Erro ao preparar impressão: $e'), backgroundColor: Colors.red),
+         );
+       }
     }
   }
 
+  Future<void> _abrirPdfLocalmenteArquivados(Uint8List pdfBytes, String chamadoId) async {
+     if (!mounted) return;
+     final scaffoldMessenger = ScaffoldMessenger.of(context);
+     BuildContext dialogContext = context;
+
+     showDialog(
+        context: dialogContext,
+        barrierDismissible: false,
+        builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+     );
+
+     try {
+        final outputDir = await getTemporaryDirectory();
+        final filename = 'chamado_arq_${chamadoId.substring(0, min(6, chamadoId.length))}.pdf';
+        final outputFile = File("${outputDir.path}/$filename");
+        await outputFile.writeAsBytes(pdfBytes);
+
+        if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+        }
+
+        final result = await OpenFilex.open(outputFile.path);
+
+        if (result.type != ResultType.done && mounted) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(content: Text('Não foi possível abrir o PDF: ${result.message}')),
+            );
+        }
+     } catch(e) {
+         if (Navigator.of(dialogContext, rootNavigator: true).canPop()) {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+         }
+         if (mounted) {
+           scaffoldMessenger.showSnackBar(
+             SnackBar(content: Text('Erro ao abrir PDF localmente: $e'), backgroundColor: Colors.red),
+           );
+         }
+     }
+  }
+
+  // --- FUNÇÃO PRINCIPAL PDF (Arquivados) ---
+  Future<void> _gerarPdfEExibirOpcoesArquivados(String chamadoId, Map<String, dynamic> dadosChamado) async {
+    if (!mounted) return;
+    if (_isGeneratingOrHandlingPdfArquivados && _processingPdfIdArquivados == chamadoId) return;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContext = context;
+
+    setState(() {
+      _isGeneratingOrHandlingPdfArquivados = true;
+      _processingPdfIdArquivados = chamadoId;
+    });
+
+    showDialog(
+      context: currentContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+    );
+
+    Uint8List? pdfBytes;
+    try {
+      pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
+        chamadoId: chamadoId,
+        dadosChamado: dadosChamado,
+        adminSignatureUrl: null,
+        requesterSignatureUrl: null,
+      );
+    } catch (e) {
+        if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+          Navigator.of(currentContext, rootNavigator: true).pop();
+        }
+        if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Erro ao gerar PDF: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+        if (mounted) {
+            setState(() {
+                _isGeneratingOrHandlingPdfArquivados = false;
+                _processingPdfIdArquivados = null;
+            });
+        }
+    }
+
+    try {
+        if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+            Navigator.of(currentContext, rootNavigator: true).pop();
+        }
+    } catch (_) { /* Ignora */ }
+
+    if (pdfBytes != null && mounted) {
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Opções do PDF (Arquivado)'),
+            content: const Text('O que você gostaria de fazer?'),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            actions: <Widget>[
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Imprimir / Salvar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _imprimirPdfArquivados(pdfBytes!);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new_outlined),
+                    label: const Text('Abrir / Visualizar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _abrirPdfLocalmenteArquivados(pdfBytes!, chamadoId);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    child: const Text('Cancelar'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      );
+    } else if (mounted) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Falha ao gerar bytes do PDF.'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+  // --- FIM DAS FUNÇÕES PDF ---
+
+
   void _showFilterBottomSheet() {
-    showModalBottomSheet(
+    // (Função permanece a mesma da sua versão anterior)
+     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16.0))),
@@ -339,11 +458,11 @@ class _ListaChamadosArquivadosScreenState
                             }
 
                             _currentDocs = snapshot.data?.docs;
-                                                        
+
                             if (_currentDocs == null || _currentDocs!.isEmpty) {
                               String msg = _isAdmin ? 'Nenhum chamado finalizado/arquivado.' : 'Você não possui chamados finalizados/arquivados.';
                               if (_isFilterActive) msg = 'Nenhum chamado finalizado com os filtros.';
-                              
+
                               return Center(
                                 child: Padding(
                                   padding: const EdgeInsets.all(kSpacingLarge),
@@ -360,7 +479,7 @@ class _ListaChamadosArquivadosScreenState
                                           label: const Text('Limpar Filtros'),
                                           onPressed: () => setState(() { _selectedDateFilter = null; _selectedSortOption = _sortOptions[0]; }),
                                           style: ElevatedButton.styleFrom(
-                                            foregroundColor: colorScheme.onSecondaryContainer, 
+                                            foregroundColor: colorScheme.onSecondaryContainer,
                                             backgroundColor: colorScheme.secondaryContainer.withOpacity(0.8)
                                           ),
                                         )
@@ -378,30 +497,35 @@ class _ListaChamadosArquivadosScreenState
                                 final DocumentSnapshot document = _currentDocs![index];
                                 final Map<String, dynamic> data = document.data() as Map<String, dynamic>? ?? {};
                                 final chamadoId = document.id;
-                                final bool isLoadingPdf = _isDownloadingPdf && _downloadingPdfId == chamadoId;
-                                
+                                // --- CORREÇÃO: Definir isLoadingPdfItem corretamente ---
+                                final bool isLoadingPdfItem = _isGeneratingOrHandlingPdfArquivados && _processingPdfIdArquivados == chamadoId;
+
                                 final Timestamp? adminFinalizouTimestamp = data[kFieldAdminFinalizouData] as Timestamp?;
                                 final String dataFinalizacaoKey = adminFinalizouTimestamp?.millisecondsSinceEpoch.toString() ?? data[kFieldDataCriacao]?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
 
+                                // --- CORREÇÃO: Passar onGerarPdfOpcoes em vez de onDownloadPdf ---
                                 return ChamadoListItem(
                                   key: ValueKey("archived_${chamadoId}_$dataFinalizacaoKey"),
                                   chamadoId: chamadoId,
                                   chamadoData: data,
                                   currentUser: _currentUser,
                                   isAdmin: _isAdmin,
-                                  onConfirmar: null, // Ação não relevante para arquivados
+                                  onConfirmar: null,
                                   isLoadingConfirmation: false,
-                                  onDelete: null, // Decidimos não permitir exclusão de arquivados por enquanto
+                                  onDelete: null,
                                   onNavigateToDetails: (id) {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (_) => DetalhesChamadoScreen(chamadoId: id)),
                                     );
                                   },
-                                  onDownloadPdf: _handleDownloadPdf,
-                                  isLoadingPdfDownload: isLoadingPdf,
+                                  isLoadingPdfDownload: isLoadingPdfItem, // Passa o estado correto
+                                  onGerarPdfOpcoes: _gerarPdfEExibirOpcoesArquivados, // Passa a função correta
                                   // onFinalizarArquivar e isLoadingFinalizarArquivar não são necessários aqui
+                                  onFinalizarArquivar: null, // Passa null
+                                  isLoadingFinalizarArquivar: false, // Passa false
                                 );
+                                // --- FIM DA CORREÇÃO ---
                               },
                             );
                           },

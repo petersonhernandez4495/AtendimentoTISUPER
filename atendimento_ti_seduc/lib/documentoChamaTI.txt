@@ -1,0 +1,430 @@
+# Documento de Especificação de Requisitos: Sistema de Cadastro de Atendimento (ChamaTI)
+
+**Versão:** 1.8 (Versão Consolidada)
+**Data:** 07/05/2025
+**Autor(es):** Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura
+**Aprovador(es):** Superintendente
+
+**Histórico de Revisões:**
+
+| Versão | Data       | Autor(es)                                                              | Seção Alterada | Descrição da Mudança                                                                                                |
+| :----- | :--------- | :--------------------------------------------------------------------- | :------------- | :------------------------------------------------------------------------------------------------------------------ |
+| 0.1    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Todas          | Início da elaboração colaborativa do documento.                                                                     |
+| 0.2    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 1.2, 1.3, Cabeçalho | Preenchimento inicial da Introdução com base nas respostas.                                                          |
+| 0.3    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 1.4, 1.5       | Detalhamento das definições e referências da Seção 1.                                                                |
+| 0.4    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 1.3            | Adicionadas informações sobre o que o sistema NÃO incluirá na Seção 1.3.                                            |
+| 0.5    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Seção 2        | Preenchimento da Seção 2 - Descrição Geral.                                                                         |
+| 0.6    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Sumário, Seção 3.1 | Adição de novos RFs (Autenticação, Auto-cadastro, Recuperação de Senha, Agenda) e início do detalhamento do RF007.    |
+| 0.7    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.1.3, 3.1.4, 3.1.6, 3.1.9 | Detalhamento dos RFs 003, 004, 006 e 009 com base nas respostas do usuário e análise de código.                    |
+| 0.8    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | RF002, RF005, RF007, RF010, RF012, RF013, RF014, RF015 | Detalhamento dos RFs com base nas respostas do usuário sobre os 8 pontos pendentes.                                  |
+| 0.9    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | RF010, RF015   | Detalhamento do RF010 (PDF OS) com base na imagem fornecida e RF015 (Agenda) com informação sobre visualização geral.    |
+| 1.0    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Seção 3.2      | Início do preenchimento dos Requisitos Não Funcionais.                                                                |
+| 1.1    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.1 (RNF001) | Adicionada informação qualitativa sobre o desempenho atual do sistema.                                                |
+| 1.2    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.2 (RNF002) | Atualizadas informações sobre logs de auditoria, segurança da aplicação (Firebase) e política de backup.             |
+| 1.3    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.2 (RNF002) | Detalhamento do conteúdo dos logs de auditoria.                                                                        |
+| 1.4    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.3 (RNF003) | Adicionadas informações sobre a simplicidade da interface e uso de fontes grandes para usabilidade/acessibilidade.    |
+| 1.5    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.4 (RNF004) | Adicionadas informações sobre disponibilidade e tolerância a falhas.                                                   |
+| 1.6    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | 3.2.6 (RNF006) | Adicionadas informações sobre versões de SO e dependências.                                                            |
+| 1.7    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Seções 4 e 5   | Adicionadas Seções 4 (Outros Requisitos) e 5 (Apêndices).                                                              |
+| 1.8    | 07/05/2025 | Equipe Técnica da Superintendência Regional de Educação de Rolim de Moura | Todas          | Consolidação de todas as seções para criar o documento completo.                                                      |
+
+**Sumário:**
+
+1.  Introdução
+    1.1. Propósito do Documento
+    1.2. Propósito do Sistema
+    1.3. Escopo do Sistema
+    1.4. Definições, Acrônimos e Abreviações
+    1.5. Referências
+    1.6. Visão Geral do Documento
+2.  Descrição Geral
+    2.1. Perspectiva do Produto/Sistema
+    2.2. Funções Principais do Sistema
+    2.3. Características dos Usuários
+    2.4. Restrições Gerais
+    2.5. Suposições e Dependências
+3.  Requisitos Específicos
+    3.1. Requisitos Funcionais
+        3.1.1. RF001 - Autenticação de Usuário (Login/Logout)
+        3.1.2. RF002 - Auto-cadastro de Novos Usuários Requisitantes
+        3.1.3. RF003 - Recuperação de Senha
+        3.1.4. RF004 - Cadastro de Novo Atendimento/Chamado ("Novo Chamado")
+        3.1.5. RF005 - Consulta e Listagem de Atendimentos/Chamados ("Chamados")
+        3.1.6. RF006 - Página de Detalhamento de Chamados
+        3.1.7. RF007 - Atualização de Status do Atendimento/Chamado
+        3.1.8. RF008 - Atribuição de Responsável pelo Atendimento/Chamado
+        3.1.9. RF009 - Registro de Interações/Histórico do Atendimento/Chamado
+        3.1.10. RF010 - Geração de PDF Ordem de Serviço (Relatório do Chamado)
+        3.1.11. RF011 - Arquivamento de Atendimentos Encerrados ("Chamados Arquivados")
+        3.1.12. RF012 - Acompanhamento Quantitativo e Geração de Relatórios
+        3.1.13. RF013 - Gestão de Usuários pelo Administrador (Técnicos)
+        3.1.14. RF014 - Notificações
+        3.1.15. RF015 - Agenda
+    3.2. Requisitos Não Funcionais
+        3.2.1. RNF001 - Desempenho
+        3.2.2. RNF002 - Segurança
+        3.2.3. RNF003 - Usabilidade
+        3.2.4. RNF004 - Confiabilidade
+        3.2.5. RNF005 - Manutenibilidade
+        3.2.6. RNF006 - Portabilidade (se aplicável)
+    3.3. Requisitos de Interface Externa (se aplicável)
+        3.3.1. Interfaces de Usuário
+        3.3.2. Interfaces de Hardware
+        3.3.3. Interfaces de Software
+        3.3.4. Interfaces de Comunicação
+    3.4. Requisitos de Dados
+        3.4.1. Estrutura de Dados (Campos para cadastro de atendimento)
+        3.4.2. Persistência de Dados
+        3.4.3. Conformidade (ex: LGPD para dados pessoais)
+4.  Outros Requisitos (se aplicável)
+    4.1. Licenças de Software
+    4.2. Requisitos Legais e Regulatórios
+5.  Apêndices (se aplicável)
+
+---
+
+**1. Introdução**
+
+**1.1. Propósito do Documento**
+Este documento especifica os requisitos funcionais e não funcionais para o Sistema de Cadastro de Atendimento, doravante denominado ChamaTI. Ele serve como um guia para as equipes de desenvolvimento, teste e qualidade, e como um ponto de referência para todas as partes interessadas (stakeholders).
+
+**1.2. Propósito do Sistema**
+O sistema ChamaTI tem o objetivo de atender as demandas escolares de atendimento técnico de manutenção da cidade e distritos competentes da Superintendência Regional de Educação de Rolim de Moura.
+
+**1.3. Escopo do Sistema**
+O ChamaTI permitirá:
+* Cadastro de perfil de requisitantes de atendimento (Gestores, Secretários Escolares, Coordenadores de LIE).
+* Cadastro de perfil de administradores (Técnicos de Informática do Estado de Rondônia) que realizarão os atendimentos.
+* Criação e listagem de chamados de atendimentos.
+* Visualização de uma página com detalhamentos de cada chamado.
+* Geração de Ordens de Serviço em formato PDF para os atendimentos.
+* Arquivamento de atendimentos que foram encerrados/concluídos.
+* Acompanhamento da quantidade de atendimentos (ex: por status, por período, por técnico).
+
+O ChamaTI NÃO incluirá:
+* Nesta fase inicial, o sistema não incluirá funcionalidades como controle de estoque de peças, módulo financeiro ou integração com sistemas de patrimônio (cadastro de tombamentos de bens).
+
+**1.4. Definições, Acrônimos e Abreviações**
+* **ChamaTI:** Nome do Sistema de Cadastro de Atendimento.
+* **SRE RM:** Superintendência Regional de Educação de Rolim de Moura.
+* **OS:** Ordem de Serviço.
+* **RF:** Requisito Funcional.
+* **RNF:** Requisito Não Funcional.
+* **LGPD:** Lei Geral de Proteção de Dados Pessoais.
+* **Requisitantes:** Usuários que abrem os chamados de atendimento. Especificamente: Gestores Escolares, Secretários Escolares e Coordenadores de Laboratório de Informática Educativa (LIE).
+* **Técnicos:** Servidores técnicos de informática do Estado de Rondônia, lotados na SRE RM ou responsáveis pelo atendimento às escolas da regional, que realizarão os atendimentos registrados no ChamaTI.
+* **Distritos Competentes:** Refere-se às unidades escolares (escolas) localizadas na cidade de Rolim de Moura e nos distritos sob a jurisdição da Superintendência Regional de Educação de Rolim de Moura.
+* **LIE:** Laboratório de Informática Educativa.
+
+**1.5. Referências**
+* Atualmente, não existe um documento formal (manual de procedimento, portaria) para o processo de abertura e gestão de chamados técnicos que o ChamaTI irá cobrir.
+* Após a conclusão deste Documento de Especificação de Requisitos, será elaborado um Manual de Utilização do Sistema ChamaTI.
+
+**1.6. Visão Geral do Documento**
+Este documento está organizado da seguinte forma: A Seção 1 fornece uma introdução. A Seção 2 descreve o sistema de uma perspectiva geral. A Seção 3 detalha os requisitos funcionais, não funcionais, de interface e de dados. A Seção 4 cobre outros requisitos relevantes. Apêndices podem ser incluídos para informações complementares.
+
+---
+
+**2. Descrição Geral**
+
+**2.1. Perspectiva do Produto/Sistema**
+O ChamaTI é um sistema de informação novo e independente, desenvolvido para ser utilizado internamente pela Superintendência Regional de Educação de Rolim de Moura (SRE RM). Ele substituirá o processo atual de gerenciamento de chamados técnicos de manutenção, que hoje é realizado por meio de planilhas Google.
+O sistema será um aplicativo/programa desktop, instalado nos computadores dos usuários pelos técnicos da SRE RM. Está previsto também desenvolvimento ou compatibilidade para a plataforma Android.
+
+**2.2. Funções Principais do Sistema**
+As funções principais do ChamaTI incluem:
+* Registro e gerenciamento de chamados para atendimento técnico de manutenção.
+* Detalhamento dos atendimentos para acompanhamento e consulta.
+* Geração de Ordens de Serviço em formato PDF.
+* Gestão de usuários (Requisitantes e Técnicos).
+* Acompanhamento quantitativo e arquivamento dos atendimentos.
+
+**2.3. Características dos Usuários**
+
+| Tipo de Usuário      | Formação/Conhecimento Técnico Necessário | Atividades Principais no Sistema                                                                                                | Nível de Acesso Esperado                                  |
+| :------------------- | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------- |
+| Requisitante         | Conhecimento básico de informática        | Abrir novos chamados de atendimento, acompanhar o status dos seus chamados, visualizar detalhes dos seus chamados.              | Operacional (limitado à sua esfera de solicitação)        |
+| Técnico              | Conhecimento básico de informática        | Registrar, consultar, atualizar status, atribuir responsável, registrar interações, gerar OS, arquivar chamados. Visualizar relatórios e realizar a gestão geral do sistema (funções administrativas). | Administrativo/Operacional (acesso total e de gestão)   |
+
+**2.4. Restrições Gerais**
+* **Plataformas Suportadas:** O sistema será desenvolvido primariamente como uma aplicação desktop para o sistema operacional Windows. Há também previsão de desenvolvimento ou compatibilidade para a plataforma Android.
+* **Tecnologias de Desenvolvimento:** [Não especificado neste documento - a ser definido pela equipe técnica].
+* **Navegadores (se aplicável a alguma interface web de administração, por exemplo):** [Não aplicável para a aplicação desktop principal, a menos que haja um painel web complementar].
+* **Identidade Visual:** O sistema terá uma identidade visual própria, não seguindo necessariamente as diretrizes de identidade visual do Governo do Estado de Rondônia.
+* **Conformidade:** O sistema deverá estar em conformidade com a LGPD no tratamento de dados pessoais.
+
+**2.5. Suposições e Dependências**
+* **Suposições:**
+    * Assume-se que os usuários (Requisitantes e Técnicos) possuirão conhecimento básico de informática para operar o sistema.
+    * Assume-se que a infraestrutura de rede interna da SRE RM e das escolas (para os Requisitantes) estará funcional.
+* **Dependências:**
+    * O sistema requer acesso à internet para seu pleno funcionamento (a natureza exata desta dependência, como sincronização de dados ou acesso a um banco de dados central, será detalhada posteriormente).
+    * O acesso ao sistema dependerá de credenciais próprias (login e senha) geradas e gerenciadas dentro do próprio ChamaTI após a instalação.
+
+---
+
+**3. Requisitos Específicos**
+
+**3.1. Requisitos Funcionais**
+
+**3.1.1. RF001 - Autenticação de Usuário (Login/Logout)**
+* **Descrição:** O sistema deve permitir que usuários cadastrados acessem o sistema através de uma tela de login. A tela de login inicial deve apresentar campos para "Email Institucional" e "Senha", um botão "Entrar", um link/botão para "Cadastro" (para novos Requisitantes) e um link/botão para "Esqueceu a senha?". Após o login bem-sucedido, o usuário é direcionado para a tela de "Lista de Chamados". O sistema deve possuir uma funcionalidade de "Logout" acessível no menu lateral, que encerra a sessão do usuário e o redireciona para a tela de login.
+* **Critérios de Aceitação:**
+    * A tela de login contém os campos "Email Institucional", "Senha" e os botões/links "Entrar", "Cadastro" e "Esqueceu a senha?".
+    * Usuário com credenciais válidas consegue acessar a página principal (Lista de Chamados).
+    * Usuário com credenciais inválidas recebe uma mensagem de erro apropriada.
+    * A funcionalidade de "Logout" encerra a sessão do usuário e o redireciona para a tela de login.
+* **Prioridade:** Alta
+
+**3.1.2. RF002 - Auto-cadastro de Novos Usuários Requisitantes**
+* **Descrição:** O sistema deve permitir que novos usuários Requisitantes (Gestores, Secretários Escolares, Coordenadores de LIE) se cadastrem através de um formulário específico. Este formulário é acessado a partir do link/botão "Cadastro" na tela de login. Os campos para cadastro são: Nome Completo, Email Institucional, Telefone, Cargo ou Função, Instituição/Lotação (Escola), Senha e Confirmar Senha. Todos os campos são de preenchimento obrigatório. Após o preenchimento, o usuário clica no botão "Cadastrar".
+* **Critérios de Aceitação:**
+    * O formulário de cadastro contém os campos: Nome Completo, Email Institucional, Telefone, Cargo ou Função, Instituição/Lotação, Senha e Confirmar Senha.
+    * Todos os campos do formulário são validados como obrigatórios.
+    * O sistema valida se o "Email Institucional" já existe na base para evitar duplicidade.
+    * O sistema valida se os campos "Senha" e "Confirmar Senha" coincidem.
+    * Após o cadastro bem-sucedido, o usuário é informado e o acesso ao sistema para abrir chamados é imediato.
+* **Prioridade:** Alta
+
+**3.1.3. RF003 - Recuperação de Senha**
+* **Descrição:** O sistema deve fornecer uma funcionalidade para que usuários que esqueceram suas senhas possam recuperá-las ou redefini-las. Esta funcionalidade é acessada pelo link/botão "Esqueceu a senha?" na tela de login. O processo envolve o envio de um e-mail para o endereço de e-mail institucional cadastrado pelo usuário, contendo instruções ou um link para redefinição da senha.
+* **Critérios de Aceitação:**
+    * Ao clicar em "Esqueceu a senha?", o usuário é solicitado a informar seu e-mail institucional cadastrado.
+    * Se o e-mail existir na base, um e-mail com link/instruções para redefinição de senha é enviado para o endereço fornecido.
+    * O usuário consegue redefinir sua senha através do mecanismo fornecido e acessar o sistema com a nova senha.
+* **Prioridade:** Média
+
+**3.1.4. RF004 - Cadastro de Novo Atendimento/Chamado ("Novo Chamado")**
+* **Descrição:** Acessível pelo menu lateral ("Novo Chamado"), esta funcionalidade permite que um Requisitante ou Técnico (com as devidas permissões) registre um novo chamado de atendimento técnico através de um formulário dividido em dois passos:
+    * **Passo 1: Identificação e Local:**
+        * **Tipo de Solicitante:** Seleção entre "Escola" ou "Superintendência".
+        * **Se "Escola":**
+            * **Cidade/Distrito:** Seleção da localidade da escola (lista de opções incluindo "OUTRO").
+            * **Instituição (Escola):** Se a cidade não for "OUTRO", seleção da escola em uma lista filtrada pela cidade. Se a cidade for "OUTRO", campo de texto para digitar o nome completo da escola.
+            * **Cargo ou Função:** Seleção do cargo do solicitante na escola (lista de opções). Se "PROFESSOR" for selecionado, um aviso informativo deve ser exibido.
+            * **Atendimento Técnico Para:** Seleção do setor/ambiente da escola para o qual o atendimento é solicitado (lista de opções).
+        * **Se "Superintendência":**
+            * **Sala/Setor da SUPER:** Seleção do setor da superintendência (lista de opções).
+            * **Cidade da Superintendência:** Campo de texto para informar a cidade onde a superintendência está localizada.
+    * **Passo 2: Equipamento e Problema:**
+        * **Número de Celular para Contato:** Campo de texto com máscara para telefone. (Pode ser pré-preenchido com o telefone do cadastro do usuário).
+        * **Equipamento para Solicitação:** Seleção do tipo de equipamento (lista de opções incluindo "OUTRO"). Se "OUTRO", campo de texto para especificar o equipamento.
+        * **Internet Conectada:** Seleção "Sim" ou "Não".
+        * **Marca/Modelo do Equipamento:** Campo de texto (opcional).
+        * **Número de Patrimônio (Tombamento):** Campo de texto numérico. Não pode ser "0".
+        * **Problema Ocorrido:** Seleção do problema principal (lista de opções incluindo "OUTRO"). Se "OUTRO", campo de texto para descrever o problema.
+* **Critérios de Aceitação:**
+    * Todos os campos marcados como obrigatórios em cada passo devem ser preenchidos para avançar ou enviar o chamado.
+    * As listas de opções para Cidade/Distrito, Instituição (Escola), Cargo/Função, Atendimento Para (Escola), Setor (Superintendência), Equipamento e Problema são carregadas dinamicamente de uma fonte de configuração central (Firebase).
+    * Se o tipo de solicitante for "Escola" e o cargo for "PROFESSOR", um aviso é exibido informando que a solicitação deve ser feita via Coordenação (o sistema permite o envio, mas exibe o aviso).
+    * Antes de registrar o novo chamado, o sistema verifica a existência de chamados duplicados (ativos) para o mesmo número de patrimônio e tipo de problema. Se um duplicado for encontrado, o novo chamado não é criado e o usuário é informado.
+    * Ao salvar o chamado com sucesso, um número de protocolo/ID único é gerado pelo sistema e informado ao usuário.
+    * O usuário é redirecionado para a tela principal (Lista de Chamados) após o envio bem-sucedido.
+    * Não há campo para o solicitante indicar um "Técnico Responsável" durante a abertura do chamado.
+* **Prioridade:** Alta
+
+**3.1.5. RF005 - Consulta e Listagem de Atendimentos/Chamados ("Chamados")**
+* **Descrição:** Tela principal após o login. Exibe uma lista dos chamados de atendimento. Requisitantes visualizam prioritariamente seus chamados ou os de sua instituição. Técnicos (Administradores) visualizam todos os chamados, com capacidade de filtro.
+* **Critérios de Aceitação:**
+    * A lista de chamados exibe as seguintes informações principais para cada chamado: Nome do Requisitante, Instituição (Escola/Setor da SRE), Cidade da Instituição, Número de Telefone para Contato (do chamado), Status do Chamado e Data de Criação.
+    * Requisitantes veem os chamados que abriram ou que são de sua instituição.
+    * Técnicos (Administradores) têm acesso a todos os chamados.
+    * Funcionalidades de filtro devem estar disponíveis, permitindo filtrar chamados por: Status, Período de Criação, Instituição (Escola/Setor), Cidade, Técnico Responsável (se aplicável).
+    * A lista deve ser paginada caso haja um grande volume de chamados para garantir bom desempenho.
+    * Deve ser possível ordenar a lista por diferentes colunas (ex: Data de Criação, Status).
+* **Prioridade:** Alta
+
+**3.1.6. RF006 - Página de Detalhamento de Chamados**
+* **Descrição:** Ao selecionar um chamado na lista (RF005), o usuário é direcionado para uma página que exibe todas as informações detalhadas do chamado, incluindo dados da solicitação (conforme RF004), status atual, responsável (se atribuído), e o histórico de interações (RF009). As informações devem ser apresentadas de forma clara e organizada.
+* **Critérios de Aceitação:**
+    * Todas as informações relevantes do chamado, incluindo os dados fornecidos na abertura, status, técnico responsável (se houver) e histórico de comentários/ações, são exibidas de forma clara e legível.
+* **Prioridade:** Alta
+
+**3.1.7. RF007 - Atualização de Status do Atendimento/Chamado**
+* **Descrição:** Permite que Técnicos (com perfil de Administrador) alterem o status de um chamado.
+    * [A definir: Status possíveis: "Aberto", "Em Análise", "Aguardando Peça", "Em Atendimento", "Pendente Usuário", "Resolvido", "Encerrado", "Cancelado". Lista de status a ser confirmada/refinada].
+* **Critérios de Aceitação:**
+    * Apenas usuários com perfil de Técnico (Administrador) podem alterar o status dos chamados.
+    * O sistema deve apresentar uma lista de status válidos para seleção.
+    * [A definir: Existem regras de transição entre os status? Ex: um chamado "Encerrado" não pode ser reaberto diretamente para "Em Atendimento"].
+    * A mudança de status é registrada no histórico do chamado (RF009) com data, hora e o nome do técnico que realizou a alteração.
+* **Prioridade:** Alta
+
+**3.1.8. RF008 - Atribuição de Responsável pelo Atendimento/Chamado**
+* **Descrição:** Permite que um Técnico (com função administrativa) atribua ou reatribua um chamado a um Técnico específico para atendimento.
+* **Critérios de Aceitação:**
+    * A atribuição (nome do técnico e data/hora) é registrada no histórico do chamado (RF009).
+    * [Opcional: O técnico atribuído é notificado (ver RF014).]
+* **Prioridade:** Média
+
+**3.1.9. RF009 - Registro de Interações/Histórico do Atendimento/Chamado**
+* **Descrição:** Cada chamado deve ter um histórico detalhado de todas as ações, comentários, soluções parciais ou finais, mudanças de status, e quem realizou a ação e quando. Tanto Técnicos quanto Requisitantes (após a criação do chamado, dentro da tela de detalhes) podem adicionar comentários/observações ao chamado.
+* **Critérios de Aceitação:**
+    * Técnicos podem adicionar comentários/observações/soluções ao chamado.
+    * Requisitantes podem adicionar comentários/respostas ao chamado após sua criação.
+    * Cada entrada no histórico deve conter: data/hora da interação, nome do usuário que realizou a interação e o conteúdo da interação/comentário/mudança de status.
+    * O histórico é exibido em ordem cronológica (mais recente primeiro ou último).
+* **Prioridade:** Alta
+
+**3.1.10. RF010 - Geração de PDF Ordem de Serviço (Relatório do Chamado)**
+* **Descrição:** O sistema deve permitir a geração de um documento PDF, intitulado "Relatório do Chamado", que formaliza a Ordem de Serviço para um chamado específico. Este PDF deve conter todas as informações relevantes do detalhamento do chamado, conforme layout similar ao da imagem fornecida (image_1b8949.png).
+* **Critérios de Aceitação:**
+    * A OS em PDF ("Relatório do Chamado") deve incluir as seguintes seções e campos:
+        * **Cabeçalho:** "Chamado ID" (canto superior direito).
+        * **Título Principal:** "Relatório do Chamado" e "ID" do chamado.
+        * **Informações do Chamado:**
+            * Status (do chamado, ex: Solucionado)
+            * Solicitante (nome do usuário que abriu o chamado)
+            * Data de Criação (do chamado, com hora)
+            * Equipamento (tipo de equipamento do chamado)
+            * Problema Relatado (descrição do problema do chamado)
+        * **Detalhes da Solução:**
+            * Descrição da Solução (texto detalhando a solução aplicada)
+            * Data de Atendimento (Informada) (data em que o atendimento ocorreu)
+            * Solucionado por (Admin/Técnico) (nome do técnico que solucionou)
+            * Data do Registro da Solução (data e hora em que a solução foi registrada no sistema)
+            * Espaço para Assinatura do Técnico/Admin (com o nome impresso abaixo).
+        * **Confirmação do Requerente:**
+            * Status Confirmação (ex: Solução Aceita pelo Requerente, Pendente de Confirmação)
+            * Confirmado por (nome do usuário requerente que confirmou)
+            * Data da Confirmação (data e hora da confirmação pelo requerente)
+            * Espaço para Assinatura do Requerente (com o nome impresso abaixo).
+        * **Rodapé:** Paginação (Página X de Y).
+    * O layout deve ser claro, profissional e similar ao exemplo fornecido.
+    * O PDF deve ser gerado a partir da tela de detalhes de um chamado.
+* **Prioridade:** Alta
+
+**3.1.11. RF011 - Arquivamento de Atendimentos Encerrados ("Chamados Arquivados")**
+* **Descrição:** Chamados com status "Encerrado" ou "Cancelado" após um certo período [definir período, ex: 30 dias] ou por ação manual de um Técnico, são movidos para uma área de "Chamados Arquivados" para não poluir a lista principal de chamados ativos, mas permanecem consultáveis.
+* **Critérios de Aceitação:**
+    * Chamados com status final (Encerrado, Cancelado) podem ser arquivados (manual ou automaticamente).
+    * Existe uma seção/tela "Chamados Arquivados" acessível pelo menu lateral, onde é possível buscar e visualizar os detalhes destes chamados arquivados.
+* **Prioridade:** Média
+
+**3.1.12. RF012 - Acompanhamento Quantitativo e Geração de Relatórios**
+* **Descrição:** O sistema deve fornecer funcionalidades para que os Técnicos (administradores) acompanhem a quantidade de atendimentos e gerem relatórios. (Funcionalidade ainda não implementada/definida no sistema atual).
+* **Critérios de Aceitação:**
+    * [A definir: Quais relatórios são necessários? Ex: Chamados por período (abertos, fechados), chamados por status, chamados por escola/setor, chamados por técnico, tempo médio de atendimento (TMA), tempo médio de primeira resposta (TMDP). Os relatórios podem ser filtrados? Podem ser exportados (CSV, PDF)?]
+    * [A definir: Haverá um painel (dashboard) com gráficos e indicadores principais para visualização rápida (ex: total de chamados abertos, chamados por prioridade, etc.)?]
+* **Prioridade:** Média (a ser reavaliada quando definido)
+
+**3.1.13. RF013 - Gestão de Usuários pelo Administrador (Técnicos)**
+* **Descrição:** Além do auto-cadastro de Requisitantes (RF002), os Técnicos (com perfil administrativo) devem poder gerenciar todos os usuários do sistema:
+    * Visualizar lista de usuários (Requisitantes e Técnicos).
+    * Cadastrar novos usuários Técnicos, definindo seu perfil (Técnico padrão ou Técnico com permissões administrativas).
+    * Ativar/Desativar usuários (impedindo o login).
+    * Editar informações de usuários (ex: nome, telefone, lotação, perfil de Técnico), exceto a senha de outros usuários.
+* **Critérios de Aceitação:**
+    * As funcionalidades de gerenciamento de usuários listadas estão disponíveis e funcionais para Técnicos com permissão administrativa.
+    * Técnicos administradores podem criar e gerenciar contas de outros Técnicos, incluindo a atribuição de direitos administrativos.
+* **Prioridade:** Média
+
+**3.1.14. RF014 - Notificações**
+* **Descrição:** O sistema deve enviar notificações (por e-mail ou dentro do próprio sistema através de um ícone/área de notificações) para eventos chave. (Funcionalidade ainda não implementada/definida no sistema atual).
+* **Critérios de Aceitação:**
+    * [A definir: Quais eventos geram notificação e para quem? Ex:
+        * Requisitante: Novo chamado aberto (confirmação com protocolo), status do seu chamado alterado, novo comentário do técnico no seu chamado, chamado encerrado.
+        * Técnicos (Equipe/Responsável): Novo chamado aberto na sua área de atuação, chamado atribuído a ele, novo comentário do requisitante em chamado sob sua responsabilidade.
+    * As notificações devem ser configuráveis (quais enviar, para quem, por qual canal).]
+* **Prioridade:** Média (a ser reavaliada quando definido)
+
+**3.1.15. RF015 - Agenda**
+* **Descrição:** Funcionalidade acessível pelo menu lateral, destinada aos Técnicos (administradores) para registrar e visualizar agendamentos de visitas técnicas às escolas/setores. A agenda é compartilhada entre os Técnicos (administradores), permitindo que todos visualizem os compromissos uns dos outros para melhor coordenação.
+* **Critérios de Aceitação:**
+    * Técnicos (administradores) podem criar novos agendamentos, informando: Data, Hora (início/fim previsto), Escola/Setor a ser visitado, Chamado(s) relacionado(s) (opcional), Técnico(s) designado(s) para a visita (pode ser mais de um ou a equipe), e uma breve descrição/objetivo da visita.
+    * O sistema deve exibir os agendamentos em um formato de calendário (diário, semanal, mensal) ou lista cronológica, com clara identificação dos técnicos envolvidos em cada agendamento.
+    * Deve ser possível visualizar os detalhes de um agendamento.
+    * Deve ser possível filtrar a agenda por técnico, período ou status do agendamento (ex: Planejado, Realizado, Cancelado).
+    * [A definir: Gera lembretes/notificações sobre os agendamentos para os técnicos envolvidos?]
+* **Prioridade:** Média
+
+---
+
+**3.2. Requisitos Não Funcionais**
+
+**3.2.1. RNF001 - Desempenho**
+* **Descrição:** Define quão rápido o sistema deve responder às interações do usuário e processar dados.
+* **Requisitos Específicos:**
+    * O sistema deve apresentar resposta rápida para interações comuns do usuário (ex: abertura de telas, submissão de formulários).
+    * Em testes iniciais com um volume baixo de dados (aproximadamente 10 chamados), o carregamento da lista de chamados e a abertura do formulário de novo chamado são percebidos como imediatos.
+    * O sistema deve ser projetado para manter um bom desempenho à medida que o volume de dados (chamados, usuários) aumentar. Testes de carga futuros podem ser necessários para quantificar limites.
+    * [A definir: O sistema deve suportar até Z usuários utilizando-o simultaneamente sem lentidão perceptível (considerando o acesso ao banco de dados central Firebase).]
+
+**3.2.2. RNF002 - Segurança**
+* **Descrição:** Define como o sistema protegerá os dados contra acesso não autorizado, perdas ou corrupção.
+* **Requisitos Específicos:**
+    * O acesso ao sistema deve ser controlado por login (e-mail institucional) e senha individuais (conforme RF001).
+    * As senhas dos usuários são gerenciadas e armazenadas de forma segura pelo Firebase Authentication.
+    * **Logs de Auditoria:** O sistema possui mecanismos de logging que registram informações sobre as operações realizadas. Cada entrada de log deve conter, no mínimo:
+        * Identificação do usuário logado que realizou a ação.
+        * Data e hora da ocorrência (timestamp).
+        * Detalhes da ação/requerimento realizado (ex: tipo de operação, dados afetados ou ID do registro modificado).
+        * Um identificador ou forma de "assinatura" da transação/evento, se aplicável (ex: ID da sessão, ID da transação).
+        * [A definir: Quais ações específicas são registradas nos logs de forma detalhada (ex: login bem-sucedido/falho, criação/alteração de chamado, alteração de status, modificações de usuário, geração de OS, visualização de dados sensíveis)? Onde esses logs são armazenados (ex: Firebase Logging, coleção específica no Firestore) e por quanto tempo são retidos?]
+    * **Segurança da Aplicação e Dados:** A segurança do acesso aos dados no back-end é primariamente gerenciada pelas regras de segurança do Firebase (Firestore Security Rules), que devem ser configuradas para garantir que os usuários só possam acessar e modificar os dados aos quais têm permissão.
+        * [A definir: Existem preocupações específicas com dados sensíveis que possam ser armazenados localmente no cache ou arquivos temporários da aplicação desktop/Android? Se sim, quais medidas de proteção local são necessárias?]
+    * O tratamento de dados pessoais (nome, telefone, e-mail) deve estar em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD).
+    * **Backup de Dados:** Atualmente, não há um procedimento de backup gerenciado ou política de exportação periódica de dados implementada pela equipe da SRE RM, contando-se com os mecanismos de backup e recuperação de desastres providos pela plataforma Firebase.
+        * [Recomendação: Avaliar a necessidade de exportações periódicas dos dados do Firestore para um local de armazenamento controlado pela SRE RM como uma camada adicional de segurança e para fins de arquivamento de longo prazo, se necessário.]
+
+**3.2.3. RNF003 - Usabilidade**
+* **Descrição:** Define a facilidade com que os usuários podem aprender e utilizar o sistema.
+* **Requisitos Específicos:**
+    * A interface do sistema deve ser intuitiva e de fácil aprendizado para os usuários-alvo (Requisitantes e Técnicos com conhecimento básico de informática). Foi adotada uma abordagem de design que prioriza a simplicidade, especialmente para o perfil Requisitante.
+    * As funcionalidades mais comuns (ex: abrir novo chamado, consultar chamados) devem ser facilmente acessíveis, com um fluxo de navegação claro.
+    * O sistema deve fornecer mensagens de erro claras e informativas, orientando o usuário sobre como proceder.
+    * Deve haver consistência visual e de navegação em todas as telas do sistema.
+    * **Acessibilidade Visual:** Para facilitar a leitura e interação, o sistema utiliza fontes de tamanho considerado grande e com boa legibilidade nos seus componentes de interface.
+    * [A definir: O sistema precisa atender a outros critérios específicos de acessibilidade para pessoas com deficiência (além do tamanho da fonte e simplicidade da interface), como navegação por teclado completa, compatibilidade com leitores de tela, ou diretrizes formais como WCAG/eMAG?]
+
+**3.2.4. RNF004 - Confiabilidade**
+* **Descrição:** Define a capacidade do sistema de operar sem falhas por um período de tempo especificado em um ambiente estabelecido.
+* **Requisitos Específicos:**
+    * **Disponibilidade:** O sistema deve estar disponível e funcional durante o horário comercial da SRE RM. A disponibilidade dependerá da infraestrutura do Firebase e da conectividade com a internet dos usuários.
+    * **Tolerância a Falhas:** Falhas em funcionalidades não críticas (ex: falha pontual na geração de um documento PDF específico) não devem impedir as operações essenciais do sistema, como cadastro, consulta e atualização de chamados. O restante do sistema deve continuar operacional.
+    * O sistema deve lidar de forma graciosa com erros de conexão com a internet (essencial para comunicação com o Firebase), informando o usuário sobre a falha de conexão e permitindo novas tentativas ou indicando que certas funcionalidades estão indisponíveis offline.
+
+**3.2.5. RNF005 - Manutenibilidade**
+* **Descrição:** Define a facilidade com que o sistema pode ser modificado para corrigir defeitos, melhorar o desempenho ou outras características, ou adaptar-se a um ambiente modificado.
+* **Requisitos Específicos:**
+    * O código-fonte do sistema (Flutter/Dart) deve ser bem documentado (comentários no código) e organizado em módulos/componentes lógicos para facilitar futuras manutenções e evoluções.
+    * Configurações do sistema que podem mudar com frequência (ex: listas de opções para equipamentos, problemas, setores, cidades, escolas) são gerenciadas externamente no Firebase (coleção `configuracoes`), permitindo atualizações sem necessidade de recompilar e reinstalar o aplicativo em todos os clientes.
+    * [Aguardando Informação - O processo de atualização da aplicação desktop (Windows) e do aplicativo Android nos dispositivos dos usuários deve ser o mais simples possível. Existem planos para um mecanismo de atualização automática ou semi-automática?]
+
+**3.2.6. RNF006 - Portabilidade (se aplicável)**
+* **Descrição:** Define a capacidade do software de ser transferido de um ambiente para outro.
+* **Requisitos Específicos:**
+    * **Sistemas Operacionais Suportados:**
+        * **Desktop:** O sistema foi desenvolvido e testado primariamente para Windows 11. [A definir: Suporte formal a outras versões do Windows, como Windows 10.]
+        * **Mobile:** Há previsão de desenvolvimento ou compatibilidade para a plataforma Android. [A definir: Versão mínima do Android suportada.]
+    * **Dependências de Instalação (Desktop):**
+        * A aplicação Flutter para desktop é distribuída como um executável que geralmente inclui suas dependências diretas.
+        * Além do executável da aplicação, pode ser necessária a instalação de um certificado digital específico para comunicação segura ou para validação da aplicação. [A definir: Detalhes sobre este certificado e seu processo de instalação.]
+        * [A definir: Existem outras bibliotecas ou runtimes específicos (ex: .NET Framework, Visual C++ Redistributable) que precisam estar pré-instalados nas máquinas Windows?]
+
+---
+
+**4. Outros Requisitos (se aplicável)**
+
+**4.1. Licenças de Software**
+* [A definir: Todas as ferramentas, bibliotecas e componentes de software utilizados no desenvolvimento e implantação do sistema ChamaTI devem estar em conformidade com suas respectivas licenças de uso. Se houver componentes pagos, suas licenças devem estar regularizadas.]
+
+**4.2. Requisitos Legais e Regulatórios**
+* O sistema deve atender aos requisitos da Lei Geral de Proteção de Dados Pessoais (LGPD) nº 13.709/2018, conforme já mencionado nas seções 2.4 (Restrições Gerais) e 3.2.2 (Segurança).
+* [A definir: Existem outras políticas internas da SRE RM, do Governo do Estado de Rondônia, ou legislações específicas (além da LGPD) que o sistema ChamaTI deve observar em seu funcionamento ou no tratamento dos dados?]
+
+---
+
+**5. Apêndices (se aplicável)**
+
+Esta seção é reservada para informações complementares que auxiliam no entendimento dos requisitos do sistema ChamaTI. Exemplos de conteúdo que podem ser incluídos futuramente:
+
+* Diagramas de Casos de Uso.
+* Protótipos de Tela (Mockups/Wireframes).
+* Modelo de Dados (Diagrama Entidade-Relacionamento).
+* Glossário Detalhado (se necessário).
+* Regras de Negócio Específicas e Detalhadas.
+
+[No momento, não há apêndices formalmente adicionados. Esta seção pode ser preenchida conforme tais artefatos sejam desenvolvidos.]
+
+---

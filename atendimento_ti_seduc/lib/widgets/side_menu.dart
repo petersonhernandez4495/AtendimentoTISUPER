@@ -50,7 +50,7 @@ class _SideMenuState extends State<SideMenu> {
   static const int perfilScreenIndex = 3;
 
   // Defina uma altura máxima razoável para a logo
-  static const double _maxLogoContainerHeight = 180.0; // Reduzido para teste, ajuste conforme necessário
+  static const double _maxLogoContainerHeight = 260.0; // Reduzido para teste, ajuste conforme necessário
   // Defina um padding vertical para a logo
   static const double _logoVerticalPadding = 8.0;
 

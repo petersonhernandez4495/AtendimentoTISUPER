@@ -10,7 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'config/theme/app_theme.dart';
 import 'widgets/gradient_background_container.dart';
-import 'widgets/side_menu.dart';
+import 'widgets/side_menu.dart'; // Import do SideMenu
 import 'lista_chamados_screen.dart';
 import 'novo_chamado_screen.dart';
 import 'agenda_screen.dart';
@@ -29,10 +29,12 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
   bool _isAdmin = false;
+  String _userRole = 'inativo'; // Armazena a role do usuário, padrão 'inativo'
   bool _isLoadingRole = true;
   User? _firebaseUserInstance;
   String _globalSearchQuery = "";
 
+  // Telas disponíveis para administradores
   List<Widget> get _adminScreens => [
         ListaChamadosScreen(
             key: ValueKey('admin_chamados_$_globalSearchQuery'),
@@ -47,19 +49,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         const TutorialScreen(key: ValueKey('admin_tutoriais')),
       ];
 
-  List<Widget> get _userScreens => [
-        ListaChamadosScreen(
-            key: ValueKey('user_chamados_$_globalSearchQuery'),
-            searchQuery: _globalSearchQuery),
-        const NovoChamadoScreen(key: ValueKey('user_novo_chamado')),
-        const AgendaScreen(key: ValueKey('user_agenda')),
-        const ProfileScreen(key: ValueKey('user_perfil')),
-        Container(key: const ValueKey('user_placeholder_admin_only')),
-        ListaChamadosArquivadosScreen(
-            key: ValueKey('user_arquivados_$_globalSearchQuery'),
-            searchQuery: _globalSearchQuery),
-        const TutorialScreen(key: ValueKey('user_tutoriais')),
-      ];
+  // Telas disponíveis para usuários não-administradores
+  List<Widget> get _userScreens {
+    // MODIFICADO: NovoChamadoScreen sempre presente. O controle de acesso
+    // será feito em _onDestinationSelected.
+    return [
+      ListaChamadosScreen(
+          key: ValueKey('user_chamados_$_globalSearchQuery'),
+          searchQuery: _globalSearchQuery),
+      const NovoChamadoScreen(
+          key: ValueKey('user_novo_chamado')), // Sempre incluído
+      const AgendaScreen(key: ValueKey('user_agenda')),
+      const ProfileScreen(key: ValueKey('user_perfil')),
+      Container(
+          key: const ValueKey(
+              'user_placeholder_admin_only')), // Placeholder para User Management
+      ListaChamadosArquivadosScreen(
+          key: ValueKey('user_arquivados_$_globalSearchQuery'),
+          searchQuery: _globalSearchQuery),
+      const TutorialScreen(key: ValueKey('user_tutoriais')),
+    ];
+  }
 
   List<Widget> get _currentScreenOptions =>
       _isAdmin ? _adminScreens : _userScreens;
@@ -85,34 +95,60 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
 
     bool isAdminResult = false;
+    String roleResult = 'inativo';
+
     if (currentUserFromAuth != null) {
       try {
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUserFromAuth.uid)
             .get();
+
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
           if (userData.containsKey('role_temp') &&
-              userData['role_temp'] == 'admin') {
-            isAdminResult = true;
+              userData['role_temp'] != null &&
+              (userData['role_temp'] as String).isNotEmpty) {
+            roleResult = userData['role_temp'] as String;
           } else if (userData.containsKey('role') &&
-              userData['role'] == 'admin') {
+              userData['role'] != null &&
+              (userData['role'] as String).isNotEmpty) {
+            roleResult = userData['role'] as String;
+          }
+          if (roleResult.isEmpty) {
+            roleResult = 'inativo';
+          }
+          if (roleResult == 'admin') {
             isAdminResult = true;
           }
+        } else {
+          print(
+              "MainNavigationScreen: Documento do usuário não encontrado, tratando como 'inativo'. UID: ${currentUserFromAuth.uid}");
+          roleResult = 'inativo';
         }
       } catch (e) {
         print("MainNavigationScreen: Erro ao verificar papel do usuário: $e");
         isAdminResult = false;
+        roleResult = 'inativo';
       }
+    } else {
+      roleResult = 'inativo';
+      isAdminResult = false;
     }
+
     if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
+        _userRole = roleResult;
         _isLoadingRole = false;
-        if (_selectedIndex >= _currentScreenOptions.length ||
+
+        // MODIFICADO: Removida a lógica que força _selectedIndex = 0 para usuário inativo
+        // tentando acessar o índice 1, pois o _onDestinationSelected cuidará disso com um alerta.
+        final optionsLength = _currentScreenOptions.length;
+        if (_selectedIndex >= optionsLength ||
             _selectedIndex < 0 ||
             (!_isAdmin && _selectedIndex == 4)) {
+          // Apenas verifica UserManagement para não-admin
           _selectedIndex = 0;
         }
       });
@@ -219,13 +255,30 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void _onDestinationSelected(int newScreenIndex) {
     final optionsLength = _currentScreenOptions.length;
-    if (newScreenIndex >= 0 && newScreenIndex < optionsLength) {
-      if (newScreenIndex == 4 && !_isAdmin) {
+
+    // MODIFICADO: Mensagem da SnackBar atualizada.
+    if (!_isAdmin && _userRole == 'inativo' && newScreenIndex == 1) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Permissão negada. Espere a ativação da conta.'), // Mensagem atualizada
+          backgroundColor: Colors.orangeAccent, // Cor ajustada para alerta
+          duration: Duration(seconds: 3),
+        ));
+      }
+      return;
+    }
+
+    if (newScreenIndex == 4 && !_isAdmin) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Acesso restrito a administradores.')),
         );
-        return;
       }
+      return;
+    }
+
+    if (newScreenIndex >= 0 && newScreenIndex < optionsLength) {
       if (mounted) {
         setState(() {
           _selectedIndex = newScreenIndex;
@@ -302,9 +355,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       effectiveIndex = 0;
     } else {
       final optionsLength = _currentScreenOptions.length;
+      // MODIFICADO: Removida a lógica que força effectiveIndex = 0 para usuário inativo
+      // tentando acessar o índice 1, pois o _onDestinationSelected cuidará disso com um alerta.
       if (_selectedIndex < 0 ||
           _selectedIndex >= optionsLength ||
           (!_isAdmin && _selectedIndex == 4)) {
+        // Apenas verifica UserManagement para não-admin
         effectiveIndex = 0;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _selectedIndex != effectiveIndex) {
@@ -334,6 +390,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               onDestinationSelected: _onDestinationSelected,
               onLogout: () => _fazerLogout(context),
               isAdminUser: _isAdmin,
+              userRole: _userRole,
               currentUser: _firebaseUserInstance,
               onCheckForUpdates:
                   kReleaseMode ? _verificarAtualizacoesApp : null,
@@ -365,7 +422,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       return FadeTransition(opacity: animation, child: child);
                     },
                     child: IndexedStack(
-                      key: ValueKey<int>(effectiveIndex),
+                      key: ValueKey<String>(
+                          'indexed_stack_${_isAdmin}_${_userRole}_$effectiveIndex'),
                       index: effectiveIndex,
                       children: _currentScreenOptions,
                     ),

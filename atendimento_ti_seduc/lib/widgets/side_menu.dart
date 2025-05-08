@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/theme/app_theme.dart';
-import '../screens/tutorial_screen.dart';
 
 class MenuItemData {
   final IconData icon;
@@ -26,13 +25,15 @@ class SideMenu extends StatefulWidget {
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onLogout;
   final bool isAdminUser;
+  final String userRole;
   final User? currentUser;
   final VoidCallback? onCheckForUpdates;
   final ValueChanged<String>? onSearchQueryChanged;
   final String initialSearchQuery;
 
   static const int perfilScreenIndex = 3;
-  static const int tutorialScreenIndex = 6;
+  static const int tutorialScreenIndex =
+      6; // Corresponde ao índice da tela de Tutoriais
 
   const SideMenu({
     super.key,
@@ -40,6 +41,7 @@ class SideMenu extends StatefulWidget {
     required this.onDestinationSelected,
     required this.onLogout,
     required this.isAdminUser,
+    required this.userRole,
     this.currentUser,
     this.onCheckForUpdates,
     this.onSearchQueryChanged,
@@ -75,8 +77,9 @@ class _SideMenuState extends State<SideMenu> {
   @override
   void didUpdateWidget(covariant SideMenu oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isAdminUser != widget.isAdminUser) {
-      _updateMenuItems();
+    if (oldWidget.isAdminUser != widget.isAdminUser ||
+        oldWidget.userRole != widget.userRole) {
+      _updateMenuItems(); // Atualiza os itens se a role ou status de admin mudar
     }
     if (widget.initialSearchQuery != oldWidget.initialSearchQuery &&
         widget.initialSearchQuery != _searchController.text) {
@@ -97,19 +100,32 @@ class _SideMenuState extends State<SideMenu> {
   void _updateMenuItems() {
     _navigationRailItems = [
       MenuItemData(icon: Icons.list_alt_rounded, title: 'Chamados', index: 0),
-      MenuItemData(icon: Icons.add_comment_outlined, title: 'Novo Chamado', index: 1),
-      MenuItemData(icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
-      MenuItemData(icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5),
+      // MODIFICADO: "Novo Chamado" (index 1) sempre visível.
+      // O controle de acesso é feito na MainNavigationScreen ao tentar navegar.
+      MenuItemData(
+          icon: Icons.add_comment_outlined, title: 'Novo Chamado', index: 1),
+      MenuItemData(
+          icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
+      MenuItemData(
+          icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5),
     ];
+
     if (widget.isAdminUser) {
-      _navigationRailItems.add(MenuItemData(icon: Icons.manage_accounts_outlined, title: 'Gerenciar Usuários', index: 4, isAdminOnly: true));
+      _navigationRailItems.add(MenuItemData(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Gerenciar Usuários',
+          index: 4, // Índice da UserManagementScreen
+          isAdminOnly: true));
     }
+
+    // Opcional: Reordenar para garantir a ordem visual caso a adição seja complexa.
+    // _navigationRailItems.sort((a, b) => a.index.compareTo(b.index));
 
     _footerItems = [
       MenuItemData(
         icon: Icons.video_library_rounded,
         title: 'Tutoriais',
-        index: SideMenu.tutorialScreenIndex,
+        index: SideMenu.tutorialScreenIndex, // Índice 6
         customNavigation: null,
       ),
     ];
@@ -137,27 +153,34 @@ class _SideMenuState extends State<SideMenu> {
         style: const TextStyle(color: AppTheme.kWinPrimaryText, fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Pesquisar chamado...',
-          hintStyle: TextStyle(color: AppTheme.kWinSecondaryText.withOpacity(0.7), fontSize: 13),
-          prefixIcon: Icon(Icons.search_outlined, color: AppTheme.kWinSecondaryText.withOpacity(0.8), size: 20),
+          hintStyle: TextStyle(
+              color: AppTheme.kWinSecondaryText.withOpacity(0.7), fontSize: 13),
+          prefixIcon: Icon(Icons.search_outlined,
+              color: AppTheme.kWinSecondaryText.withOpacity(0.8), size: 20),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20.0),
-            borderSide: BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
+            borderSide:
+                BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20.0),
-            borderSide: BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
+            borderSide:
+                BorderSide(color: AppTheme.kWinDivider.withOpacity(0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20.0),
-            borderSide: const BorderSide(color: AppTheme.kWinAccent, width: 1.5),
+            borderSide:
+                const BorderSide(color: AppTheme.kWinAccent, width: 1.5),
           ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, color: AppTheme.kWinSecondaryText, size: 18),
+                  icon: const Icon(Icons.clear_rounded,
+                      color: AppTheme.kWinSecondaryText, size: 18),
                   onPressed: () {
                     _searchController.clear();
                   },
@@ -173,7 +196,8 @@ class _SideMenuState extends State<SideMenu> {
   Widget _buildLogoSection(BuildContext context) {
     if (!_isExpanded) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: _logoVerticalPadding, horizontal: 60.0),
+      padding: const EdgeInsets.symmetric(
+          vertical: _logoVerticalPadding, horizontal: 60.0),
       child: SizedBox(
         height: _maxLogoContainerHeight,
         width: double.infinity,
@@ -187,7 +211,10 @@ class _SideMenuState extends State<SideMenu> {
               alignment: Alignment.center,
               child: Text(
                 "LOGO",
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppTheme.kWinPrimaryText),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(color: AppTheme.kWinPrimaryText),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -204,7 +231,8 @@ class _SideMenuState extends State<SideMenu> {
 
     final bool hasValidPhotoUrl = user.photoURL != null &&
         user.photoURL!.isNotEmpty &&
-        (user.photoURL!.startsWith('http') || user.photoURL!.startsWith('https'));
+        (user.photoURL!.startsWith('http') ||
+            user.photoURL!.startsWith('https'));
 
     return InkWell(
       onTap: () {
@@ -221,8 +249,12 @@ class _SideMenuState extends State<SideMenu> {
                   CircleAvatar(
                     radius: 20,
                     backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                    backgroundImage: hasValidPhotoUrl ? NetworkImage(user.photoURL!) : null,
-                    child: !hasValidPhotoUrl ? const Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent) : null,
+                    backgroundImage:
+                        hasValidPhotoUrl ? NetworkImage(user.photoURL!) : null,
+                    child: !hasValidPhotoUrl
+                        ? const Icon(Icons.person_rounded,
+                            size: 22, color: AppTheme.kWinAccent)
+                        : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -230,18 +262,21 @@ class _SideMenuState extends State<SideMenu> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (user.displayName != null && user.displayName!.isNotEmpty)
+                        if (user.displayName != null &&
+                            user.displayName!.isNotEmpty)
                           Text(
                             user.displayName!,
                             style: theme.textTheme.titleSmall?.copyWith(
-                                color: AppTheme.kWinPrimaryText, fontWeight: FontWeight.w600),
+                                color: AppTheme.kWinPrimaryText,
+                                fontWeight: FontWeight.w600),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                           ),
                         if (user.email != null && user.email!.isNotEmpty)
                           Text(
                             user.email!,
-                            style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.kWinSecondaryText),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.kWinSecondaryText),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                           ),
@@ -255,8 +290,12 @@ class _SideMenuState extends State<SideMenu> {
                 child: CircleAvatar(
                   radius: 20,
                   backgroundColor: AppTheme.kWinAccent.withOpacity(0.2),
-                  backgroundImage: hasValidPhotoUrl ? NetworkImage(user.photoURL!) : null,
-                  child: !hasValidPhotoUrl ? const Icon(Icons.person_rounded, size: 22, color: AppTheme.kWinAccent) : null,
+                  backgroundImage:
+                      hasValidPhotoUrl ? NetworkImage(user.photoURL!) : null,
+                  child: !hasValidPhotoUrl
+                      ? const Icon(Icons.person_rounded,
+                          size: 22, color: AppTheme.kWinAccent)
+                      : null,
                 ),
               ),
       ),
@@ -266,28 +305,37 @@ class _SideMenuState extends State<SideMenu> {
   Widget _buildMenuActions(BuildContext context) {
     List<Widget> actions = [];
     if (widget.onCheckForUpdates != null && kReleaseMode) {
-      actions.add(_buildActionItem(context, icon: Icons.update_outlined, label: 'Verificar Atualizações', onPressed: widget.onCheckForUpdates));
+      actions.add(_buildActionItem(context,
+          icon: Icons.update_outlined,
+          label: 'Verificar Atualizações',
+          onPressed: widget.onCheckForUpdates));
     }
     if (actions.isEmpty) return const SizedBox.shrink();
     return Column(mainAxisSize: MainAxisSize.min, children: actions);
   }
 
-  Widget _buildActionItem(BuildContext context, {required IconData icon, required String label, VoidCallback? onPressed}) {
+  Widget _buildActionItem(BuildContext context,
+      {required IconData icon,
+      required String label,
+      VoidCallback? onPressed}) {
     if (_isExpanded) {
       return TextButton.icon(
         icon: Icon(icon, color: AppTheme.kWinSecondaryText, size: 20),
         label: Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.kWinPrimaryText),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: AppTheme.kWinPrimaryText),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
         onPressed: onPressed,
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          alignment: Alignment.centerLeft,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
-        ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            alignment: Alignment.centerLeft,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
       );
     } else {
       return IconButton(
@@ -300,17 +348,24 @@ class _SideMenuState extends State<SideMenu> {
   }
 
   Widget _buildCustomMenuItem(BuildContext context, MenuItemData item) {
-    final bool isSelected = widget.selectedIndex == item.index && item.customNavigation == null;
-    final Color iconColor = isSelected ? AppTheme.kWinAccent : AppTheme.kWinSecondaryText;
-    final Color textColor = isSelected ? AppTheme.kWinAccent : AppTheme.kWinPrimaryText;
-    final FontWeight fontWeight = isSelected ? FontWeight.bold : FontWeight.normal;
+    final bool isSelected =
+        widget.selectedIndex == item.index && item.customNavigation == null;
+    final Color iconColor =
+        isSelected ? AppTheme.kWinAccent : AppTheme.kWinSecondaryText;
+    final Color textColor =
+        isSelected ? AppTheme.kWinAccent : AppTheme.kWinPrimaryText;
+    final FontWeight fontWeight =
+        isSelected ? FontWeight.bold : FontWeight.normal;
 
     if (_isExpanded) {
       return TextButton.icon(
         icon: Icon(item.icon, color: iconColor, size: 22),
         label: Text(
           item.title,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: textColor, fontWeight: fontWeight),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: textColor, fontWeight: fontWeight),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
@@ -322,11 +377,13 @@ class _SideMenuState extends State<SideMenu> {
           }
         },
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          alignment: Alignment.centerLeft,
-          backgroundColor: isSelected ? AppTheme.kWinAccent.withOpacity(0.12) : Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
-        ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            alignment: Alignment.centerLeft,
+            backgroundColor: isSelected
+                ? AppTheme.kWinAccent.withOpacity(0.12)
+                : Colors.transparent,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
       );
     } else {
       return Tooltip(
@@ -346,8 +403,11 @@ class _SideMenuState extends State<SideMenu> {
           },
           padding: const EdgeInsets.all(12),
           style: IconButton.styleFrom(
-              backgroundColor: isSelected ? AppTheme.kWinAccent.withOpacity(0.12) : Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
+            backgroundColor: isSelected
+                ? AppTheme.kWinAccent.withOpacity(0.12)
+                : Colors.transparent,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6.0)),
           ),
         ),
       );
@@ -365,14 +425,18 @@ class _SideMenuState extends State<SideMenu> {
           icon: Icon(Icons.logout_rounded, color: logoutIconColor, size: 22),
           label: Text(
             'Sair',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: logoutTextColor, fontWeight: FontWeight.w600),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: logoutTextColor, fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
           onPressed: widget.onLogout,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             alignment: Alignment.centerLeft,
           ),
         ),
@@ -393,11 +457,12 @@ class _SideMenuState extends State<SideMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
     int railSelectedIndex = -1;
 
-    if (widget.selectedIndex != SideMenu.perfilScreenIndex && widget.selectedIndex != SideMenu.tutorialScreenIndex) {
-      railSelectedIndex = _navigationRailItems.indexWhere((item) => item.index == widget.selectedIndex);
+    if (widget.selectedIndex != SideMenu.perfilScreenIndex &&
+        widget.selectedIndex != SideMenu.tutorialScreenIndex) {
+      railSelectedIndex = _navigationRailItems
+          .indexWhere((item) => item.index == widget.selectedIndex);
     }
 
     return Container(
@@ -413,9 +478,11 @@ class _SideMenuState extends State<SideMenu> {
           Container(
             height: 56,
             alignment: _isExpanded ? Alignment.centerRight : Alignment.center,
-            padding: _isExpanded ? const EdgeInsets.only(right: 8) : EdgeInsets.zero,
+            padding:
+                _isExpanded ? const EdgeInsets.only(right: 8) : EdgeInsets.zero,
             child: IconButton(
-              icon: Icon(_isExpanded ? Icons.menu_open_rounded : Icons.menu_rounded),
+              icon: Icon(
+                  _isExpanded ? Icons.menu_open_rounded : Icons.menu_rounded),
               tooltip: _isExpanded ? 'Recolher Menu' : 'Expandir Menu',
               color: AppTheme.kWinSecondaryText,
               iconSize: 26,
@@ -434,8 +501,10 @@ class _SideMenuState extends State<SideMenu> {
             child: NavigationRail(
               selectedIndex: railSelectedIndex >= 0 ? railSelectedIndex : null,
               onDestinationSelected: (selectedIndexInRail) {
-                if (selectedIndexInRail >= 0 && selectedIndexInRail < _navigationRailItems.length) {
-                  final selectedItem = _navigationRailItems[selectedIndexInRail];
+                if (selectedIndexInRail >= 0 &&
+                    selectedIndexInRail < _navigationRailItems.length) {
+                  final selectedItem =
+                      _navigationRailItems[selectedIndexInRail];
                   widget.onDestinationSelected(selectedItem.index);
                 }
               },
@@ -444,36 +513,44 @@ class _SideMenuState extends State<SideMenu> {
               minWidth: _collapsedWidth,
               minExtendedWidth: _expandedWidth,
               labelType: NavigationRailLabelType.none,
-              selectedIconTheme: const IconThemeData(color: AppTheme.kWinAccent, size: 24),
-              unselectedIconTheme: const IconThemeData(color: AppTheme.kWinSecondaryText, size: 22),
+              selectedIconTheme:
+                  const IconThemeData(color: AppTheme.kWinAccent, size: 24),
+              unselectedIconTheme: const IconThemeData(
+                  color: AppTheme.kWinSecondaryText, size: 22),
               useIndicator: true,
               indicatorColor: AppTheme.kWinAccent.withOpacity(0.12),
               indicatorShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6.0)
-              ),
+                  borderRadius: BorderRadius.circular(6.0)),
               destinations: _navigationRailItems.map((item) {
                 return NavigationRailDestination(
                   icon: Tooltip(message: item.title, child: Icon(item.icon)),
-                  selectedIcon: Tooltip(message: item.title, child: Icon(item.icon)),
-                  label: Text(item.title, overflow: TextOverflow.ellipsis, maxLines: 1),
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                  selectedIcon:
+                      Tooltip(message: item.title, child: Icon(item.icon)),
+                  label: Text(item.title,
+                      overflow: TextOverflow.ellipsis, maxLines: 1),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                 );
               }).toList(),
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: _isExpanded ? 8.0 : 0, vertical: 8.0),
+            padding: EdgeInsets.symmetric(
+                horizontal: _isExpanded ? 8.0 : 0, vertical: 8.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: _footerItems.map((item) => _buildCustomMenuItem(context, item)).toList(),
+              children: _footerItems
+                  .map((item) => _buildCustomMenuItem(context, item))
+                  .toList(),
             ),
           ),
           if (widget.onCheckForUpdates != null && kReleaseMode)
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: _isExpanded ? 8.0 : 0, vertical: 0),
-              child: _buildMenuActions(context)
-            )
-          else if (!_isExpanded && (widget.onCheckForUpdates != null && kReleaseMode))
+                padding: EdgeInsets.symmetric(
+                    horizontal: _isExpanded ? 8.0 : 0, vertical: 0),
+                child: _buildMenuActions(context))
+          else if (!_isExpanded &&
+              (widget.onCheckForUpdates != null && kReleaseMode))
             _buildMenuActions(context),
           const Divider(height: 0, thickness: 1, color: AppTheme.kWinDivider),
           _buildLogoutButton(context),

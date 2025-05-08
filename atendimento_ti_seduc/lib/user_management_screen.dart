@@ -16,10 +16,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       FirebaseFirestore.instance.collection('users');
 
   // Lista das roles disponíveis para edição
-  final List<String> _availableRoles = ['admin', 'requester'];
+  // Atualizado para incluir 'inativo'
+  final List<String> _availableRoles = ['admin', 'requester', 'inativo'];
 
   // Variável para guardar o estado de carregamento da atualização de uma role específica
-  String? _updatingUserId; // Guarda o ID do usuário cuja role está sendo atualizada
+  String?
+      _updatingUserId; // Guarda o ID do usuário cuja role está sendo atualizada
 
   // --- Função para atualizar a role no Firestore ---
   Future<void> _updateUserRole(String userId, String newRole) async {
@@ -42,12 +44,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       // Atualiza apenas o campo 'role_temp' no documento do usuário especificado
       await _usersCollection.doc(userId).update({'role_temp': newRole});
 
-      if (mounted) { // Verifica se o widget ainda está na árvore
+      if (mounted) {
+        // Verifica se o widget ainda está na árvore
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Perfil de ${userId.substring(0, 6)}... atualizado para $newRole.'), // Feedback mais claro
+            content: Text(
+                'Perfil de ${userId.substring(0, 6)}... atualizado para $newRole.'), // Feedback mais claro
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2), // Duração mais curta para sucesso
+            duration:
+                const Duration(seconds: 2), // Duração mais curta para sucesso
           ),
         );
       }
@@ -64,11 +69,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     } finally {
       // Garante que o estado de loading seja resetado mesmo se o widget for desmontado
       // durante o processo (embora 'mounted' já proteja setState)
-       if (mounted) {
-         setState(() {
+      if (mounted) {
+        setState(() {
           _updatingUserId = null; // Finaliza o estado de atualização
         });
-       }
+      }
     }
   }
 
@@ -93,8 +98,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         // Usa StreamBuilder para ouvir atualizações em tempo real da coleção 'users'
         // Qualquer mudança no Firestore (add/edit/delete) refletirá aqui
         stream: _usersCollection
-                 .orderBy('name') // Ordena os usuários pelo nome alfabeticamente
-                 .snapshots(), // Cria o stream
+            .orderBy('name') // Ordena os usuários pelo nome alfabeticamente
+            .snapshots(), // Cria o stream
         builder: (context, snapshot) {
           // --- Tratamento de Estados do Stream ---
           if (snapshot.hasError) {
@@ -119,11 +124,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           // Verifica se temos dados e se a lista de documentos não está vazia
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
-              child: Text(
-                'Nenhum usuário encontrado na base de dados.',
-                style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
-              )
-            );
+                child: Text(
+              'Nenhum usuário encontrado na base de dados.',
+              style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+            ));
           }
 
           // --- Lista de Usuários ---
@@ -132,7 +136,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
           return ListView.separated(
             itemCount: userDocs.length,
-            separatorBuilder: (context, index) => const Divider(height: 1, thickness: 0.5, indent: 16, endIndent: 16), // Linha divisória mais sutil
+            separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                thickness: 0.5,
+                indent: 16,
+                endIndent: 16), // Linha divisória mais sutil
             itemBuilder: (context, index) {
               final userDoc = userDocs[index];
               // Pega os dados do documento como um mapa
@@ -141,87 +149,131 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               final userId = userDoc.id; // UID do usuário (ID do documento)
 
               // Obtém os dados do usuário (com tratamento para campos ausentes/nulos)
-              final String name = userData['name'] as String? ?? 'Nome não disponível';
-              final String email = userData['email'] as String? ?? 'Email não disponível';
-              final String? currentRole = userData['role_temp'] as String?; // A role pode ser nula
+              final String name =
+                  userData['name'] as String? ?? 'Nome não disponível';
+              final String email =
+                  userData['email'] as String? ?? 'Email não disponível';
+              final String? currentRole =
+                  userData['role_temp'] as String?; // A role pode ser nula
 
               // Verifica se este usuário específico está sendo atualizado no momento
               final bool isUpdating = _updatingUserId == userId;
 
               return ListTile(
-                leading: CircleAvatar( // Adiciona um avatar simples
+                leading: CircleAvatar(
+                  // Adiciona um avatar simples
                   // Use cores baseadas no tema para consistência
-                  backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.secondaryContainer,
                   child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?', // Mostra a primeira letra do nome
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSecondaryContainer),
+                    name.isNotEmpty
+                        ? name[0].toUpperCase()
+                        : '?', // Mostra a primeira letra do nome
+                    style: TextStyle(
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer),
                   ),
                 ),
                 title: Text(
-                    name,
-                    style: const TextStyle(fontWeight: FontWeight.w500), // Nome em destaque
+                  name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w500), // Nome em destaque
                 ),
-                subtitle: Column( // Usa Column para alinhar email e outras infos se necessário
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     Text(email, style: Theme.of(context).textTheme.bodySmall), // Email com estilo menor
-                     // Poderia adicionar mais informações aqui (descomente se necessário)
-                     // if (userData.containsKey('jobTitle') && userData['jobTitle'] != null)
-                     //   Padding(
-                     //      padding: const EdgeInsets.only(top: 2.0),
-                     //      child: Text(userData['jobTitle'], style: Theme.of(context).textTheme.labelSmall),
-                     //    ),
-                   ],
+                subtitle: Column(
+                  // Usa Column para alinhar email e outras infos se necessário
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(email,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall), // Email com estilo menor
+                    // Poderia adicionar mais informações aqui (descomente se necessário)
+                    // if (userData.containsKey('jobTitle') && userData['jobTitle'] != null)
+                    //   Padding(
+                    //     padding: const EdgeInsets.only(top: 2.0),
+                    //     child: Text(userData['jobTitle'], style: Theme.of(context).textTheme.labelSmall),
+                    //   ),
+                  ],
                 ),
-                trailing: SizedBox( // Container para o controle da role
-                  width: 165, // Largura ajustada para os nomes completos das roles
+                trailing: SizedBox(
+                  // Container para o controle da role
+                  width:
+                      165, // Largura ajustada para os nomes completos das roles
                   child: isUpdating // Se estiver atualizando ESTE usuário...
-                      ? const Center( // Mostra um indicador de progresso centralizado
+                      ? const Center(
+                          // Mostra um indicador de progresso centralizado
                           child: SizedBox(
                             width: 24,
                             height: 24,
                             child: CircularProgressIndicator(strokeWidth: 3),
                           ),
                         )
-                      : DropdownButtonHideUnderline( // Esconde a linha padrão do dropdown
-                        child: DropdownButton<String>(
-                            value: currentRole, // O valor atual da role no banco
+                      : DropdownButtonHideUnderline(
+                          // Esconde a linha padrão do dropdown
+                          child: DropdownButton<String>(
+                            value:
+                                currentRole, // O valor atual da role no banco
                             // Texto exibido quando o valor é nulo
-                            hint: const Text('Definir Perfil', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                            isExpanded: true, // Faz o dropdown ocupar a largura do SizedBox
-                            items: _availableRoles.map((role) { // Cria os itens do dropdown
+                            hint: const Text('Definir Perfil',
+                                style: TextStyle(
+                                    fontSize: 13, color: Colors.grey)),
+                            isExpanded:
+                                true, // Faz o dropdown ocupar a largura do SizedBox
+                            items: _availableRoles.map((role) {
+                              // Cria os itens do dropdown
                               return DropdownMenuItem<String>(
                                 value: role,
                                 child: Text(
                                   // Melhora a legibilidade dos nomes das roles
-                                  role == 'admin' ? 'Administrador' : 'Requisitante',
+                                  // Atualizado para incluir 'Inativo'
+                                  role == 'admin'
+                                      ? 'Administrador'
+                                      : role == 'requester'
+                                          ? 'Requisitante'
+                                          : role == 'inativo'
+                                              ? 'Inativo'
+                                              : role, // Fallback para o nome da role
                                   style: TextStyle(
-                                    fontSize: 13, // Tamanho de fonte menor para caber
+                                    fontSize:
+                                        13, // Tamanho de fonte menor para caber
                                     // Destaca a opção que está selecionada atualmente
-                                    fontWeight: currentRole == role ? FontWeight.bold : FontWeight.normal,
-                                    color: currentRole == role ? Theme.of(context).colorScheme.primary : null,
+                                    fontWeight: currentRole == role
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: currentRole == role
+                                        ? Theme.of(context).colorScheme.primary
+                                        : null,
                                   ),
-                                  overflow: TextOverflow.ellipsis, // Evita quebra de texto
+                                  overflow: TextOverflow
+                                      .ellipsis, // Evita quebra de texto
                                 ),
                               );
                             }).toList(), // Converte o resultado do map em uma lista de itens
-                            onChanged: (newRole) { // Chamado quando uma nova role é selecionada
+                            onChanged: (newRole) {
+                              // Chamado quando uma nova role é selecionada
                               // Só atualiza se um valor foi selecionado e é diferente do atual
                               if (newRole != null && newRole != currentRole) {
-                                _updateUserRole(userId, newRole); // Chama a função de atualização
+                                _updateUserRole(userId,
+                                    newRole); // Chama a função de atualização
                               }
                             },
                             // Ícone visualmente mais integrado
-                            icon: Icon(Icons.edit_attributes_outlined, size: 20, color: Theme.of(context).colorScheme.primary.withOpacity(0.7)),
+                            icon: Icon(Icons.edit_attributes_outlined,
+                                size: 20,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.7)),
                           ),
-                      ),
+                        ),
                 ),
                 // Desabilita interações com o ListTile enquanto a role está sendo atualizada
                 // Evita cliques duplos ou seleção de outro item durante a atualização
                 enabled: !isUpdating,
                 // Adiciona um leve efeito visual quando desabilitado para indicar o loading
                 tileColor: isUpdating ? Colors.grey.withOpacity(0.05) : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0), // Ajusta padding interno
+                contentPadding: const EdgeInsets.symmetric(
+                    vertical: 8.0, horizontal: 16.0), // Ajusta padding interno
               );
             },
           );

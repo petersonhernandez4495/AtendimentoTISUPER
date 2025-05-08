@@ -36,6 +36,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   late Map<String, dynamic> _selectedSortOption;
   DateTime? _selectedDateFilter;
   bool _isAdmin = false;
+  String _userRole = 'inativo'; // <<<< Adicionado estado para role
   bool _isLoadingRole = true;
   User? _currentUser;
   String? _currentUserInstitution;
@@ -89,7 +90,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     super.initState();
     _searchLogic = ChamadoSearchLogic();
     _selectedSortOption = _sortOptions[0];
-    _checkUserRole();
+    _checkUserRole(); // Chama a função para verificar a role
   }
 
   Future<void> _checkUserRole() async {
@@ -98,19 +99,34 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     User? user = _auth.currentUser;
     bool isAdminResult = false;
     String? userInstitutionResult;
+    String roleResult = 'inativo'; // Padrão para inativo
 
     if (user != null) {
       _currentUser = user;
       print("DEBUG: Usuário logado: ${user.email} (UID: ${user.uid})");
       try {
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection(kCollectionUsers)
+            .collection(kCollectionUsers) // Use a constante correta
             .doc(user.uid)
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          isAdminResult = (userData[kFieldUserRole] == 'admin');
-          print("DEBUG: Usuário é admin? $isAdminResult");
+          // Verifica a role (prioriza role_temp)
+          if (userData.containsKey('role_temp') &&
+              userData['role_temp'] != null &&
+              (userData['role_temp'] as String).isNotEmpty) {
+            roleResult = userData['role_temp'] as String;
+          } else if (userData.containsKey(kFieldUserRole) &&
+              userData[kFieldUserRole] != null &&
+              (userData[kFieldUserRole] as String).isNotEmpty) {
+            // Usa constante kFieldUserRole
+            roleResult = userData[kFieldUserRole] as String;
+          }
+          if (roleResult.isEmpty)
+            roleResult = 'inativo'; // Garante que string vazia vire inativo
+
+          isAdminResult = (roleResult == 'admin');
+          print("DEBUG: Usuário é admin? $isAdminResult. Role: $roleResult");
 
           if (!isAdminResult) {
             userInstitutionResult = userData[kFieldUserInstituicao] as String?;
@@ -124,12 +140,14 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
         } else {
           isAdminResult = false;
           userInstitutionResult = null;
+          roleResult = 'inativo'; // Usuário sem doc é inativo
           print(
               "DEBUG: Documento do usuário não encontrado no Firestore ou sem dados.");
         }
       } catch (e) {
         isAdminResult = false;
         userInstitutionResult = null;
+        roleResult = 'inativo'; // Erro ao buscar, assume inativo
         print("DEBUG: Erro ao verificar permissões do usuário: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -142,12 +160,14 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       _currentUser = null;
       isAdminResult = false;
       userInstitutionResult = null;
+      roleResult = 'inativo'; // Sem usuário logado, é inativo
       print("DEBUG: Nenhum usuário logado.");
     }
 
     if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
+        _userRole = roleResult; // Atualiza a role no estado
         _currentUserInstitution = userInstitutionResult;
         _isLoadingRole = false;
       });
@@ -162,30 +182,35 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
         widget.searchQuery.isNotEmpty;
   }
 
+  // --- MÉTODO _buildFirestoreQuery ATUALIZADO ---
   Query _buildFirestoreQuery() {
     Query query = FirebaseFirestore.instance.collection(kCollectionChamados);
     print("DEBUG: _buildFirestoreQuery INICIADO.");
 
     if (_isLoadingRole) {
       print("DEBUG: _buildFirestoreQuery: Aguardando papel do usuário.");
-      // Retorna uma query válida que não encontrará documentos
-      return query.where(FieldPath.documentId,
-          isEqualTo: _dummyNonExistentDocId);
-    }
-    if (_currentUser == null && !_isAdmin) {
-      print("DEBUG: _buildFirestoreQuery: Usuário não logado e não é admin.");
-      // Retorna uma query válida que não encontrará documentos
+      // Retorna uma query válida que não encontrará documentos enquanto carrega
       return query.where(FieldPath.documentId,
           isEqualTo: _dummyNonExistentDocId);
     }
 
+    // <<<--- ADICIONADO: Verificação para usuário INATIVO --- >>>
+    if (!_isAdmin && _userRole == 'inativo') {
+      print(
+          "DEBUG: _buildFirestoreQuery: Usuário inativo, retornando query vazia.");
+      // Retorna uma query que garantidamente não encontrará documentos
+      return query.where(FieldPath.documentId,
+          isEqualTo: _dummyNonExistentDocId);
+    }
+    // <<<--- FIM DA VERIFICAÇÃO --- >>>
+
+    // Lógica existente para usuários não-admin (mas agora sabemos que não são inativos)
     if (!_isAdmin && _currentUser != null) {
       print(
-          "DEBUG: _buildFirestoreQuery: Usuário NÃO é admin. Instituição do usuário: '$_currentUserInstitution'");
+          "DEBUG: _buildFirestoreQuery: Usuário NÃO é admin (Role: $_userRole). Instituição: '$_currentUserInstitution'");
       if (_currentUserInstitution == null || _currentUserInstitution!.isEmpty) {
         print(
             "DEBUG: _buildFirestoreQuery: Usuário sem instituição definida no perfil.");
-        // Retorna uma query válida que não encontrará documentos
         return query.where(FieldPath.documentId,
             isEqualTo: _dummyNonExistentDocId);
       } else {
@@ -203,11 +228,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
               "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldStatus == '$_selectedStatusFilter'");
           query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
         }
-        print(
-            "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldAdminInativo == false");
-        query = query.where(kFieldAdminInativo, isEqualTo: false);
+        // Removido filtro kFieldAdminInativo, pois não parece relevante para o requisitante comum
+        // print("DEBUG: _buildFirestoreQuery: Filtrando por $kFieldAdminInativo == false");
+        // query = query.where(kFieldAdminInativo, isEqualTo: false);
       }
-    } else if (_isAdmin) {
+    }
+    // Lógica existente para admin
+    else if (_isAdmin) {
       print("DEBUG: _buildFirestoreQuery: Usuário é ADMIN.");
       if (_selectedStatusFilter != null) {
         print(
@@ -216,10 +243,19 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       } else {
         print(
             "DEBUG: _buildFirestoreQuery (Admin): Filtrando por $kFieldStatus NOT IN ['$kStatusFinalizado']");
+        // Mostra todos exceto os finalizados por padrão para admin
         query = query.where(kFieldStatus, whereNotIn: [kStatusFinalizado]);
       }
     }
+    // Se não for admin e não tiver usuário logado (caso raro, mas seguro tratar)
+    else {
+      print(
+          "DEBUG: _buildFirestoreQuery: Caso não previsto (não admin, sem usuário?). Retornando query vazia.");
+      return query.where(FieldPath.documentId,
+          isEqualTo: _dummyNonExistentDocId);
+    }
 
+    // Lógica de filtro de data e ordenação (permanece igual)
     if (_selectedDateFilter != null) {
       final DateTime startOfDay = DateTime(_selectedDateFilter!.year,
           _selectedDateFilter!.month, _selectedDateFilter!.day, 0, 0, 0);
@@ -244,6 +280,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
         "DEBUG: _buildFirestoreQuery: Ordenando por '$sortField' ${sortDescending ? 'DESC' : 'ASC'}");
     query = query.orderBy(sortField, descending: sortDescending);
 
+    // Adiciona ordenação secundária por data se a primária não for data
     if (sortField != kFieldDataCriacao) {
       print(
           "DEBUG: _buildFirestoreQuery: Ordenação secundária por '$kFieldDataCriacao' DESC");
@@ -252,6 +289,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     return query;
   }
 
+  // --- Função _showFilterBottomSheet (sem alterações) ---
   void _showFilterBottomSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -435,6 +473,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     );
   }
 
+  // --- Funções _excluirChamado, _handleRequerenteConfirmar, _handleFinalizarArquivarChamado (sem alterações) ---
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
     if (!_isAdmin || !mounted) return;
     bool confirmar = await showDialog<bool>(
@@ -583,8 +622,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                     if (snapshot.hasError) {
                       print(
                           "DEBUG: Erro no StreamBuilder: ${snapshot.error}"); // DEBUG
-                      // Não mostrar o erro de __inexistente__ diretamente ao usuário se for esse o caso,
-                      // pois a query dummy é interna. Mostrar uma mensagem genérica.
                       if (snapshot.error
                               .toString()
                               .contains(_dummyNonExistentDocId) ||
@@ -647,18 +684,29 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                     print(
                         "DEBUG: Após filtro de pesquisa local, ${_ultimosChamadosFiltradosParaExibicao.length} chamados para exibição.");
 
+                    // --- LÓGICA DE MENSAGEM DE LISTA VAZIA ATUALIZADA ---
                     if (_ultimosChamadosFiltradosParaExibicao.isEmpty) {
                       String msg = "Nenhum chamado encontrado.";
                       IconData icone = Icons.inbox_outlined;
 
-                      if (_isFilterActive) {
+                      // Verifica PRIMEIRO se o usuário é inativo
+                      if (!_isAdmin && _userRole == 'inativo') {
+                        msg =
+                            'Nenhum chamado disponível.\nSua conta está aguardando ativação.';
+                        icone = Icons
+                            .hourglass_empty_rounded; // Ícone diferente para inativo
+                      }
+                      // Se não for inativo, verifica se há filtros ativos
+                      else if (_isFilterActive) {
                         msg =
                             'Nenhum chamado encontrado com os critérios aplicados.';
                         if (widget.searchQuery.isNotEmpty) {
                           msg += '\nPesquisa: "${widget.searchQuery}"';
                         }
                         icone = Icons.filter_alt_off_outlined;
-                      } else if (!_isLoadingRole) {
+                      }
+                      // Se não for inativo e não houver filtros, mostra mensagens padrão
+                      else if (!_isLoadingRole) {
                         if (_isAdmin) {
                           msg = 'Nenhum chamado ativo no sistema.';
                           icone = Icons.inbox_outlined;
@@ -670,11 +718,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             icone = Icons.business_outlined;
                           } else {
                             msg =
-                                'Nenhum chamado encontrado para a sua instituição: "$_currentUserInstitution"';
+                                'Nenhum chamado encontrado para a sua instituição:\n"$_currentUserInstitution"';
                             icone = Icons.assignment_late_outlined;
                           }
                         }
                       }
+                      // --- FIM DA LÓGICA ATUALIZADA ---
+
                       print("DEBUG: Exibindo mensagem de lista vazia: $msg");
                       return Center(
                         child: Padding(
@@ -690,7 +740,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       .textTheme
                                       .titleMedium
                                       ?.copyWith(color: Colors.grey[600])),
-                              if (_isFilterActive) ...[
+                              if (_isFilterActive &&
+                                  !(_userRole == 'inativo' && !_isAdmin)) ...[
+                                // Não mostra botão de limpar para inativo
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   icon: const Icon(Icons.clear_all),
@@ -701,6 +753,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       _selectedStatusFilter = null;
                                       _selectedDateFilter = null;
                                       _selectedSortOption = _sortOptions[0];
+                                      // Limpar a busca na MainNavigationScreen também seria ideal
                                     });
                                   },
                                 )
@@ -711,6 +764,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                       );
                     }
 
+                    // Constrói a lista se houver chamados
                     return ListView.builder(
                       padding: const EdgeInsets.only(
                           top: 8.0, left: 8.0, right: 8.0, bottom: 72.0),
@@ -740,6 +794,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         }
 
                         if (chamadoDataMap.isEmpty) {
+                          // Fallback para dados do objeto Chamado se o snapshot não tiver
                           chamadoDataMap = {
                             'id': chamado.id,
                             'status': chamado.status,
@@ -798,11 +853,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                   builder: (_) =>
                                       DetalhesChamadoScreen(chamadoId: id)),
                             ).then((_) {
+                              // Atualiza a lista após voltar dos detalhes, se necessário
                               if (mounted) setState(() {});
                             });
                           },
                           isLoadingPdfDownload: isLoadingPdfItem,
                           onGerarPdfOpcoes: (id, data) {
+                            // Implementar lógica de geração de PDF aqui
                             print(
                                 'Gerar PDF para $id não implementado neste exemplo.');
                           },

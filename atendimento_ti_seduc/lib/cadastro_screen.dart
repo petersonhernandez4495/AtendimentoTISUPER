@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/services.dart'; // <<< ADICIONADO IMPORT
+import 'package:flutter/services.dart';
 
 // Importe suas constantes de serviço, se aplicável, para nomes de campos.
 import '../services/chamado_service.dart'; // Exemplo, ajuste o caminho
-import 'main_navigation_screen.dart'; // <<< ADICIONADO IMPORT
+import 'main_navigation_screen.dart';
+// Considere importar a tela de Login se for redirecionar para lá após cadastro
+// import 'login_screen.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -23,10 +25,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _instituicaoManualController = TextEditingController();
-
-  // --- REMOVIDO DuplicidadeService e MaskFormatter ---
-  // final DuplicidadeService _duplicidadeService = DuplicidadeService();
-  // final _phoneMaskFormatter = MaskTextInputFormatter(...);
 
   // Estados para Dropdowns
   List<String> _listaCidades = [];
@@ -71,14 +69,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
     try {
       final db = FirebaseFirestore.instance;
       final results = await Future.wait([
-        db
-            .collection(kCollectionConfig)
-            .doc(kDocLocalidades)
-            .get(), // Usa constante local
-        db
-            .collection(kCollectionConfig)
-            .doc(kDocOpcoes)
-            .get(), // Usa constante local
+        db.collection(kCollectionConfig).doc(kDocLocalidades).get(),
+        db.collection(kCollectionConfig).doc(kDocOpcoes).get(),
       ]);
 
       final docLocalidades = results[0];
@@ -89,7 +81,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
       String? erroLocalidades;
       if (docLocalidades.exists && docLocalidades.data() != null) {
         final data = docLocalidades.data()!;
-        // Usa a constante local definida dentro desta função
         const String nomeCampoMapa = 'escolasPorCidade';
         if (data.containsKey(nomeCampoMapa) && data[nomeCampoMapa] is Map) {
           final Map<String, dynamic> rawMap =
@@ -130,7 +121,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
       String? erroCargos;
       if (docOpcoes.exists && docOpcoes.data() != null) {
         final data = docOpcoes.data()!;
-        // Usa a constante local definida dentro desta função
         const String nomeCampoCargos = 'cargosEscola';
         if (data.containsKey(nomeCampoCargos) &&
             data[nomeCampoCargos] is List) {
@@ -193,6 +183,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
     });
   }
 
+  // --- Função Cadastrar (Com Validação de Cargo e Mensagem) ---
   Future<void> _cadastrar() async {
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
@@ -204,6 +195,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
               content: Text(
                   'Cadastro permitido apenas para emails $dominioPermitido'),
               backgroundColor: Colors.orange[800]));
+        }
+        return;
+      }
+
+      // Validação de Cargo
+      if (_cargoSelecionado?.toUpperCase() == 'PROFESSOR') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text(
+                'Apenas Gestores, Coordenadores do LIE e Secretários são permitidos criar um Perfil de acesso.'),
+            backgroundColor: Colors.orange[800],
+            duration: const Duration(seconds: 6),
+          ));
         }
         return;
       }
@@ -233,32 +237,42 @@ class _CadastroScreenState extends State<CadastroScreen> {
           final uid = user.uid;
           final profileData = {
             'uid': uid,
-            kFieldName: _nameController.text.trim(), // Usa constante local
-            kFieldEmail: email, // Usa constante local
-            kFieldPhone: _phoneController.text.trim(), // Usa constante local
-            kFieldJobTitle: _cargoSelecionado, // Usa constante local
-            kFieldUserInstituicao: instituicaoFinal, // Usa constante local
-            kFieldCidade: _cidadeSelecionada, // Usa constante local
-            'role': 'requester',
+            kFieldName: _nameController.text.trim(),
+            kFieldEmail: email,
+            kFieldPhone: _phoneController.text.trim(),
+            kFieldJobTitle: _cargoSelecionado,
+            kFieldUserInstituicao: instituicaoFinal,
+            kFieldCidade: _cidadeSelecionada,
+            // ALTERADO: Define a role inicial como 'inativo' usando o campo 'role_temp'
+            'role_temp': 'inativo',
             'createdAt': FieldValue.serverTimestamp(),
+            // Você pode optar por remover o campo 'role' antigo ou mantê-lo também como 'inativo'
+            // 'role': 'inativo', // Exemplo se quiser manter ambos sincronizados inicialmente
           };
 
           await FirebaseFirestore.instance
-              .collection(kCollectionUsers) // Usa constante local
+              .collection(kCollectionUsers)
               .doc(uid)
               .set(profileData);
 
           if (mounted) {
-            // Navega para MainNavigationScreen usando o import adicionado
+            // ALTERADO: Mensagem de sucesso atualizada
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text(
+                      'Conta criada! Aguardando aprovação do administrador.'), // <<<< MENSAGEM ATUALIZADA
+                  backgroundColor: Colors.green),
+            );
+            // Navega para a tela principal ou para a tela de login
             Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
                     builder: (_) => const MainNavigationScreen()));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Conta criada com sucesso! Faça login.'),
-                  backgroundColor: Colors.green),
-            );
+            // Ou, para forçar o login novamente:
+            // Navigator.of(context).pushAndRemoveUntil(
+            //   MaterialPageRoute(builder: (context) => const LoginScreen()),
+            //   (Route<dynamic> route) => false,
+            // );
           }
         } else {
           throw Exception('Falha ao obter usuário após criação.');
@@ -311,6 +325,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                // --- Campos do Formulário (Nome, Email, Telefone, Dropdowns, Senha) ---
+                // ... (código dos campos do formulário permanece o mesmo) ...
                 // --- Campo Nome ---
                 TextFormField(
                   controller: _nameController,
@@ -358,8 +374,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   controller: _phoneController,
                   enabled: !_isLoading,
                   keyboardType: TextInputType.phone,
-                  // Adiciona o TextInputFormatter para o telefone se desejar
-                  // inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Exemplo
                   decoration: const InputDecoration(
                     labelText: 'Telefone *',
                     hintText: '(XX) XXXXX-XXXX',
@@ -664,8 +678,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
       ),
     );
   }
-
-  // --- REMOVIDO _buildTextFormField (não utilizado) ---
 
   // Constantes locais para nomes de campos (usadas no _cadastrar)
   static const String kFieldName = 'name';

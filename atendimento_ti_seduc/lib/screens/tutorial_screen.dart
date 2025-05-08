@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:collection'; // Para LinkedHashMap
+import 'package:url_launcher/url_launcher.dart'; // Importar o url_launcher
 
-import 'package:webview_windows/webview_windows.dart' as windows_webview;
-
-// Importe seu modelo e tema. Certifique-se que os caminhos estão corretos.
-import '../models/tutorial_video_model.dart'; // Deve conter TutorialVideo e extractYouTubeIdFromString (ou ser importado lá)
-import '../config/theme/app_theme.dart';
+// Importe seu modelo e tema.
+// Certifique-se que o modelo TutorialVideo tem o método fromMap
+// e que a função extractYouTubeIdFromString está acessível e sendo usada por ele.
+import '../models/tutorial_video_model.dart';
+import '../config/theme/app_theme.dart'; // Suas configurações de tema
 
 class TutorialScreen extends StatefulWidget {
   static const String routeName = '/tutoriais';
@@ -17,69 +18,21 @@ class TutorialScreen extends StatefulWidget {
 }
 
 class _TutorialScreenState extends State<TutorialScreen> {
-  String? _currentVideoIdForEmbed;
-  String? _selectedVideoIdForHighlight;
-
-  final _webviewController = windows_webview.WebviewController();
-
+  // Variáveis de estado para a lista e seleção
   Map<String, List<TutorialVideo>> _videosPorCategoria = LinkedHashMap();
   List<String> _categorias = [];
   bool _isLoadingData = true;
   String? _errorMessage;
-  bool _isWebviewInitialized = false;
+  String? _selectedVideoIdForHighlight;
+  String? _lastSelectedVideoTitle; // Para mostrar qual vídeo foi selecionado para abrir
 
   @override
   void initState() {
     super.initState();
     _fetchAndGroupTutorialVideos();
-    _initWebview();
-  }
-
-  @override
-  void dispose() {
-    _webviewController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initWebview() async {
-    print("DEBUG: Iniciando _initWebview..."); // DEBUG
-    try {
-      await _webviewController.initialize();
-      if (!mounted) {
-        print("DEBUG: _initWebview - widget não montado após initialize."); // DEBUG
-        return;
-      }
-      setState(() {
-        _isWebviewInitialized = true;
-      });
-      print("DEBUG: _initWebview concluído com SUCESSO. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
-
-      _webviewController.url.listen((url) {
-        // print('WebView (Windows) navegou para: $url');
-      });
-      _webviewController.loadingState.listen((state) {
-        // print('WebView (Windows) estado de carregamento: $state');
-      });
-    } catch (e) {
-      print("DEBUG: ERRO em _initWebview: $e"); // DEBUG (já havia um print similar)
-      if (!mounted) return;
-      setState(() {
-        if (e.toString().toLowerCase().contains("webview2 runtime") ||
-            e.toString().toLowerCase().contains("0x80070002")) {
-          _errorMessage =
-              "O componente WebView2 Runtime não foi encontrado ou está desatualizado. "
-              "Este componente é necessário para exibir vídeos.\n\n"
-              "Por favor, instale ou atualize o WebView2 Runtime da Microsoft e reinicie o aplicativo.";
-        } else {
-          _errorMessage = "Erro ao inicializar o player de vídeo: $e.";
-        }
-        _isWebviewInitialized = false;
-      });
-    }
   }
 
   Future<void> _fetchAndGroupTutorialVideos() async {
-    // ... (código desta função permanece o mesmo da última versão completa)
     if (!mounted) return;
     setState(() {
       _isLoadingData = true;
@@ -95,14 +48,14 @@ class _TutorialScreenState extends State<TutorialScreen> {
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>?;
             if (data == null) return null;
-
+            // Assume que TutorialVideo.fromMap chama extractYouTubeIdFromString internamente
+            // e também trata a formatação da categoria.
             final video = TutorialVideo.fromMap(data);
-
             if (video.youtubeVideoId.isNotEmpty) {
               return video;
             } else {
               print(
-                  "AVISO (TutorialScreen): Documento ${doc.id} ('${data['title'] ?? 'Título Desconhecido'}') com ID do YouTube vazio ou inválido após processamento. Ignorando.");
+                  "AVISO (TutorialScreen): Documento ${doc.id} ('${data['title'] ?? 'Título Desconhecido'}') com ID do YouTube vazio ou inválido. Ignorando.");
               return null;
             }
           })
@@ -142,61 +95,42 @@ class _TutorialScreenState extends State<TutorialScreen> {
     }
   }
 
-  void _playVideo(String videoId) {
-    print("DEBUG: _playVideo chamado. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
+  // CORRIGIDO DEFINITIVAMENTE para abrir a URL pública correta do YouTube no navegador
+  Future<void> _openVideoInBrowser(String videoId, String videoTitle) async {
     if (videoId.isEmpty) {
-      print("Tentativa de reproduzir vídeo com ID vazio.");
+      print("Tentativa de abrir vídeo com ID vazio.");
       if (mounted) {
-        setState(() {
-          _errorMessage = "ID do vídeo inválido.";
-          _currentVideoIdForEmbed = null;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ID do vídeo inválido.")),
+        );
       }
       return;
     }
 
-    if (!_isWebviewInitialized) {
-      print(
-          "DEBUG: _playVideo - WebView (Windows) não está inicializado. Tentando inicializar novamente..."); // DEBUG
-      _initWebview().then((_) {
-        if (_isWebviewInitialized && mounted) {
-          print("DEBUG: _playVideo - WebView inicializado com sucesso após nova tentativa."); // DEBUG
-          _loadVideoIntoWebview(videoId);
-        } else if (mounted) {
-          print("DEBUG: _playVideo - Falha ao inicializar o WebView após tentativa em _playVideo."); // DEBUG
-          setState(() {
-            _errorMessage =
-                "Não foi possível inicializar o player de vídeo. Tente selecionar novamente.";
-          });
-        }
+    // Constrói a URL padrão de visualização do YouTube
+    final Uri youtubeUrl = Uri.parse('https://www.youtube.com/watch?v=$videoId');
+
+    if (mounted) {
+      setState(() {
+        _selectedVideoIdForHighlight = videoId;
+        _lastSelectedVideoTitle = videoTitle;
       });
-      return;
     }
-    _loadVideoIntoWebview(videoId);
-  }
 
-  void _loadVideoIntoWebview(String videoId) {
-    print("DEBUG: _loadVideoIntoWebview chamado. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
-    final String embedUrl =
-        'youtu.be8$videoId?autoplay=1&modestbranding=1&rel=0';
-    print("Carregando vídeo no WebView (Windows): ID $videoId, URL: $embedUrl");
+    print("Tentando abrir URL: $youtubeUrl"); // Log para verificar a URL completa
 
-    if (!mounted) return;
-    setState(() {
-      _currentVideoIdForEmbed = videoId;
-      _selectedVideoIdForHighlight = videoId;
-      _errorMessage = null;
-    });
-
-    if (_isWebviewInitialized) {
-      print("DEBUG: _loadVideoIntoWebview - Carregando URL no WebView..."); // DEBUG
-      _webviewController.loadUrl(embedUrl);
+    if (await canLaunchUrl(youtubeUrl)) {
+      // Tenta abrir no aplicativo do YouTube se possível, senão no navegador
+      await launchUrl(youtubeUrl, mode: LaunchMode.externalApplication);
     } else {
-      print("DEBUG: ERRO CRÍTICO em _loadVideoIntoWebview: _isWebviewInitialized é FALSE. URL não será carregada."); // DEBUG
+      print("Não foi possível abrir a URL: $youtubeUrl");
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Não foi possível abrir o vídeo: '$videoTitle'. Verifique se você tem um navegador ou o app do YouTube instalado.")),
+        );
         setState(() {
-          _errorMessage =
-              "Player não inicializado. Não é possível carregar o vídeo.";
+          _lastSelectedVideoTitle = null;
+          _selectedVideoIdForHighlight = null;
         });
       }
     }
@@ -204,138 +138,33 @@ class _TutorialScreenState extends State<TutorialScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (o método build e os widgets auxiliares buildLoadingWidget, buildErrorWidget, buildEmptyListWidget)
-    // permanecem OS MESMOS da última versão completa que eu forneci (aquela após a correção do kriy_maxLines).
-    // As `key`s no Webview e ListView.separated continuam comentadas.
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    Widget playerArea;
-
-    if (_errorMessage != null &&
-        _errorMessage!.toLowerCase().contains("webview2 runtime")) {
-      playerArea = Container(
-        key: const ValueKey('webview_error_runtime'), // Chave para o AnimatedSwitcher
-        color: colorScheme.errorContainer.withOpacity(0.2),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView( // Permite rolagem se o texto for longo
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                'Problema ao Carregar Vídeos',
-                style: textTheme.titleLarge?.copyWith(color: colorScheme.onErrorContainer),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: textTheme.bodyMedium?.copyWith(color: colorScheme.onErrorContainer.withOpacity(0.9)),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.info_outline),
-                label: const Text('Mais Informações'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.error,
-                  foregroundColor: colorScheme.onError,
-                ),
-                onPressed: () {
-                  showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                            title: const Text("Microsoft Edge WebView2 Runtime"),
-                            content: const Text(
-                                "Este aplicativo utiliza o componente WebView2 da Microsoft para exibir conteúdo da web, como vídeos do YouTube.\n\n"
-                                "Se os vídeos não estão carregando e você vê uma mensagem sobre o 'WebView2 Runtime', significa que este componente pode estar faltando, desatualizado ou corrompido no seu Windows.\n\n"
-                                "Soluções comuns:\n"
-                                "1. Verifique se o Microsoft Edge está atualizado.\n"
-                                "2. Procure por 'Download WebView2 Runtime' no seu navegador e instale a versão 'Evergreen Standalone Installer' ou 'Evergreen Bootstrapper' do site oficial da Microsoft.\n"
-                                "3. Reinicie este aplicativo após a instalação/atualização."),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("OK"))
-                            ],
-                          ));
-                },
-              )
-            ],
-          ),
-        ),
-      );
-    } else if (_currentVideoIdForEmbed != null && _isWebviewInitialized) {
-      playerArea = windows_webview.Webview(
-        _webviewController, // Passa o controller inicializado
-        // key: ValueKey('webview_player_$_currentVideoIdForEmbed'), // LINHA 316 ORIGINAL - Comentada conforme solicitado
-        permissionRequested: (url, permission, isUserInitiated) async {
-          // print("WebView (Windows) - Pedido de permissão: $permission para $url");
-          return windows_webview.WebviewPermissionDecision.allow; // Permite todas as requisições por padrão
-        },
-      );
-    } else if (!_isWebviewInitialized && _currentVideoIdForEmbed != null) {
-      playerArea = Container(
-          key: const ValueKey('webview_initializing_after_click'), // Chave para o AnimatedSwitcher
-          color: colorScheme.surfaceVariant.withOpacity(0.3),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: colorScheme.primary),
-              const SizedBox(height: 16),
-              Text("Inicializando player de vídeo...", style: textTheme.bodyMedium),
-            ],
-          ));
-    } else {
-      playerArea = Container(
-        key: const ValueKey('placeholder_video_area'), // Chave para o AnimatedSwitcher
-        color: colorScheme.surfaceVariant.withOpacity(0.3),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.play_circle_outline_rounded,
-              size: 56,
-              color: AppTheme.kSecondaryTextColor.withOpacity(0.7), // Adapte se kSecondaryTextColor não existir em AppTheme
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _errorMessage ?? 'Selecione um vídeo tutorial abaixo', // Mostra erro geral aqui também
-              style: textTheme.titleMedium?.copyWith(
-                color: _errorMessage != null 
-                       ? colorScheme.error 
-                       : AppTheme.kSecondaryTextColor.withOpacity(0.9), // Adapte se kSecondaryTextColor não existir
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
+    Widget topMessageArea = Container(
+      padding: const EdgeInsets.all(16.0),
+      color: colorScheme.surfaceVariant.withOpacity(0.3),
+      alignment: Alignment.center,
+      child: Text(
+        _lastSelectedVideoTitle != null
+            ? 'Abrindo vídeo: $_lastSelectedVideoTitle...'
+            : 'Selecione um vídeo da lista para abrir no seu navegador.',
+        style: textTheme.titleMedium,
+        textAlign: TextAlign.center,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AspectRatio(
-            aspectRatio: 16 / 9,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: playerArea,
-            )),
+        topMessageArea,
+        const Divider(height: 1),
         Expanded(
           child: _isLoadingData
               ? buildLoadingWidget()
-              : (_errorMessage != null &&
-                      !_errorMessage!
-                          .toLowerCase()
-                          .contains("webview2 runtime") &&
-                      _currentVideoIdForEmbed == null) 
-                  ? buildErrorWidget() 
+              : _errorMessage != null
+                  ? buildErrorWidget()
                   : _categorias.isEmpty && !_isLoadingData
                       ? buildEmptyListWidget()
                       : DefaultTabController(
@@ -343,29 +172,22 @@ class _TutorialScreenState extends State<TutorialScreen> {
                           child: Column(
                             children: [
                               Container(
-                                color: theme.appBarTheme.backgroundColor ??
-                                    AppTheme.kWinBackground, // Adapte se kWinBackground não existir
+                                color: theme.appBarTheme.backgroundColor ?? AppTheme.kWinBackground, // Adapte se AppTheme.kWinBackground não existir
                                 child: TabBar(
                                   isScrollable: true,
                                   indicatorColor: colorScheme.primary,
                                   labelColor: colorScheme.primary,
-                                  unselectedLabelColor: AppTheme
-                                      .kSecondaryTextColor
-                                      .withOpacity(0.8), // Adapte se kSecondaryTextColor não existir
-                                  labelStyle: textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                  unselectedLabelColor: AppTheme.kSecondaryTextColor.withOpacity(0.8), // Adapte se AppTheme.kSecondaryTextColor não existir
+                                  labelStyle: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                   unselectedLabelStyle: textTheme.titleSmall,
-                                  tabs: _categorias
-                                      .map((categoria) => Tab(text: categoria))
-                                      .toList(),
+                                  tabs: _categorias.map((categoria) => Tab(text: categoria)).toList(),
                                 ),
                               ),
                               const Divider(height: 1, thickness: 1),
                               Expanded(
                                 child: TabBarView(
                                   children: _categorias.map((categoria) {
-                                    final videosDaCategoria =
-                                        _videosPorCategoria[categoria] ?? [];
+                                    final videosDaCategoria = _videosPorCategoria[categoria] ?? [];
                                     if (videosDaCategoria.isEmpty) {
                                       return Center(
                                           child: Text(
@@ -373,89 +195,57 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                               style: textTheme.bodyMedium));
                                     }
                                     return ListView.separated(
-                                      // key: PageStorageKey('tutorial_list_$categoria'), // Comentado por precaução devido a erros anteriores com 'key'
                                       padding: const EdgeInsets.all(8.0),
                                       itemCount: videosDaCategoria.length,
                                       itemBuilder: (context, index) {
                                         final video = videosDaCategoria[index];
-                                        final bool isPlaying =
-                                            _selectedVideoIdForHighlight ==
-                                                video.youtubeVideoId;
+                                        final bool isSelected = _selectedVideoIdForHighlight == video.youtubeVideoId;
                                         return Card(
-                                          elevation: isPlaying ? 4.0 : 1.0,
-                                          margin: const EdgeInsets.symmetric(
-                                              vertical: 4.0, horizontal: 0),
+                                          elevation: isSelected ? 4.0 : 1.0,
+                                          margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 0),
                                           clipBehavior: Clip.antiAlias,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            side: isPlaying
-                                                ? BorderSide(
-                                                    color: colorScheme.primary,
-                                                    width: 1.5)
-                                                : BorderSide(
-                                                    color: theme.dividerColor
-                                                        .withOpacity(0.5)),
+                                            borderRadius: BorderRadius.circular(8),
+                                            side: isSelected
+                                                ? BorderSide(color: colorScheme.primary, width: 1.5)
+                                                : BorderSide(color: theme.dividerColor.withOpacity(0.5)),
                                           ),
                                           child: ListTile(
                                             leading: Icon(
-                                              isPlaying
-                                                  ? Icons.play_circle_filled_rounded
-                                                  : Icons.ondemand_video_rounded,
+                                              Icons.smart_display_rounded,
                                               size: 32,
-                                              color: isPlaying
-                                                  ? colorScheme.primary
-                                                  : AppTheme.kSecondaryTextColor, // Adapte se não existir
+                                              color: isSelected ? colorScheme.primary : AppTheme.kSecondaryTextColor, // Adapte se não existir
                                             ),
                                             title: Text(
                                               video.title,
-                                              style: textTheme.titleSmall
-                                                  ?.copyWith(
-                                                color: isPlaying
-                                                    ? colorScheme.primary
-                                                    : AppTheme.kWinPrimaryText, // Adapte se não existir
-                                                fontWeight: isPlaying
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
+                                              style: textTheme.titleSmall?.copyWith(
+                                                color: isSelected ? colorScheme.primary : AppTheme.kWinPrimaryText, // Adapte se não existir
+                                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                                               ),
-                                              maxLines: 2, // Corrigido (era kriy_maxLines)
+                                              maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             subtitle: video.description.isNotEmpty
                                                 ? Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                            top: 4.0),
+                                                    padding: const EdgeInsets.only(top: 4.0),
                                                     child: Text(
                                                       video.description,
-                                                      style: textTheme.bodySmall
-                                                          ?.copyWith(
-                                                              color: AppTheme.kSecondaryTextColor), // Adapte
+                                                      style: textTheme.bodySmall?.copyWith(color: AppTheme.kSecondaryTextColor), // Adapte se não existir
                                                       maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   )
                                                 : null,
-                                            trailing: Icon(
-                                              Icons.chevron_right_rounded,
-                                              color: AppTheme.kSecondaryTextColor.withOpacity(0.6), // Adapte
-                                            ),
+                                            trailing: const Icon(Icons.launch_rounded),
                                             onTap: () {
-                                              _playVideo(video.youtubeVideoId);
+                                              _openVideoInBrowser(video.youtubeVideoId, video.title);
                                             },
-                                            selected: isPlaying,
+                                            selected: isSelected,
                                             selectedTileColor: colorScheme.primary.withOpacity(0.08),
-                                            dense: false,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    vertical: 8.0,
-                                                    horizontal: 16.0),
                                           ),
                                         );
                                       },
-                                      separatorBuilder: (context, index) =>
-                                          const SizedBox(height: 4),
+                                      separatorBuilder: (context, index) => const SizedBox(height: 4),
                                     );
                                   }).toList(),
                                 ),
@@ -477,13 +267,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Text(
-          _errorMessage ??
-              'Ocorreu um erro inesperado ao carregar os tutoriais.',
+          _errorMessage ?? 'Ocorreu um erro inesperado.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.error),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
         ),
       ),
     );
@@ -496,8 +282,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
         child: Text(
           'Nenhum vídeo tutorial disponível no momento.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppTheme.kSecondaryTextColor), // Adapte se kSecondaryTextColor não existir
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppTheme.kSecondaryTextColor), // Adapte se não existir
         ),
       ),
     );

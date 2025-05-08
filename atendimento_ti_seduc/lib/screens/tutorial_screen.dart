@@ -5,12 +5,12 @@ import 'dart:collection'; // Para LinkedHashMap
 import 'package:webview_windows/webview_windows.dart' as windows_webview;
 
 // Importe seu modelo e tema. Certifique-se que os caminhos estão corretos.
-import '../models/tutorial_video_model.dart';
+import '../models/tutorial_video_model.dart'; // Deve conter TutorialVideo e extractYouTubeIdFromString (ou ser importado lá)
 import '../config/theme/app_theme.dart';
 
 class TutorialScreen extends StatefulWidget {
   static const String routeName = '/tutoriais';
-  const TutorialScreen({super.key}); // super.key é o correto para o construtor principal da tela
+  const TutorialScreen({super.key});
 
   @override
   State<TutorialScreen> createState() => _TutorialScreenState();
@@ -42,12 +42,17 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 
   Future<void> _initWebview() async {
+    print("DEBUG: Iniciando _initWebview..."); // DEBUG
     try {
       await _webviewController.initialize();
-      if (!mounted) return;
+      if (!mounted) {
+        print("DEBUG: _initWebview - widget não montado após initialize."); // DEBUG
+        return;
+      }
       setState(() {
         _isWebviewInitialized = true;
       });
+      print("DEBUG: _initWebview concluído com SUCESSO. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
 
       _webviewController.url.listen((url) {
         // print('WebView (Windows) navegou para: $url');
@@ -56,7 +61,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
         // print('WebView (Windows) estado de carregamento: $state');
       });
     } catch (e) {
-      print("Erro ao inicializar o WebView para Windows: $e");
+      print("DEBUG: ERRO em _initWebview: $e"); // DEBUG (já havia um print similar)
       if (!mounted) return;
       setState(() {
         if (e.toString().toLowerCase().contains("webview2 runtime") ||
@@ -74,6 +79,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 
   Future<void> _fetchAndGroupTutorialVideos() async {
+    // ... (código desta função permanece o mesmo da última versão completa)
     if (!mounted) return;
     setState(() {
       _isLoadingData = true;
@@ -85,21 +91,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
           .collection('tutoriais')
           .get();
 
-      // Utiliza TutorialVideo.fromMap que deve chamar a função de extração de ID internamente
       final List<TutorialVideo> todosOsVideos = snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>?;
             if (data == null) return null;
 
-            // TutorialVideo.fromMap é responsável por chamar extractYouTubeIdFromString
-            // e tratar a categoria corretamente.
             final video = TutorialVideo.fromMap(data);
 
             if (video.youtubeVideoId.isNotEmpty) {
               return video;
             } else {
-              // O print de aviso deve vir da função de extração ou de dentro do fromMap
-              // se o ID raw for vazio.
               print(
                   "AVISO (TutorialScreen): Documento ${doc.id} ('${data['title'] ?? 'Título Desconhecido'}') com ID do YouTube vazio ou inválido após processamento. Ignorando.");
               return null;
@@ -142,6 +143,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 
   void _playVideo(String videoId) {
+    print("DEBUG: _playVideo chamado. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
     if (videoId.isEmpty) {
       print("Tentativa de reproduzir vídeo com ID vazio.");
       if (mounted) {
@@ -155,12 +157,13 @@ class _TutorialScreenState extends State<TutorialScreen> {
 
     if (!_isWebviewInitialized) {
       print(
-          "WebView (Windows) não está inicializado. Tentando inicializar novamente...");
+          "DEBUG: _playVideo - WebView (Windows) não está inicializado. Tentando inicializar novamente..."); // DEBUG
       _initWebview().then((_) {
         if (_isWebviewInitialized && mounted) {
+          print("DEBUG: _playVideo - WebView inicializado com sucesso após nova tentativa."); // DEBUG
           _loadVideoIntoWebview(videoId);
         } else if (mounted) {
-          print("Falha ao inicializar o WebView após tentativa em _playVideo.");
+          print("DEBUG: _playVideo - Falha ao inicializar o WebView após tentativa em _playVideo."); // DEBUG
           setState(() {
             _errorMessage =
                 "Não foi possível inicializar o player de vídeo. Tente selecionar novamente.";
@@ -172,10 +175,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
     _loadVideoIntoWebview(videoId);
   }
 
-  // Carrega o vídeo no componente WebView com a URL de embed CORRIGIDA
   void _loadVideoIntoWebview(String videoId) {
+    print("DEBUG: _loadVideoIntoWebview chamado. _isWebviewInitialized = $_isWebviewInitialized"); // DEBUG
     final String embedUrl =
-        'youtu.be8$videoId?autoplay=1&modestbranding=1&rel=0'; // rel=0 para não mostrar relacionados
+        'youtu.be8$videoId?autoplay=1&modestbranding=1&rel=0';
     print("Carregando vídeo no WebView (Windows): ID $videoId, URL: $embedUrl");
 
     if (!mounted) return;
@@ -186,10 +189,10 @@ class _TutorialScreenState extends State<TutorialScreen> {
     });
 
     if (_isWebviewInitialized) {
+      print("DEBUG: _loadVideoIntoWebview - Carregando URL no WebView..."); // DEBUG
       _webviewController.loadUrl(embedUrl);
     } else {
-      print(
-          "Erro crítico: _loadVideoIntoWebview chamado mas WebView não está inicializado.");
+      print("DEBUG: ERRO CRÍTICO em _loadVideoIntoWebview: _isWebviewInitialized é FALSE. URL não será carregada."); // DEBUG
       if (mounted) {
         setState(() {
           _errorMessage =
@@ -201,6 +204,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (o método build e os widgets auxiliares buildLoadingWidget, buildErrorWidget, buildEmptyListWidget)
+    // permanecem OS MESMOS da última versão completa que eu forneci (aquela após a correção do kriy_maxLines).
+    // As `key`s no Webview e ListView.separated continuam comentadas.
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
@@ -210,29 +216,26 @@ class _TutorialScreenState extends State<TutorialScreen> {
     if (_errorMessage != null &&
         _errorMessage!.toLowerCase().contains("webview2 runtime")) {
       playerArea = Container(
-        key: const ValueKey('webview_error_runtime'),
+        key: const ValueKey('webview_error_runtime'), // Chave para o AnimatedSwitcher
         color: colorScheme.errorContainer.withOpacity(0.2),
         alignment: Alignment.center,
         padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
+        child: SingleChildScrollView( // Permite rolagem se o texto for longo
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline_rounded,
-                  color: colorScheme.error, size: 48),
+              Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 48),
               const SizedBox(height: 12),
               Text(
                 'Problema ao Carregar Vídeos',
-                style: textTheme.titleLarge
-                    ?.copyWith(color: colorScheme.onErrorContainer),
+                style: textTheme.titleLarge?.copyWith(color: colorScheme.onErrorContainer),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 _errorMessage!,
-                style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onErrorContainer.withOpacity(0.9)),
+                style: textTheme.bodyMedium?.copyWith(color: colorScheme.onErrorContainer.withOpacity(0.9)),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -247,8 +250,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                   showDialog(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                            title: const Text(
-                                "Microsoft Edge WebView2 Runtime"),
+                            title: const Text("Microsoft Edge WebView2 Runtime"),
                             content: const Text(
                                 "Este aplicativo utiliza o componente WebView2 da Microsoft para exibir conteúdo da web, como vídeos do YouTube.\n\n"
                                 "Se os vídeos não estão carregando e você vê uma mensagem sobre o 'WebView2 Runtime', significa que este componente pode estar faltando, desatualizado ou corrompido no seu Windows.\n\n"
@@ -257,9 +259,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                 "2. Procure por 'Download WebView2 Runtime' no seu navegador e instale a versão 'Evergreen Standalone Installer' ou 'Evergreen Bootstrapper' do site oficial da Microsoft.\n"
                                 "3. Reinicie este aplicativo após a instalação/atualização."),
                             actions: [
-                              TextButton(
-                                  onPressed: () => Navigator.of(ctx).pop(),
-                                  child: const Text("OK"))
+                              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("OK"))
                             ],
                           ));
                 },
@@ -270,15 +270,16 @@ class _TutorialScreenState extends State<TutorialScreen> {
       );
     } else if (_currentVideoIdForEmbed != null && _isWebviewInitialized) {
       playerArea = windows_webview.Webview(
-        _webviewController,
+        _webviewController, // Passa o controller inicializado
         // key: ValueKey('webview_player_$_currentVideoIdForEmbed'), // LINHA 316 ORIGINAL - Comentada conforme solicitado
         permissionRequested: (url, permission, isUserInitiated) async {
-          return windows_webview.WebviewPermissionDecision.allow;
+          // print("WebView (Windows) - Pedido de permissão: $permission para $url");
+          return windows_webview.WebviewPermissionDecision.allow; // Permite todas as requisições por padrão
         },
       );
     } else if (!_isWebviewInitialized && _currentVideoIdForEmbed != null) {
       playerArea = Container(
-          key: const ValueKey('webview_initializing_after_click'),
+          key: const ValueKey('webview_initializing_after_click'), // Chave para o AnimatedSwitcher
           color: colorScheme.surfaceVariant.withOpacity(0.3),
           alignment: Alignment.center,
           child: Column(
@@ -286,13 +287,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
             children: [
               CircularProgressIndicator(color: colorScheme.primary),
               const SizedBox(height: 16),
-              Text("Inicializando player de vídeo...",
-                  style: textTheme.bodyMedium),
+              Text("Inicializando player de vídeo...", style: textTheme.bodyMedium),
             ],
           ));
     } else {
       playerArea = Container(
-        key: const ValueKey('placeholder_video_area'),
+        key: const ValueKey('placeholder_video_area'), // Chave para o AnimatedSwitcher
         color: colorScheme.surfaceVariant.withOpacity(0.3),
         alignment: Alignment.center,
         child: Column(
@@ -301,17 +301,15 @@ class _TutorialScreenState extends State<TutorialScreen> {
             Icon(
               Icons.play_circle_outline_rounded,
               size: 56,
-              color: AppTheme.kSecondaryTextColor.withOpacity(
-                  0.7), // Adapte se kSecondaryTextColor não existir em AppTheme
+              color: AppTheme.kSecondaryTextColor.withOpacity(0.7), // Adapte se kSecondaryTextColor não existir em AppTheme
             ),
             const SizedBox(height: 12),
             Text(
-              _errorMessage ?? 'Selecione um vídeo tutorial abaixo',
+              _errorMessage ?? 'Selecione um vídeo tutorial abaixo', // Mostra erro geral aqui também
               style: textTheme.titleMedium?.copyWith(
-                color: _errorMessage != null
-                    ? colorScheme.error
-                    : AppTheme.kSecondaryTextColor.withOpacity(
-                        0.9), // Adapte se kSecondaryTextColor não existir
+                color: _errorMessage != null 
+                       ? colorScheme.error 
+                       : AppTheme.kSecondaryTextColor.withOpacity(0.9), // Adapte se kSecondaryTextColor não existir
               ),
               textAlign: TextAlign.center,
             ),
@@ -336,8 +334,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
                       !_errorMessage!
                           .toLowerCase()
                           .contains("webview2 runtime") &&
-                      _currentVideoIdForEmbed == null)
-                  ? buildErrorWidget()
+                      _currentVideoIdForEmbed == null) 
+                  ? buildErrorWidget() 
                   : _categorias.isEmpty && !_isLoadingData
                       ? buildEmptyListWidget()
                       : DefaultTabController(
@@ -346,16 +344,14 @@ class _TutorialScreenState extends State<TutorialScreen> {
                             children: [
                               Container(
                                 color: theme.appBarTheme.backgroundColor ??
-                                    AppTheme
-                                        .kWinBackground, // Adapte se kWinBackground não existir
+                                    AppTheme.kWinBackground, // Adapte se kWinBackground não existir
                                 child: TabBar(
                                   isScrollable: true,
                                   indicatorColor: colorScheme.primary,
                                   labelColor: colorScheme.primary,
                                   unselectedLabelColor: AppTheme
                                       .kSecondaryTextColor
-                                      .withOpacity(
-                                          0.8), // Adapte se kSecondaryTextColor não existir
+                                      .withOpacity(0.8), // Adapte se kSecondaryTextColor não existir
                                   labelStyle: textTheme.titleSmall
                                       ?.copyWith(fontWeight: FontWeight.bold),
                                   unselectedLabelStyle: textTheme.titleSmall,
@@ -404,15 +400,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                           child: ListTile(
                                             leading: Icon(
                                               isPlaying
-                                                  ? Icons
-                                                      .play_circle_filled_rounded
-                                                  : Icons
-                                                      .ondemand_video_rounded,
+                                                  ? Icons.play_circle_filled_rounded
+                                                  : Icons.ondemand_video_rounded,
                                               size: 32,
                                               color: isPlaying
                                                   ? colorScheme.primary
-                                                  : AppTheme
-                                                      .kSecondaryTextColor, // Adapte se não existir
+                                                  : AppTheme.kSecondaryTextColor, // Adapte se não existir
                                             ),
                                             title: Text(
                                               video.title,
@@ -420,17 +413,15 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                                   ?.copyWith(
                                                 color: isPlaying
                                                     ? colorScheme.primary
-                                                    : AppTheme
-                                                        .kWinPrimaryText, // Adapte se não existir
+                                                    : AppTheme.kWinPrimaryText, // Adapte se não existir
                                                 fontWeight: isPlaying
                                                     ? FontWeight.w600
                                                     : FontWeight.normal,
                                               ),
-                                              maxLines: 2,
+                                              maxLines: 2, // Corrigido (era kriy_maxLines)
                                               overflow: TextOverflow.ellipsis,
                                             ),
-                                            subtitle: video
-                                                    .description.isNotEmpty
+                                            subtitle: video.description.isNotEmpty
                                                 ? Padding(
                                                     padding:
                                                         const EdgeInsets.only(
@@ -439,8 +430,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                                       video.description,
                                                       style: textTheme.bodySmall
                                                           ?.copyWith(
-                                                              color: AppTheme
-                                                                  .kSecondaryTextColor), // Adapte
+                                                              color: AppTheme.kSecondaryTextColor), // Adapte
                                                       maxLines: 2,
                                                       overflow:
                                                           TextOverflow.ellipsis,
@@ -449,18 +439,13 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                                 : null,
                                             trailing: Icon(
                                               Icons.chevron_right_rounded,
-                                              color: AppTheme
-                                                  .kSecondaryTextColor
-                                                  .withOpacity(
-                                                      0.6), // Adapte
+                                              color: AppTheme.kSecondaryTextColor.withOpacity(0.6), // Adapte
                                             ),
                                             onTap: () {
                                               _playVideo(video.youtubeVideoId);
                                             },
                                             selected: isPlaying,
-                                            selectedTileColor: colorScheme
-                                                .primary
-                                                .withOpacity(0.08),
+                                            selectedTileColor: colorScheme.primary.withOpacity(0.08),
                                             dense: false,
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
@@ -512,8 +497,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
           'Nenhum vídeo tutorial disponível no momento.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppTheme
-                  .kSecondaryTextColor), // Adapte se kSecondaryTextColor não existir
+              color: AppTheme.kSecondaryTextColor), // Adapte se kSecondaryTextColor não existir
         ),
       ),
     );

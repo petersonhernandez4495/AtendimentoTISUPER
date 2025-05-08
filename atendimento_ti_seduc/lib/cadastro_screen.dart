@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart'; // <<< ADICIONADO IMPORT
+
+// Importe suas constantes de serviço, se aplicável, para nomes de campos.
+import '../services/chamado_service.dart'; // Exemplo, ajuste o caminho
+import 'main_navigation_screen.dart'; // <<< ADICIONADO IMPORT
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -15,124 +20,204 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _jobTitleController = TextEditingController();
-  // Controller de instituição não é mais necessário
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _instituicaoManualController = TextEditingController();
 
-  // Estados para o Dropdown de Instituição
+  // --- REMOVIDO DuplicidadeService e MaskFormatter ---
+  // final DuplicidadeService _duplicidadeService = DuplicidadeService();
+  // final _phoneMaskFormatter = MaskTextInputFormatter(...);
+
+  // Estados para Dropdowns
+  List<String> _listaCidades = [];
+  String? _cidadeSelecionada;
   List<String> _listaInstituicoes = [];
+  List<String> _instituicoesDisponiveis = [];
   String? _instituicaoSelecionada;
-  bool _isLoadingInstituicoes = true;
-  String? _erroCarregarInstituicoes;
+  List<String> _listaCargos = [];
+  String? _cargoSelecionado;
 
-  // Estado para o loading do cadastro geral
+  bool _isLoadingConfig = true;
+  String? _erroCarregarConfig;
+
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _carregarInstituicoes(); // Carrega a lista ao iniciar
+    _carregarConfiguracoesDropdowns();
   }
 
   @override
   void dispose() {
-    // Limpar controllers
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _jobTitleController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _instituicaoManualController.dispose();
     super.dispose();
   }
 
-  // --- FUNÇÃO CORRIGIDA PARA CARREGAR INSTITUIÇÕES ---
-  Future<void> _carregarInstituicoes() async {
+  Map<String, List<String>> _escolasPorCidadeMap = {};
+
+  Future<void> _carregarConfiguracoesDropdowns() async {
     if (!mounted) return;
-
-    // --- Define as constantes ANTES do try para acesso no catch ---
-    const String nomeColecao = 'configuracoes';
-    const String nomeDocumento = 'localidades';
-    const String nomeCampoMapa = 'escolasPorCidade';
-    // -----------------------------------------------------------
-
     setState(() {
-      _isLoadingInstituicoes = true;
-      _erroCarregarInstituicoes = null;
+      _isLoadingConfig = true;
+      _erroCarregarConfig = null;
     });
 
     try {
-      // Usa as constantes definidas acima
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection(nomeColecao)
-          .doc(nomeDocumento)
-          .get();
+      final db = FirebaseFirestore.instance;
+      final results = await Future.wait([
+        db
+            .collection(kCollectionConfig)
+            .doc(kDocLocalidades)
+            .get(), // Usa constante local
+        db
+            .collection(kCollectionConfig)
+            .doc(kDocOpcoes)
+            .get(), // Usa constante local
+      ]);
 
-      List<String> todasInstituicoes = [];
+      final docLocalidades = results[0];
+      final docOpcoes = results[1];
 
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        final data = docSnapshot.data()!;
+      List<String> cidades = [];
+      Map<String, List<String>> escolasMap = {};
+      String? erroLocalidades;
+      if (docLocalidades.exists && docLocalidades.data() != null) {
+        final data = docLocalidades.data()!;
+        // Usa a constante local definida dentro desta função
+        const String nomeCampoMapa = 'escolasPorCidade';
         if (data.containsKey(nomeCampoMapa) && data[nomeCampoMapa] is Map) {
-           final Map<String, dynamic> escolasPorCidadeMap = Map<String, dynamic>.from(data[nomeCampoMapa]);
-
-           for (final listaDeEscolas in escolasPorCidadeMap.values) {
-              if (listaDeEscolas is List) {
-                 todasInstituicoes.addAll(
-                    listaDeEscolas
-                       .map((escola) => escola?.toString())
-                       .where((nome) => nome != null && nome.isNotEmpty)
-                       .cast<String>()
-                 );
-              }
-           }
-           todasInstituicoes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          final Map<String, dynamic> rawMap =
+              Map<String, dynamic>.from(data[nomeCampoMapa]);
+          rawMap.forEach((key, value) {
+            if (key is String && value != null && value is List) {
+              List<String> escolas = value
+                  .map((escola) => escola?.toString())
+                  .where((nome) => nome != null && nome.isNotEmpty)
+                  .cast<String>()
+                  .toList();
+              escolas
+                  .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+              escolasMap[key] = escolas;
+            }
+          });
+          cidades = escolasMap.keys.toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          if (!escolasMap.containsKey("OUTRO")) {
+            escolasMap["OUTRO"] = [];
+            if (!cidades.contains("OUTRO")) {
+              cidades.add("OUTRO");
+              cidades
+                  .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            }
+          }
         } else {
-           print("Campo '$nomeCampoMapa' não encontrado ou não é um Mapa no documento '$nomeDocumento'.");
-           if(mounted) _erroCarregarInstituicoes = "Erro: Estrutura de dados de escolas inválida.";
+          erroLocalidades = "Erro: Estrutura de dados de localidades inválida.";
         }
       } else {
-        print("Documento '$nomeDocumento' não encontrado na coleção '$nomeColecao'.");
-        if(mounted) _erroCarregarInstituicoes = "Erro: Configuração de localidades não encontrada.";
+        erroLocalidades = "Erro: Configuração de localidades não encontrada.";
       }
+      if (cidades.isEmpty && erroLocalidades == null) {
+        erroLocalidades = "Nenhuma cidade/instituição encontrada.";
+      }
+
+      List<String> cargos = [];
+      String? erroCargos;
+      if (docOpcoes.exists && docOpcoes.data() != null) {
+        final data = docOpcoes.data()!;
+        // Usa a constante local definida dentro desta função
+        const String nomeCampoCargos = 'cargosEscola';
+        if (data.containsKey(nomeCampoCargos) &&
+            data[nomeCampoCargos] is List) {
+          cargos = (data[nomeCampoCargos] as List)
+              .map((cargo) => cargo?.toString())
+              .where((nome) => nome != null && nome.isNotEmpty)
+              .cast<String>()
+              .toList();
+          cargos.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        } else {
+          erroCargos = "Erro: Estrutura de dados de cargos inválida.";
+        }
+      } else {
+        erroCargos = "Erro: Configuração de opções não encontrada.";
+      }
+      if (cargos.isEmpty && erroCargos == null) {
+        erroCargos = "Nenhum cargo encontrado.";
+      }
+
+      _erroCarregarConfig = erroLocalidades ?? erroCargos;
 
       if (mounted) {
         setState(() {
-          _listaInstituicoes = todasInstituicoes;
-          _isLoadingInstituicoes = false;
-          if (todasInstituicoes.isEmpty && _erroCarregarInstituicoes == null) {
-             _erroCarregarInstituicoes = "Nenhuma instituição encontrada.";
-          }
+          _listaCidades = cidades;
+          _escolasPorCidadeMap = escolasMap;
+          _listaInstituicoes = escolasMap.values
+              .expand((list) => list)
+              .toSet()
+              .toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _instituicoesDisponiveis = [];
+          _listaCargos = cargos;
+          _isLoadingConfig = false;
         });
       }
     } catch (e, s) {
-      // Agora 'nomeColecao' e 'nomeDocumento' estão acessíveis aqui
-      print("Erro ao carregar instituições de '$nomeColecao/$nomeDocumento': $e\nStackTrace: $s");
+      print("Erro ao carregar configurações de dropdowns: $e\nStackTrace: $s");
       if (mounted) {
         setState(() {
-          _isLoadingInstituicoes = false;
-          _erroCarregarInstituicoes = "Erro ao carregar instituições.";
+          _isLoadingConfig = false;
+          _erroCarregarConfig = "Erro ao carregar configurações.";
         });
       }
     }
   }
-  // --- FIM DA FUNÇÃO CORRIGIDA ---
 
+  void _atualizarInstituicoes(String? cidadeSelecionada) {
+    setState(() {
+      _cidadeSelecionada = cidadeSelecionada;
+      _instituicaoSelecionada = null;
+      _instituicaoManualController.clear();
+      if (cidadeSelecionada != null &&
+          cidadeSelecionada != "OUTRO" &&
+          _escolasPorCidadeMap.containsKey(cidadeSelecionada)) {
+        _instituicoesDisponiveis =
+            List<String>.from(_escolasPorCidadeMap[cidadeSelecionada]!);
+      } else {
+        _instituicoesDisponiveis = [];
+      }
+    });
+  }
 
-  // --- Função Cadastrar (Atualizada para usar _instituicaoSelecionada) ---
   Future<void> _cadastrar() async {
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
-      const String dominioPermitido = '@seduc.ro.gov.br'; // Ajuste se necessário
+      const String dominioPermitido = '@seduc.ro.gov.br';
 
       if (!email.toLowerCase().endsWith(dominioPermitido)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar( SnackBar( content: const Text('Cadastro permitido apenas para emails $dominioPermitido'), backgroundColor: Colors.orange[800]));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  'Cadastro permitido apenas para emails $dominioPermitido'),
+              backgroundColor: Colors.orange[800]));
         }
         return;
       }
 
-      setState(() { _isLoading = true; });
+      setState(() {
+        _isLoading = true;
+      });
+
+      String? instituicaoFinal;
+      if (_cidadeSelecionada == "OUTRO") {
+        instituicaoFinal = _instituicaoManualController.text.trim();
+      } else {
+        instituicaoFinal = _instituicaoSelecionada;
+      }
 
       try {
         UserCredential userCredential =
@@ -148,34 +233,63 @@ class _CadastroScreenState extends State<CadastroScreen> {
           final uid = user.uid;
           final profileData = {
             'uid': uid,
-            'name': _nameController.text.trim(),
-            'email': email,
-            'phone': _phoneController.text.trim(),
-            'jobTitle': _jobTitleController.text.trim(),
-            'institution': _instituicaoSelecionada, // Usa o valor do dropdown
+            kFieldName: _nameController.text.trim(), // Usa constante local
+            kFieldEmail: email, // Usa constante local
+            kFieldPhone: _phoneController.text.trim(), // Usa constante local
+            kFieldJobTitle: _cargoSelecionado, // Usa constante local
+            kFieldUserInstituicao: instituicaoFinal, // Usa constante local
+            kFieldCidade: _cidadeSelecionada, // Usa constante local
             'role': 'requester',
             'createdAt': FieldValue.serverTimestamp(),
           };
 
-          await FirebaseFirestore.instance.collection('users').doc(uid).set(profileData);
+          await FirebaseFirestore.instance
+              .collection(kCollectionUsers) // Usa constante local
+              .doc(uid)
+              .set(profileData);
 
           if (mounted) {
-            Navigator.pushReplacementNamed(context, '/login');
-            ScaffoldMessenger.of(context).showSnackBar( const SnackBar(content: Text('Conta criada com sucesso! Faça login.'), backgroundColor: Colors.green),);
+            // Navega para MainNavigationScreen usando o import adicionado
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const MainNavigationScreen()));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Conta criada com sucesso! Faça login.'),
+                  backgroundColor: Colors.green),
+            );
           }
-        } else { throw Exception('Falha ao obter usuário após criação.'); }
-
+        } else {
+          throw Exception('Falha ao obter usuário após criação.');
+        }
       } on FirebaseAuthException catch (e) {
         String errorMessage = 'Ocorreu um erro ao criar a conta.';
-        if (e.code == 'email-already-in-use') { errorMessage = 'Este email já está sendo usado.'; }
-        else if (e.code == 'weak-password') { errorMessage = 'A senha deve ter pelo menos 6 caracteres.'; }
-        else if (e.code == 'invalid-email') { errorMessage = 'O formato do email é inválido.'; }
-        else { errorMessage = e.message ?? errorMessage; }
-        if (mounted) { ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text(errorMessage), backgroundColor: Colors.red)); }
+        if (e.code == 'email-already-in-use') {
+          errorMessage = 'Este email já está sendo usado.';
+        } else if (e.code == 'weak-password') {
+          errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'O formato do email é inválido.';
+        } else {
+          errorMessage = e.message ?? errorMessage;
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(errorMessage), backgroundColor: Colors.red));
+        }
       } catch (e) {
-         if (mounted) { ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text('Ocorreu um erro inesperado: ${e.toString()}'), backgroundColor: Colors.red)); }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Ocorreu um erro inesperado: ${e.toString()}'),
+              backgroundColor: Colors.red));
+        }
       } finally {
-         if (mounted) { setState(() { _isLoading = false; }); }
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     } else {
       print("Formulário inválido.");
@@ -208,36 +322,44 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   ),
                   textCapitalization: TextCapitalization.words,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) { return 'Por favor, digite seu nome completo.'; }
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor, digite seu nome completo.';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
                 // --- Campo Email ---
-                  TextFormField(
-                    controller: _emailController,
-                    enabled: !_isLoading,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Institucional *',
-                      hintText: 'exemplo@seduc.ro.gov.br',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) { return 'Por favor, digite seu email.'; }
-                      if (!value.contains('@') || !value.contains('.')) { return 'Formato de email inválido.'; }
-                      return null;
-                    },
+                TextFormField(
+                  controller: _emailController,
+                  enabled: !_isLoading,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Institucional *',
+                    hintText: 'exemplo@seduc.ro.gov.br',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
                   ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor, digite seu email.';
+                    }
+                    if (!value.contains('@') || !value.contains('.')) {
+                      return 'Formato de email inválido.';
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 16.0),
 
                 // --- Campo Telefone ---
-                 TextFormField(
+                TextFormField(
                   controller: _phoneController,
                   enabled: !_isLoading,
                   keyboardType: TextInputType.phone,
+                  // Adiciona o TextInputFormatter para o telefone se desejar
+                  // inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Exemplo
                   decoration: const InputDecoration(
                     labelText: 'Telefone *',
                     hintText: '(XX) XXXXX-XXXX',
@@ -245,67 +367,224 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     prefixIcon: Icon(Icons.phone),
                   ),
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) { return 'Digite seu telefone para contato.'; }
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Digite seu telefone para contato.';
+                    }
                     return null;
                   },
-                 ),
-                const SizedBox(height: 16.0),
-
-                // --- Campo Cargo/Função ---
-                TextFormField(
-                  controller: _jobTitleController,
-                  enabled: !_isLoading,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Cargo / Função *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.work_outline),
-                  ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) { return 'Digite seu cargo ou função.'; }
-                      return null;
-                    },
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Dropdown de Instituição ---
+                // --- Dropdown de Cargo/Função ---
                 DropdownButtonFormField<String>(
-                  value: _instituicaoSelecionada,
+                  value: _cargoSelecionado,
                   isExpanded: true,
-                  hint: _isLoadingInstituicoes
-                      ? const Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 8), Text('Carregando...')])
-                      : (_erroCarregarInstituicoes != null
-                          ? Text(_erroCarregarInstituicoes!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14))
-                          : const Text('Selecione sua instituição *')),
+                  hint: _isLoadingConfig
+                      ? const Row(children: [
+                          SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 8),
+                          Text('Carregando...')
+                        ])
+                      : (_erroCarregarConfig != null && _listaCargos.isEmpty
+                          ? Text(_erroCarregarConfig!,
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 14))
+                          : const Text('Selecione seu cargo/função *')),
                   decoration: InputDecoration(
-                    labelText: 'Instituição / Lotação *',
+                    labelText: 'Cargo / Função *',
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.account_balance_outlined),
-                    errorText: _erroCarregarInstituicoes != null && !_isLoadingInstituicoes && _listaInstituicoes.isEmpty
-                               ? _erroCarregarInstituicoes // Mostra erro aqui se a lista não carregou
-                               : null,
+                    prefixIcon: const Icon(Icons.work_outline),
+                    errorText: _erroCarregarConfig != null &&
+                            !_isLoadingConfig &&
+                            _listaCargos.isEmpty
+                        ? _erroCarregarConfig
+                        : null,
                   ),
-                  items: _isLoadingInstituicoes || _erroCarregarInstituicoes != null
+                  items: _isLoadingConfig ||
+                          (_erroCarregarConfig != null && _listaCargos.isEmpty)
                       ? []
-                      : _listaInstituicoes.map<DropdownMenuItem<String>>((String value) {
+                      : _listaCargos
+                          .map<DropdownMenuItem<String>>((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
                             child: Text(value, overflow: TextOverflow.ellipsis),
                           );
                         }).toList(),
-                  onChanged: (_isLoading || _isLoadingInstituicoes || _erroCarregarInstituicoes != null)
+                  onChanged: (_isLoading ||
+                          _isLoadingConfig ||
+                          (_erroCarregarConfig != null && _listaCargos.isEmpty))
                       ? null
                       : (String? newValue) {
-                          setState(() { _instituicaoSelecionada = newValue; });
+                          setState(() {
+                            _cargoSelecionado = newValue;
+                          });
                         },
                   validator: (value) {
-                    if (value == null) {
-                      if (_isLoadingInstituicoes || _erroCarregarInstituicoes != null) return null; // Não valida se carregando/erro
-                      return 'Por favor, selecione sua instituição.';
+                    if (value == null || value.isEmpty) {
+                      if (_isLoadingConfig) return null;
+                      if (_erroCarregarConfig != null && _listaCargos.isEmpty)
+                        return _erroCarregarConfig;
+                      return 'Por favor, selecione seu cargo/função.';
                     }
                     return null;
                   },
                 ),
+                const SizedBox(height: 16.0),
+
+                // --- Dropdown de Cidade/Distrito ---
+                DropdownButtonFormField<String>(
+                  value: _cidadeSelecionada,
+                  isExpanded: true,
+                  hint: _isLoadingConfig
+                      ? const Row(children: [
+                          SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 8),
+                          Text('Carregando...')
+                        ])
+                      : (_erroCarregarConfig != null && _listaCidades.isEmpty
+                          ? Text(_erroCarregarConfig!,
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 14))
+                          : const Text('Selecione a cidade/distrito *')),
+                  decoration: InputDecoration(
+                    labelText: 'Cidade / Distrito *',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.location_city_outlined),
+                    errorText: _erroCarregarConfig != null &&
+                            !_isLoadingConfig &&
+                            _listaCidades.isEmpty
+                        ? _erroCarregarConfig
+                        : null,
+                  ),
+                  items: _isLoadingConfig ||
+                          (_erroCarregarConfig != null && _listaCidades.isEmpty)
+                      ? []
+                      : _listaCidades
+                          .map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                  onChanged: (_isLoading ||
+                          _isLoadingConfig ||
+                          (_erroCarregarConfig != null &&
+                              _listaCidades.isEmpty))
+                      ? null
+                      : _atualizarInstituicoes,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      if (_isLoadingConfig) return null;
+                      if (_erroCarregarConfig != null && _listaCidades.isEmpty)
+                        return _erroCarregarConfig;
+                      return 'Por favor, selecione a cidade/distrito.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16.0),
+
+                // --- Campo Instituição (Dropdown ou Texto) ---
+                if (_cidadeSelecionada == "OUTRO")
+                  TextFormField(
+                    controller: _instituicaoManualController,
+                    enabled: !_isLoading,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome da Instituição (Escola)*',
+                      hintText: 'Digite o nome completo da escola',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.account_balance_outlined),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) {
+                      if (_cidadeSelecionada == "OUTRO" &&
+                          (value == null || value.trim().isEmpty)) {
+                        return 'Informe o nome da instituição';
+                      }
+                      return null;
+                    },
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    value: _instituicaoSelecionada,
+                    isExpanded: true,
+                    hint: _isLoadingConfig
+                        ? const Row(children: [
+                            SizedBox(
+                                width: 12,
+                                height: 12,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 8),
+                            Text('Carregando...')
+                          ])
+                        : (_cidadeSelecionada == null
+                            ? const Text('Selecione a cidade primeiro')
+                            : const Text('Selecione sua instituição *')),
+                    decoration: InputDecoration(
+                      labelText: 'Instituição / Lotação *',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.account_balance_outlined),
+                      errorText: (_erroCarregarConfig != null &&
+                              !_isLoadingConfig &&
+                              _instituicoesDisponiveis.isEmpty &&
+                              _cidadeSelecionada != null &&
+                              _cidadeSelecionada != "OUTRO")
+                          ? "Nenhuma instituição para esta cidade."
+                          : ((_erroCarregarConfig != null &&
+                                  !_isLoadingConfig &&
+                                  _listaInstituicoes.isEmpty)
+                              ? _erroCarregarConfig
+                              : null),
+                    ),
+                    items: _isLoadingConfig ||
+                            _cidadeSelecionada == null ||
+                            _cidadeSelecionada == "OUTRO" ||
+                            (_erroCarregarConfig != null &&
+                                _instituicoesDisponiveis.isEmpty)
+                        ? []
+                        : _instituicoesDisponiveis
+                            .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child:
+                                  Text(value, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                    onChanged: (_isLoading ||
+                            _isLoadingConfig ||
+                            _cidadeSelecionada == null ||
+                            _cidadeSelecionada == "OUTRO" ||
+                            (_erroCarregarConfig != null &&
+                                _instituicoesDisponiveis.isEmpty))
+                        ? null
+                        : (String? newValue) {
+                            setState(() {
+                              _instituicaoSelecionada = newValue;
+                            });
+                          },
+                    validator: (value) {
+                      if (_cidadeSelecionada != null &&
+                          _cidadeSelecionada != "OUTRO") {
+                        if (value == null || value.isEmpty) {
+                          if (_isLoadingConfig) return null;
+                          if (_erroCarregarConfig != null &&
+                              _instituicoesDisponiveis.isEmpty)
+                            return "Nenhuma instituição para esta cidade.";
+                          return 'Por favor, selecione sua instituição.';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
                 const SizedBox(height: 16.0),
 
                 // --- Campo Senha ---
@@ -320,15 +599,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     prefixIcon: Icon(Icons.lock),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) { return 'Por favor, digite uma senha.'; }
-                    if (value.length < 6) { return 'A senha deve ter no mínimo 6 caracteres.'; }
+                    if (value == null || value.isEmpty) {
+                      return 'Por favor, digite uma senha.';
+                    }
+                    if (value.length < 6) {
+                      return 'A senha deve ter no mínimo 6 caracteres.';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
                 // --- Campo Confirmar Senha ---
-                 TextFormField(
+                TextFormField(
                   controller: _confirmPasswordController,
                   enabled: !_isLoading,
                   obscureText: true,
@@ -337,30 +620,41 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) { return 'Por favor, confirme sua senha.'; }
-                      if (value != _passwordController.text) { return 'As senhas não coincidem.'; }
-                      return null;
-                    },
-                 ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Por favor, confirme sua senha.';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'As senhas não coincidem.';
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 24.0),
 
                 // --- Botão Cadastrar ---
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _cadastrar,
+                  onPressed: _isLoading || _isLoadingConfig ? null : _cadastrar,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    textStyle: const TextStyle(fontSize: 16)
-                  ),
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      textStyle: const TextStyle(fontSize: 16)),
                   child: _isLoading
-                      ? const SizedBox( width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 3, color: Colors.white))
                       : const Text('Cadastrar'),
                 ),
                 const SizedBox(height: 16.0),
 
                 // --- Botão Voltar para Login ---
                 TextButton(
-                  onPressed: _isLoading ? null : () { Navigator.pop(context); },
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                        },
                   child: const Text('Já tem uma conta? Faça login'),
                 ),
               ],
@@ -370,4 +664,18 @@ class _CadastroScreenState extends State<CadastroScreen> {
       ),
     );
   }
+
+  // --- REMOVIDO _buildTextFormField (não utilizado) ---
+
+  // Constantes locais para nomes de campos (usadas no _cadastrar)
+  static const String kFieldName = 'name';
+  static const String kFieldEmail = 'email';
+  static const String kFieldPhone = 'phone';
+  static const String kFieldJobTitle = 'jobTitle';
+  static const String kFieldUserInstituicao = 'institution';
+  static const String kFieldCidade = 'cidade';
+  static const String kCollectionUsers = 'users';
+  static const String kCollectionConfig = 'configuracoes';
+  static const String kDocOpcoes = 'opcoesChamado';
+  static const String kDocLocalidades = 'localidades';
 }

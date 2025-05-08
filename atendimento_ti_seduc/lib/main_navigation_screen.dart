@@ -34,26 +34,35 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   String _globalSearchQuery = "";
 
   List<Widget> get _adminScreens => [
-        ListaChamadosScreen(key: ValueKey('admin_chamados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        ListaChamadosScreen(
+            key: ValueKey('admin_chamados_$_globalSearchQuery'),
+            searchQuery: _globalSearchQuery),
         const NovoChamadoScreen(key: ValueKey('admin_novo_chamado')),
         const AgendaScreen(key: ValueKey('admin_agenda')),
         const ProfileScreen(key: ValueKey('admin_perfil')),
         const UserManagementScreen(key: ValueKey('admin_user_management')),
-        ListaChamadosArquivadosScreen(key: ValueKey('admin_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        ListaChamadosArquivadosScreen(
+            key: ValueKey('admin_arquivados_$_globalSearchQuery'),
+            searchQuery: _globalSearchQuery),
         const TutorialScreen(key: ValueKey('admin_tutoriais')),
       ];
 
   List<Widget> get _userScreens => [
-        ListaChamadosScreen(key: ValueKey('user_chamados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        ListaChamadosScreen(
+            key: ValueKey('user_chamados_$_globalSearchQuery'),
+            searchQuery: _globalSearchQuery),
         const NovoChamadoScreen(key: ValueKey('user_novo_chamado')),
         const AgendaScreen(key: ValueKey('user_agenda')),
         const ProfileScreen(key: ValueKey('user_perfil')),
         Container(key: const ValueKey('user_placeholder_admin_only')),
-        ListaChamadosArquivadosScreen(key: ValueKey('user_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        ListaChamadosArquivadosScreen(
+            key: ValueKey('user_arquivados_$_globalSearchQuery'),
+            searchQuery: _globalSearchQuery),
         const TutorialScreen(key: ValueKey('user_tutoriais')),
       ];
 
-  List<Widget> get _currentScreenOptions => _isAdmin ? _adminScreens : _userScreens;
+  List<Widget> get _currentScreenOptions =>
+      _isAdmin ? _adminScreens : _userScreens;
 
   @override
   void initState() {
@@ -84,9 +93,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          if (userData.containsKey('role_temp') && userData['role_temp'] == 'admin') {
+          if (userData.containsKey('role_temp') &&
+              userData['role_temp'] == 'admin') {
             isAdminResult = true;
-          } else if (userData.containsKey('role') && userData['role'] == 'admin') {
+          } else if (userData.containsKey('role') &&
+              userData['role'] == 'admin') {
             isAdminResult = true;
           }
         }
@@ -99,7 +110,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         _isAdmin = isAdminResult;
         _isLoadingRole = false;
-        if (_selectedIndex >= _currentScreenOptions.length || _selectedIndex < 0 || (!_isAdmin && _selectedIndex == 4)) {
+        if (_selectedIndex >= _currentScreenOptions.length ||
+            _selectedIndex < 0 ||
+            (!_isAdmin && _selectedIndex == 4)) {
           _selectedIndex = 0;
         }
       });
@@ -111,13 +124,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/versao.json';
     try {
       final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      final String buildNumber = packageInfo.buildNumber.isNotEmpty ? packageInfo.buildNumber : "0";
-      final Version currentVersion = Version.parse("${packageInfo.version}+$buildNumber");
+      final String buildNumber =
+          packageInfo.buildNumber.isNotEmpty ? packageInfo.buildNumber : "0";
+      final Version currentVersion =
+          Version.parse("${packageInfo.version}+$buildNumber");
 
       final response = await http.get(Uri.parse(versionUrl));
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
-        final String? latestVersionStr = jsonResponse['latestSemanticVersion'] as String?;
+        final String? latestVersionStr =
+            jsonResponse['latestSemanticVersion'] as String?;
         final String? releaseNotes = jsonResponse['releaseNotes'] as String?;
         final String? downloadUrl = jsonResponse['downloadUrl'] as String?;
 
@@ -128,7 +144,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         final Version latestVersion = Version.parse(latestVersionStr);
         if (latestVersion > currentVersion) {
           if (mounted) {
-            _mostrarDialogoAtualizacao(latestVersionStr, releaseNotes ?? "Sem notas de versão.", downloadUrl);
+            _mostrarDialogoAtualizacao(latestVersionStr,
+                releaseNotes ?? "Sem notas de versão.", downloadUrl);
           }
         }
       }
@@ -137,7 +154,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> _mostrarDialogoAtualizacao(String newVersion, String notes, String url) async {
+  Future<void> _mostrarDialogoAtualizacao(
+      String newVersion, String notes, String url) async {
     if (!mounted) return;
     await showDialog(
       context: context,
@@ -150,7 +168,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Uma nova versão do aplicativo está disponível. Notas da versão:'),
+                const Text(
+                    'Uma nova versão do aplicativo está disponível. Notas da versão:'),
                 const SizedBox(height: 15),
                 Text(notes, style: const TextStyle(fontSize: 13)),
               ],
@@ -201,25 +220,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _onDestinationSelected(int newScreenIndex) {
     final optionsLength = _currentScreenOptions.length;
     if (newScreenIndex >= 0 && newScreenIndex < optionsLength) {
-       if (newScreenIndex == 4 && !_isAdmin) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Acesso restrito a administradores.')),
-           );
-          return;
-       }
+      if (newScreenIndex == 4 && !_isAdmin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Acesso restrito a administradores.')),
+        );
+        return;
+      }
       if (mounted) {
         setState(() {
           _selectedIndex = newScreenIndex;
-          if (_globalSearchQuery.isNotEmpty && newScreenIndex != 0 && newScreenIndex != 5) {
+          if (_globalSearchQuery.isNotEmpty &&
+              newScreenIndex != 0 &&
+              newScreenIndex != 5) {
             _globalSearchQuery = "";
           }
         });
       }
     } else {
       if (mounted && _selectedIndex != 0) {
-         setState(() {
-           _selectedIndex = 0;
-         });
+        setState(() {
+          _selectedIndex = 0;
+        });
       }
     }
   }
@@ -236,7 +257,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   child: const Text('Cancelar')),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Sair', style: TextStyle(color: AppTheme.kErrorColor)),
+                child: const Text('Sair',
+                    style: TextStyle(color: AppTheme.kErrorColor)),
               ),
             ],
           ),
@@ -261,11 +283,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _handleSearchQueryChanged(String query) {
-     if (mounted) {
+    if (mounted) {
       setState(() {
         _globalSearchQuery = query;
         if (_selectedIndex != 0 && _selectedIndex != 5 && query.isNotEmpty) {
-           _selectedIndex = 0;
+          _selectedIndex = 0;
         }
       });
     }
@@ -277,18 +299,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     int effectiveIndex = _selectedIndex;
 
     if (_isLoadingRole) {
-       effectiveIndex = 0;
+      effectiveIndex = 0;
     } else {
       final optionsLength = _currentScreenOptions.length;
-      if (_selectedIndex < 0 || _selectedIndex >= optionsLength || (!_isAdmin && _selectedIndex == 4) ) {
-         effectiveIndex = 0;
-         WidgetsBinding.instance.addPostFrameCallback((_) {
-           if (mounted && _selectedIndex != effectiveIndex) {
-              setState(() {
-               _selectedIndex = effectiveIndex;
-             });
-           }
-         });
+      if (_selectedIndex < 0 ||
+          _selectedIndex >= optionsLength ||
+          (!_isAdmin && _selectedIndex == 4)) {
+        effectiveIndex = 0;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedIndex != effectiveIndex) {
+            setState(() {
+              _selectedIndex = effectiveIndex;
+            });
+          }
+        });
       } else {
         effectiveIndex = _selectedIndex;
       }
@@ -311,7 +335,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               onLogout: () => _fazerLogout(context),
               isAdminUser: _isAdmin,
               currentUser: _firebaseUserInstance,
-              onCheckForUpdates: kReleaseMode ? _verificarAtualizacoesApp : null,
+              onCheckForUpdates:
+                  kReleaseMode ? _verificarAtualizacoesApp : null,
               onSearchQueryChanged: _handleSearchQueryChanged,
               initialSearchQuery: _globalSearchQuery,
             ),
@@ -320,7 +345,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 margin: const EdgeInsets.only(
                     top: 8.0, right: 8.0, bottom: 8.0, left: 0.0),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardTheme.color ?? AppTheme.kWinSurface,
+                  color:
+                      Theme.of(context).cardTheme.color ?? AppTheme.kWinSurface,
                   borderRadius: contentBorderRadius,
                   boxShadow: [
                     BoxShadow(
@@ -334,7 +360,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   borderRadius: contentBorderRadius,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (Widget child, Animation<double> animation) {
+                    transitionBuilder:
+                        (Widget child, Animation<double> animation) {
                       return FadeTransition(opacity: animation, child: child);
                     },
                     child: IndexedStack(

@@ -35,6 +35,7 @@ dependencies:
   url_launcher: ^6.1.14   # Ou versão mais recente (para abrir link download)
   pub_semver: ^2.1.4      # Ou versão mais recente (para comparar versões)
   printing: ^5.12.0
+  youtube_player_flutter: ^9.0.1 
   # -------------------------------------------------
 
 dev_dependencies:

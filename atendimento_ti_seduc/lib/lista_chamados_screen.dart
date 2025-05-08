@@ -583,6 +583,8 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                       );
                     }
 
+                    
+
                     return ListView.builder(
                       padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0, bottom: 72.0), // Espaço para FAB
                       itemCount: _ultimosChamadosFiltradosParaExibicao.length,

@@ -122,18 +122,22 @@ class _AgendamentoVisitaScreenState extends State<AgendamentoVisitaScreen> {
   Future<void> _agendarVisita() async {
     // Verifica se os dados do chamado foram carregados
     if (!_chamadoDataFetched) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Aguarde, carregando dados do chamado...'), backgroundColor: Colors.orange),
         );
+        }
         _fetchChamadoData(); // Tenta buscar novamente se não buscou
         return;
     }
 
     if (_formKey.currentState!.validate()) {
       if (_selectedDate == null || _selectedTime == null) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Selecione data e hora.'), backgroundColor: Colors.orange),
         );
+        }
         return;
       }
 

@@ -399,7 +399,7 @@ Future<String> criarChamado({
         if (e.toString().contains('Ação não permitida') || 
             e.toString().contains('Este chamado já foi confirmado') ||
             e.toString().contains('O chamado precisa estar com status "$kStatusPadraoSolicionado"')) {
-            throw e; // Repassa exceções específicas
+            rethrow; // Repassa exceções específicas
         }
         throw Exception('Falha ao registrar a confirmação do serviço.');
     }
@@ -459,7 +459,7 @@ Future<String> criarChamado({
       if (e.toString().contains('A confirmação do requerente é necessária') ||
           e.toString().contains('O chamado precisa estar com status') ||
           e.toString().contains('Este chamado já foi finalizado')) {
-        throw e; // Repassa exceções específicas
+        rethrow; // Repassa exceções específicas
       }
       throw Exception('Falha ao arquivar o chamado.');
     }

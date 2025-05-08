@@ -38,18 +38,16 @@ class AppTheme {
     scaffoldBackgroundColor: kWinBackground,
     primaryColor: kPrimaryColor, 
     fontFamily: GoogleFonts.openSans().fontFamily,
-    colorScheme: ColorScheme.light( 
+    colorScheme: const ColorScheme.light( 
       primary: kPrimaryColor,       
       secondary: kSecondaryColor,   
-      surface: kSurfaceColor,       
-      background: kWinBackground,
+      surface: kSurfaceColor,
       error: kErrorColor,           
       onPrimary: Colors.white,      
       onSecondary: Colors.white,    
-      onSurface: kTextColor,        
-      onBackground: kTextColor,     
+      onSurface: kTextColor,     
       onError: Colors.white,        
-      surfaceVariant: kSurfaceVariant,
+      surfaceContainerHighest: kSurfaceVariant,
       onSurfaceVariant: kTextColor,
     ),
     textTheme: GoogleFonts.openSansTextTheme(
@@ -58,9 +56,9 @@ class AppTheme {
       headlineSmall: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 22),
       headlineMedium: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 26),
       titleLarge: TextStyle(color: kTextColor.withOpacity(0.9), fontWeight: FontWeight.w600, fontSize: 20),
-      bodyLarge: TextStyle(color: kTextColor, fontSize: 14),
-      bodyMedium: TextStyle(color: kSecondaryTextColor, fontSize: 14),
-      labelLarge: TextStyle(color: kTextColor, fontWeight: FontWeight.normal, fontSize: 14),
+      bodyLarge: const TextStyle(color: kTextColor, fontSize: 14),
+      bodyMedium: const TextStyle(color: kSecondaryTextColor, fontSize: 14),
+      labelLarge: const TextStyle(color: kTextColor, fontWeight: FontWeight.normal, fontSize: 14),
     ),
     cardTheme: CardTheme(
       elevation: 1.0,
@@ -107,7 +105,7 @@ class AppTheme {
     appBarTheme: AppBarTheme(
       backgroundColor: kWinBackground,
       elevation: 0, 
-      iconTheme: IconThemeData(color: kTextColor), 
+      iconTheme: const IconThemeData(color: kTextColor), 
       titleTextStyle: GoogleFonts.openSans(
         color: kTextColor, 
         fontSize: 18,
@@ -129,13 +127,13 @@ class AppTheme {
       ),
       focusedBorder: OutlineInputBorder( 
         borderRadius: BorderRadius.circular(4.0),
-        borderSide: BorderSide(color: kPrimaryColor, width: 1.5), 
+        borderSide: const BorderSide(color: kPrimaryColor, width: 1.5), 
       ),
-      labelStyle: TextStyle(color: kSecondaryTextColor), 
+      labelStyle: const TextStyle(color: kSecondaryTextColor), 
       hintStyle: TextStyle(color: kSecondaryTextColor.withOpacity(0.8)),
-      errorStyle: TextStyle(color: kErrorColor), 
+      errorStyle: const TextStyle(color: kErrorColor), 
     ),
-    iconTheme: IconThemeData( 
+    iconTheme: const IconThemeData( 
       color: kSecondaryTextColor, 
       size: 22.0,
     ),
@@ -147,7 +145,7 @@ class AppTheme {
     chipTheme: ChipThemeData( 
       backgroundColor: const Color(0xFFE0E0E0),
       labelStyle: TextStyle(color: kTextColor.withOpacity(0.8), fontSize: 12), 
-      secondaryLabelStyle: TextStyle(color: kSecondaryTextColor, fontSize: 12), 
+      secondaryLabelStyle: const TextStyle(color: kSecondaryTextColor, fontSize: 12), 
       selectedColor: kPrimaryColor, 
       disabledColor: Colors.grey.shade300,
       checkmarkColor: Colors.white,
@@ -155,9 +153,9 @@ class AppTheme {
         borderRadius: BorderRadius.circular(6.0),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      iconTheme: IconThemeData(color: kSecondaryTextColor, size: 16), 
+      iconTheme: const IconThemeData(color: kSecondaryTextColor, size: 16), 
     ),
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: kPrimaryColor, 
       foregroundColor: Colors.white,
       elevation: 2,

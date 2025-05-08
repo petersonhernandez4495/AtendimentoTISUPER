@@ -168,16 +168,16 @@ class _AgendaScreenState extends State<AgendaScreen> {
                 onDaySelected: (selectedDay, focusedDay) { if (!isSameDay(_selectedDay, selectedDay)) { if (!mounted) return; setState(() { _selectedDay = selectedDay; _focusedDay = focusedDay; _updateSelectedDayStream(selectedDay); }); } },
                 onPageChanged: (focusedDay) { _focusedDay = focusedDay; },
                 onFormatChanged: (format) { if (_calendarFormat != format) { if (!mounted) return; setState(() { _calendarFormat = format; }); } },
-                calendarStyle: CalendarStyle( /* ... Estilos ... */ ),
-                headerStyle: HeaderStyle( /* ... Estilos ... */ ),
-                calendarBuilders: CalendarBuilders( /* ... Builders ... */ ),
+                calendarStyle: const CalendarStyle( /* ... Estilos ... */ ),
+                headerStyle: const HeaderStyle( /* ... Estilos ... */ ),
+                calendarBuilders: const CalendarBuilders( /* ... Builders ... */ ),
               ),
 
           Divider(height: 1, thickness: 1, color: colorScheme.outlineVariant.withOpacity(0.5)),
 
           // --- Título da Seção da Lista ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 8.0),
             child: Row( /* ... Row do Título ... */ ),
           ),
 
@@ -188,7 +188,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
               builder: (context, snapshotVisitas) {
                 // ... (código existente de loading, error, sem dados) ...
                  if (!snapshotVisitas.hasData || snapshotVisitas.data!.docs.isEmpty) {
-                   return Center( /* ... Mensagem "Nenhuma visita agendada..." ... */ );
+                   return const Center( /* ... Mensagem "Nenhuma visita agendada..." ... */ );
                  }
 
                 final visitasDoDia = snapshotVisitas.data!.docs;

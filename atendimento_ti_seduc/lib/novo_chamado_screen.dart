@@ -114,8 +114,8 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         db.collection(kCollectionConfig).doc(kDocOpcoes).get(),
         db.collection(kCollectionConfig).doc(kDocLocalidades).get(),
       ]);
-      final docOpcoes = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-      final docLocalidades = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+      final docOpcoes = results[0];
+      final docLocalidades = results[1];
       Map<String, dynamic>? dataOpcoes = docOpcoes.data();
 
       List<String> loadedTipos = _parseStringList(dataOpcoes, 'tipos');
@@ -472,7 +472,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   Widget _buildStepPlaceholder(String message) {
-    return Container( padding: const EdgeInsets.symmetric(vertical: 30.0, horizontal: 10.0), alignment: Alignment.center, decoration: BoxDecoration( color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).disabledColor.withOpacity(0.2)) ), child: Text( message, style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).disabledColor, fontSize: 14, height: 1.4), textAlign: TextAlign.center, ), );
+    return Container( padding: const EdgeInsets.symmetric(vertical: 30.0, horizontal: 10.0), alignment: Alignment.center, decoration: BoxDecoration( color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3), borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).disabledColor.withOpacity(0.2)) ), child: Text( message, style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).disabledColor, fontSize: 14, height: 1.4), textAlign: TextAlign.center, ), );
   }
 
   Widget _buildStep1Content() {

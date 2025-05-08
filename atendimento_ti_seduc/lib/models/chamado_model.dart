@@ -1,6 +1,5 @@
 // models/chamado_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 // Importa as constantes do serviço
 import '../services/chamado_service.dart'; // <<<--- AJUSTE O CAMINHO SE NECESSÁRIO

@@ -152,9 +152,9 @@ class _ListaChamadosArquivadosScreenState
     showDialog(
       context: currentContext,
       barrierDismissible: false,
-      builder: (dialogCtx) => PopScope(
+      builder: (dialogCtx) => const PopScope(
           canPop: false,
-          child: const Center(child: CircularProgressIndicator(backgroundColor: Colors.white))),
+          child: Center(child: CircularProgressIndicator(backgroundColor: Colors.white))),
     );
 
     Uint8List? pdfBytes;
@@ -284,7 +284,7 @@ class _ListaChamadosArquivadosScreenState
     showDialog(
       context: dialogContext,
       barrierDismissible: false,
-      builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator(backgroundColor: Colors.white))),
+      builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator(backgroundColor: Colors.white))),
     );
 
     try {
@@ -455,7 +455,7 @@ class _ListaChamadosArquivadosScreenState
     final ColorScheme colorScheme = theme.colorScheme;
     // Supondo que AppTheme.kWinBackground e AppTheme.kWinSecondaryText existem em algum lugar,
     // ou substitua por cores do seu tema.
-    final Color winBackgroundColor = Theme.of(context).brightness == Brightness.dark ? Colors.grey[850]! : Color(0xFFF0F4F8); // Exemplo
+    final Color winBackgroundColor = Theme.of(context).brightness == Brightness.dark ? Colors.grey[850]! : const Color(0xFFF0F4F8); // Exemplo
     final Color winSecondaryTextColor = Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey[600]!; // Exemplo
 
     return Column(

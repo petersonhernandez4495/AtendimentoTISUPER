@@ -78,8 +78,8 @@ class ChamadoListItem extends StatelessWidget {
     final String? creatorUid = chamadoData[kFieldCreatorUid] as String?;
     final String? currentUserId = currentUser?.uid;
 
-    final String statusSolucionadoComparacao = kStatusPadraoSolicionado;
-    final String statusFinalizadoComparacao = kStatusFinalizado;
+    const String statusSolucionadoComparacao = kStatusPadraoSolicionado;
+    const String statusFinalizadoComparacao = kStatusFinalizado;
 
     final bool isSolucionado = status.toLowerCase() == statusSolucionadoComparacao.toLowerCase();
     final bool isFinalizado = status.toLowerCase() == statusFinalizadoComparacao.toLowerCase();
@@ -327,7 +327,7 @@ class ChamadoListItem extends StatelessWidget {
                               value: 'pdf_opcoes',
                               enabled: podeGerarPdf && !isLoadingPdfDownload, // Habilita baseado na condição e loading
                               child: isLoadingPdfDownload
-                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Gerando PDF...'), dense: true, contentPadding: EdgeInsets.zero)
+                                ? const ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Gerando PDF...'), dense: true, contentPadding: EdgeInsets.zero)
                                 : ListTile(leading: Icon(Icons.picture_as_pdf_outlined, size: 20, color: podeGerarPdf ? colorScheme.onSurfaceVariant : Colors.grey), title: Text('Gerar PDF', style: textTheme.bodyMedium?.copyWith(color: podeGerarPdf ? null : Colors.grey)), dense: true, contentPadding: EdgeInsets.zero)
                           ));
                         }
@@ -338,7 +338,7 @@ class ChamadoListItem extends StatelessWidget {
                               value: 'confirmar_servico',
                               enabled: !isLoadingConfirmation,
                               child: isLoadingConfirmation
-                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Confirmando...'), dense: true, contentPadding: EdgeInsets.zero)
+                                ? const ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Confirmando...'), dense: true, contentPadding: EdgeInsets.zero)
                                 : ListTile(leading: Icon(Icons.check_circle_outline, size: 20, color: Colors.green[700]), title: Text('Aceitar Solução', style: textTheme.bodyMedium), dense: true, contentPadding: EdgeInsets.zero)
                           ));
                         }
@@ -348,7 +348,7 @@ class ChamadoListItem extends StatelessWidget {
                               value: 'finalizar_arquivar',
                               enabled: !isLoadingFinalizarArquivar,
                               child: isLoadingFinalizarArquivar
-                                ? ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Finalizando...'), dense: true, contentPadding: EdgeInsets.zero)
+                                ? const ListTile(leading: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)), title: Text('Finalizando...'), dense: true, contentPadding: EdgeInsets.zero)
                                 : ListTile(leading: Icon(Icons.archive_outlined, size: 20, color: colorScheme.onSurfaceVariant), title: Text('Finalizar e Arquivar', style: textTheme.bodyMedium), dense: true, contentPadding: EdgeInsets.zero)
                           ));
                         }

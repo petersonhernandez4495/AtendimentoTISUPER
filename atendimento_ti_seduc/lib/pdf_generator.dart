@@ -386,7 +386,7 @@ class PdfGenerator {
               child: pw.Column(
                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                  children: [
-                    pw.Text(title, style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text(title, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                     pw.SizedBox(
                         width: 150,
                         height: 50, // Levemente menor para economizar espaço

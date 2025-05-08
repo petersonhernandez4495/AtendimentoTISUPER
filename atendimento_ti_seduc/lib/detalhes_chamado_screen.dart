@@ -121,16 +121,16 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
 
     final solutionControllerDialog = TextEditingController(text: dadosAtuais[kFieldSolucao] as String? ?? '');
     bool showMandatoryFields = statusSelecionado.toLowerCase() == kStatusPadraoSolicionado.toLowerCase();
-    DateTime? _selectedAtendimentoDate;
+    DateTime? selectedAtendimentoDate;
     final Timestamp? currentAtendimentoTs = dadosAtuais[kFieldDataAtendimento] as Timestamp?;
-    if (currentAtendimentoTs != null) { _selectedAtendimentoDate = currentAtendimentoTs.toDate(); }
+    if (currentAtendimentoTs != null) { selectedAtendimentoDate = currentAtendimentoTs.toDate(); }
 
     if (!_listaStatusEdicao.contains(statusSelecionado)) statusSelecionado = _listaStatusEdicao.first;
     if (!_listaPrioridades.contains(prioridadeSelecionada)) prioridadeSelecionada = _listaPrioridades.first;
 
-    Future<void> _selectDate(BuildContext dlgContext, Function(DateTime?) onDateSelected) async {
-      final DateTime? picked = await showDatePicker( context: dlgContext, initialDate: _selectedAtendimentoDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)), locale: const Locale('pt', 'BR'), );
-      if (picked != null && picked != _selectedAtendimentoDate) {
+    Future<void> selectDate(BuildContext dlgContext, Function(DateTime?) onDateSelected) async {
+      final DateTime? picked = await showDatePicker( context: dlgContext, initialDate: selectedAtendimentoDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)), locale: const Locale('pt', 'BR'), );
+      if (picked != null && picked != selectedAtendimentoDate) {
         onDateSelected(picked);
       }
     }
@@ -151,7 +151,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      DropdownButtonFormField<String>( value: statusSelecionado, items: _listaStatusEdicao.map((String v) => DropdownMenuItem<String>( value: v, child: Text(v), )).toList(), onChanged: (newValue) { if (newValue != null) { setDialogState(() { statusSelecionado = newValue; showMandatoryFields = newValue.toLowerCase() == kStatusPadraoSolicionado.toLowerCase(); if (!showMandatoryFields) { solutionControllerDialog.clear(); _selectedAtendimentoDate = null;}}); }}, decoration: const InputDecoration(labelText: 'Status', isDense: true), validator: (v) => v == null ? 'Selecione status' : null, ),
+                      DropdownButtonFormField<String>( value: statusSelecionado, items: _listaStatusEdicao.map((String v) => DropdownMenuItem<String>( value: v, child: Text(v), )).toList(), onChanged: (newValue) { if (newValue != null) { setDialogState(() { statusSelecionado = newValue; showMandatoryFields = newValue.toLowerCase() == kStatusPadraoSolicionado.toLowerCase(); if (!showMandatoryFields) { solutionControllerDialog.clear(); selectedAtendimentoDate = null;}}); }}, decoration: const InputDecoration(labelText: 'Status', isDense: true), validator: (v) => v == null ? 'Selecione status' : null, ),
                       const SizedBox(height: kSpacingSmall),
                       DropdownButtonFormField<String>( value: prioridadeSelecionada, items: _listaPrioridades.map((String v) => DropdownMenuItem<String>( value: v, child: Text(v), )).toList(), onChanged: (newValue) { if (newValue != null) { setDialogState(() { prioridadeSelecionada = newValue; }); } }, decoration: const InputDecoration(labelText: 'Prioridade', isDense: true), validator: (v) => v == null ? 'Selecione prioridade' : null, ),
                       const SizedBox(height: kSpacingSmall),
@@ -172,8 +172,8 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                             Text("Data de Atendimento (Obrigatório)", style: theme.textTheme.labelMedium),
                             const SizedBox(height: kSpacingXSmall/2),
                             Row( children: [
-                              Expanded( child: OutlinedButton.icon( icon: const Icon(Icons.calendar_today, size: 18), label: Text( _selectedAtendimentoDate == null ? 'Selecionar Data' : dateFormat.format(_selectedAtendimentoDate!), ), onPressed: () { _selectDate(dialogContext, (pickedDate) { setDialogState(() { _selectedAtendimentoDate = pickedDate; }); }); }, style: OutlinedButton.styleFrom( padding: const EdgeInsets.symmetric(vertical: 10), alignment: Alignment.centerLeft, foregroundColor: _selectedAtendimentoDate == null ? theme.hintColor : theme.textTheme.bodyLarge?.color, side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.5))),),),
-                              if (_selectedAtendimentoDate != null) IconButton( icon: const Icon(Icons.clear, size: 20), tooltip: "Limpar Data", onPressed: () { setDialogState(() { _selectedAtendimentoDate = null; }); }, color: theme.colorScheme.error, constraints: const BoxConstraints(), padding: const EdgeInsets.all(kSpacingXSmall),),
+                              Expanded( child: OutlinedButton.icon( icon: const Icon(Icons.calendar_today, size: 18), label: Text( selectedAtendimentoDate == null ? 'Selecionar Data' : dateFormat.format(selectedAtendimentoDate!), ), onPressed: () { selectDate(dialogContext, (pickedDate) { setDialogState(() { selectedAtendimentoDate = pickedDate; }); }); }, style: OutlinedButton.styleFrom( padding: const EdgeInsets.symmetric(vertical: 10), alignment: Alignment.centerLeft, foregroundColor: selectedAtendimentoDate == null ? theme.hintColor : theme.textTheme.bodyLarge?.color, side: BorderSide(color: theme.colorScheme.outline.withOpacity(0.5))),),),
+                              if (selectedAtendimentoDate != null) IconButton( icon: const Icon(Icons.clear, size: 20), tooltip: "Limpar Data", onPressed: () { setDialogState(() { selectedAtendimentoDate = null; }); }, color: theme.colorScheme.error, constraints: const BoxConstraints(), padding: const EdgeInsets.all(kSpacingXSmall),),
                             ],),
                             const SizedBox(height: kSpacingSmall),
                           ]
@@ -191,7 +191,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                     if (!formKeyDialog.currentState!.validate()) { return; }
                     if (statusSelecionado.toLowerCase() == kStatusPadraoSolicionado.toLowerCase()) {
                       final isDescriptionEmpty = solutionControllerDialog.text.trim().isEmpty;
-                      final isDateMissing = _selectedAtendimentoDate == null;
+                      final isDateMissing = selectedAtendimentoDate == null;
                       if (isDescriptionEmpty || isDateMissing) {
                         ScaffoldMessenger.of(dialogContext).showSnackBar( const SnackBar( content: Text('Para status "Solucionado", descrição e data são obrigatórias.'), backgroundColor: Colors.orange, behavior: SnackBarBehavior.floating, margin: EdgeInsets.all(10),) );
                         return;
@@ -218,7 +218,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
       try {
         final tecnicoFinal = tecnicoResponsavel.trim();
         final String? solucaoFinal = statusSelecionado.toLowerCase() == kStatusPadraoSolicionado.toLowerCase() ? solutionControllerDialog.text.trim() : null;
-        final Timestamp? atendimentoTimestamp = _selectedAtendimentoDate != null ? Timestamp.fromDate(_selectedAtendimentoDate!) : null;
+        final Timestamp? atendimentoTimestamp = selectedAtendimentoDate != null ? Timestamp.fromDate(selectedAtendimentoDate!) : null;
 
         await _chamadoService.atualizarDetalhesAdmin(
           chamadoId: widget.chamadoId,
@@ -248,9 +248,9 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     showDialog(
       context: currentContext, // Usar o contexto salvo
       barrierDismissible: false,
-      builder: (dialogCtx) => PopScope(
+      builder: (dialogCtx) => const PopScope(
           canPop: false,
-          child: const Center(child: CircularProgressIndicator())
+          child: Center(child: CircularProgressIndicator())
       ),
     );
 
@@ -293,7 +293,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
       Navigator.of(currentContext, rootNavigator: true).pop();
     }
 
-    if (pdfBytes != null && mounted) {
+    if (mounted) {
       try {
         await Printing.sharePdf(bytes: pdfBytes, filename: 'chamado_${widget.chamadoId.substring(0,6)}.pdf');
       } catch (e) {
@@ -319,7 +319,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     showDialog(
       context: currentContext,
       barrierDismissible: false,
-      builder: (dialogCtx) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+      builder: (dialogCtx) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())),
     );
 
     Uint8List? pdfBytes;
@@ -363,7 +363,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     }
 
     // Mostra diálogo de opções
-    if (pdfBytes != null && mounted) {
+    if (mounted) {
       showDialog(
         context: context, // Usa o contexto original do State para mostrar o novo diálogo
         builder: (BuildContext dialogContext) {
@@ -435,7 +435,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     showDialog(
       context: currentContextForDialog,
       barrierDismissible: false,
-      builder: (_) => PopScope(canPop: false, child: const Center(child: CircularProgressIndicator())),
+      builder: (_) => const PopScope(canPop: false, child: Center(child: CircularProgressIndicator())),
     );
 
     try {
@@ -562,7 +562,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
     final String statusAtual = dadosChamadoExibido[kFieldStatus] as String? ?? '';
     if (statusAtual.toLowerCase() != kStatusPadraoSolicionado.toLowerCase()){
         ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('O chamado precisa estar "$kStatusPadraoSolicionado" para ser arquivado.'), backgroundColor: Colors.orange)
+        const SnackBar(content: Text('O chamado precisa estar "$kStatusPadraoSolicionado" para ser arquivado.'), backgroundColor: Colors.orange)
       );
       return;
     }
@@ -799,7 +799,7 @@ class _DetalhesChamadoScreenState extends State<DetalhesChamadoScreen> {
                   padding: const EdgeInsets.only(top: kSpacingXXSmall),
                   child: Text( sys ? "Sistema - $dtHr" : "$a - $dtHr", style: Theme.of(context).textTheme.bodySmall?.copyWith(color: sys ? Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8) : null, fontSize: 11))),
                 dense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: kSpacingXSmall -2, horizontal: kSpacingSmall),
+                contentPadding: const EdgeInsets.symmetric(vertical: kSpacingXSmall -2, horizontal: kSpacingSmall),
               ),
             );
           }).toList(),
@@ -979,7 +979,7 @@ class _ChamadoInfoBody extends StatelessWidget {
           : Colors.white;
     }
 
-    final Color statusColor = AppTheme.getStatusColor(status) ?? t.colorScheme.surfaceVariant;
+    final Color statusColor = AppTheme.getStatusColor(status) ?? t.colorScheme.surfaceContainerHighest;
     final Color priorityColor = AppTheme.getPriorityColor(prioridade) ?? t.colorScheme.secondary;
 
     return Padding(
@@ -1120,7 +1120,7 @@ class _ChamadoInfoBody extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: kSpacingSmall),
               child: Center(
                 child: Chip(
-                  label: Text('CHAMADO INATIVO (APENAS ADMINS VÊEM)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                  label: const Text('CHAMADO INATIVO (APENAS ADMINS VÊEM)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                   backgroundColor: Colors.red.shade700,
                   padding: const EdgeInsets.symmetric(horizontal: kSpacingSmall, vertical: kSpacingXSmall -2),
                 ),

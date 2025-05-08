@@ -138,7 +138,7 @@ class _HorizontalDateSelectorState extends State<HorizontalDateSelector> {
     } else if (isToday) {
       // Hoje (não selecionado): Cor variante da superfície com borda sutil
       itemDecoration = BoxDecoration(
-        color: colorScheme.surfaceVariant.withOpacity(0.6),
+        color: colorScheme.surfaceContainerHighest.withOpacity(0.6),
         borderRadius: BorderRadius.circular(8.0),
         border: Border.all(color: colorScheme.outline.withOpacity(0.5), width: 1.0),
       );
@@ -182,7 +182,7 @@ class _HorizontalDateSelectorState extends State<HorizontalDateSelector> {
         // O Container interno contém o conteúdo visual e a decoração
         child: Container(
           width: _itemWidth,
-          margin: EdgeInsets.symmetric(horizontal: _itemHorizontalMargin),
+          margin: const EdgeInsets.symmetric(horizontal: _itemHorizontalMargin),
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           decoration: itemDecoration, // Aplica a decoração calculada acima
           child: Column(
@@ -224,7 +224,7 @@ class _HorizontalDateSelectorState extends State<HorizontalDateSelector> {
       horizontalPadding = horizontalPadding.clamp(8.0, double.infinity);
 
     // Container principal que define a altura do seletor
-    return Container(
+    return SizedBox(
       height: 75,
       // ListView horizontal para exibir os itens de data
       child: ListView.builder(

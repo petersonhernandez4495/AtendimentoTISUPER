@@ -14,7 +14,7 @@ class GradientBackgroundContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration( // Removido o 'const' para permitir cores dinâmicas do tema
+      decoration: const BoxDecoration( // Removido o 'const' para permitir cores dinâmicas do tema
         gradient: LinearGradient(
           // Cores atualizadas para corresponder ao gradiente da ListaChamadosScreen
           colors: [
@@ -23,7 +23,7 @@ class GradientBackgroundContainer extends StatelessWidget {
           ],
           // Opcional: adicione os 'stops' se quiser controlar a transição do gradiente
           // como fizemos na ListaChamadosScreen. Se omitido, a transição é linear.
-          stops: const [0.0, 0.8], // Exemplo: Cinza no topo, transição completa para branco em 70%
+          stops: [0.0, 0.8], // Exemplo: Cinza no topo, transição completa para branco em 70%
                                   // Ajuste ou remova esta linha conforme sua preferência.
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,

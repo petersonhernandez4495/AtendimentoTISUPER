@@ -1,6 +1,5 @@
 // lib/services/pdf_handler_service.dart (CORRIGIDO - v2)
 
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // Para debugPrint
 

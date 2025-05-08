@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 // import 'cadastro_screen.dart';
 
 // --- IMPORT TELA PRINCIPAL ---
-import '/main_navigation_screen.dart'; // Ajuste o caminho se necessário
+// Ajuste o caminho se necessário
 // --- FIM IMPORT ---
 
 class LoginScreen extends StatefulWidget {

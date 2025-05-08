@@ -127,7 +127,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
       if (!email.toLowerCase().endsWith(dominioPermitido)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar( SnackBar( content: Text('Cadastro permitido apenas para emails $dominioPermitido'), backgroundColor: Colors.orange[800]));
+          ScaffoldMessenger.of(context).showSnackBar( SnackBar( content: const Text('Cadastro permitido apenas para emails $dominioPermitido'), backgroundColor: Colors.orange[800]));
         }
         return;
       }

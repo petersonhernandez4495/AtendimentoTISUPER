@@ -1,4 +1,3 @@
-// lib/main_navigation_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,7 +17,8 @@ import 'agenda_screen.dart';
 import 'profile_screen.dart';
 import 'user_management_screen.dart';
 import 'login_screen.dart';
-import 'chamados_arquivados_screen.dart'; // Importe a tela de arquivados
+import 'chamados_arquivados_screen.dart';
+import 'screens/tutorial_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -31,17 +31,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   bool _isAdmin = false;
   bool _isLoadingRole = true;
   User? _firebaseUserInstance;
-
   String _globalSearchQuery = "";
 
-  // CORRIGIDO: Passa searchQuery para ListaChamadosArquivadosScreen também
   List<Widget> get _adminScreens => [
         ListaChamadosScreen(key: ValueKey('admin_chamados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
         const NovoChamadoScreen(key: ValueKey('admin_novo_chamado')),
         const AgendaScreen(key: ValueKey('admin_agenda')),
         const ProfileScreen(key: ValueKey('admin_perfil')),
         const UserManagementScreen(key: ValueKey('admin_user_management')),
-        ListaChamadosArquivadosScreen(key: ValueKey('admin_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery), // Passa a query
+        ListaChamadosArquivadosScreen(key: ValueKey('admin_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        const TutorialScreen(key: ValueKey('admin_tutoriais')),
       ];
 
   List<Widget> get _userScreens => [
@@ -50,15 +49,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         const AgendaScreen(key: ValueKey('user_agenda')),
         const ProfileScreen(key: ValueKey('user_perfil')),
         Container(key: const ValueKey('user_placeholder_admin_only')),
-        ListaChamadosArquivadosScreen(key: ValueKey('user_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery), // Passa a query
+        ListaChamadosArquivadosScreen(key: ValueKey('user_arquivados_$_globalSearchQuery'), searchQuery: _globalSearchQuery),
+        const TutorialScreen(key: ValueKey('user_tutoriais')),
       ];
 
-  List<Widget> get _currentScreenOptions =>
-      _isAdmin ? _adminScreens : _userScreens;
+  List<Widget> get _currentScreenOptions => _isAdmin ? _adminScreens : _userScreens;
 
   @override
   void initState() {
-    // ... (seu initState existente) ...
     super.initState();
     _firebaseUserInstance = FirebaseAuth.instance.currentUser;
     _checkUserRole();
@@ -70,9 +68,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<void> _checkUserRole() async {
-    // ... (seu código _checkUserRole existente) ...
-        final User? currentUserFromAuth = FirebaseAuth.instance.currentUser;
-    if (mounted) { // Verifica se o widget ainda está montado
+    final User? currentUserFromAuth = FirebaseAuth.instance.currentUser;
+    if (mounted) {
       setState(() {
         _firebaseUserInstance = currentUserFromAuth;
       });
@@ -81,15 +78,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     bool isAdminResult = false;
     if (currentUserFromAuth != null) {
       try {
-        // Use suas constantes aqui após centralizar
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users') // Use kCollectionUsers
+            .collection('users')
             .doc(currentUserFromAuth.uid)
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          // Use kFieldUserRole
           if (userData.containsKey('role_temp') && userData['role_temp'] == 'admin') {
+            isAdminResult = true;
+          } else if (userData.containsKey('role') && userData['role'] == 'admin') {
             isAdminResult = true;
           }
         }
@@ -98,33 +95,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         isAdminResult = false;
       }
     }
-    if (mounted) { // Verifica novamente antes de chamar setState
+    if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
         _isLoadingRole = false;
-        if (_selectedIndex >= _currentScreenOptions.length || _selectedIndex < 0) {
-          _selectedIndex = 0; // Garante que o índice seja válido
+        if (_selectedIndex >= _currentScreenOptions.length || _selectedIndex < 0 || (!_isAdmin && _selectedIndex == 4)) {
+          _selectedIndex = 0;
         }
       });
     }
   }
 
   Future<void> _verificarAtualizacoesApp() async {
-    // ... (seu código _verificarAtualizacoesApp existente) ...
-        const String versionUrl =
+    const String versionUrl =
         'https://raw.githubusercontent.com/petersonhernandez4495/AtendimentoTISUPER/refs/heads/main/atendimento_ti_seduc/updates/versao.json';
     try {
       final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      final String buildNumber =
-          packageInfo.buildNumber.isNotEmpty ? packageInfo.buildNumber : "0";
-      final Version currentVersion =
-          Version.parse("${packageInfo.version}+$buildNumber");
+      final String buildNumber = packageInfo.buildNumber.isNotEmpty ? packageInfo.buildNumber : "0";
+      final Version currentVersion = Version.parse("${packageInfo.version}+$buildNumber");
 
       final response = await http.get(Uri.parse(versionUrl));
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
-        final String? latestVersionStr =
-            jsonResponse['latestSemanticVersion'] as String?;
+        final String? latestVersionStr = jsonResponse['latestSemanticVersion'] as String?;
         final String? releaseNotes = jsonResponse['releaseNotes'] as String?;
         final String? downloadUrl = jsonResponse['downloadUrl'] as String?;
 
@@ -135,8 +128,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         final Version latestVersion = Version.parse(latestVersionStr);
         if (latestVersion > currentVersion) {
           if (mounted) {
-            _mostrarDialogoAtualizacao(
-                latestVersionStr, releaseNotes ?? "Sem notas de versão.", downloadUrl);
+            _mostrarDialogoAtualizacao(latestVersionStr, releaseNotes ?? "Sem notas de versão.", downloadUrl);
           }
         }
       }
@@ -145,10 +137,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> _mostrarDialogoAtualizacao(
-      String newVersion, String notes, String url) async {
-    // ... (seu código _mostrarDialogoAtualizacao existente) ...
-        if (!mounted) return;
+  Future<void> _mostrarDialogoAtualizacao(String newVersion, String notes, String url) async {
+    if (!mounted) return;
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -160,8 +150,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                    'Uma nova versão do aplicativo está disponível. Notas da versão:'),
+                const Text('Uma nova versão do aplicativo está disponível. Notas da versão:'),
                 const SizedBox(height: 15),
                 Text(notes, style: const TextStyle(fontSize: 13)),
               ],
@@ -189,8 +178,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<void> _abrirUrlDownload(String url) async {
-    // ... (seu código _abrirUrlDownload existente) ...
-        final Uri uri = Uri.parse(url);
+    final Uri uri = Uri.parse(url);
     if (!await canLaunchUrl(uri)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -211,31 +199,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _onDestinationSelected(int newScreenIndex) {
-    // ... (seu código _onDestinationSelected existente, com a limpeza de _globalSearchQuery) ...
-        final optionsLength = _currentScreenOptions.length;
+    final optionsLength = _currentScreenOptions.length;
     if (newScreenIndex >= 0 && newScreenIndex < optionsLength) {
+       if (newScreenIndex == 4 && !_isAdmin) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('Acesso restrito a administradores.')),
+           );
+          return;
+       }
       if (mounted) {
         setState(() {
           _selectedIndex = newScreenIndex;
-          // Limpa a pesquisa se o usuário navegar para uma tela que não seja
-          // a de chamados (índice 0) ou arquivados (índice 5) E havia uma pesquisa.
           if (_globalSearchQuery.isNotEmpty && newScreenIndex != 0 && newScreenIndex != 5) {
             _globalSearchQuery = "";
           }
         });
       }
     } else {
-      if (mounted) {
-        setState(() {
-          _selectedIndex = 0; // Fallback seguro
-        });
+      if (mounted && _selectedIndex != 0) {
+         setState(() {
+           _selectedIndex = 0;
+         });
       }
     }
   }
 
   Future<void> _fazerLogout(BuildContext context) async {
-    // ... (seu código _fazerLogout existente) ...
-        bool confirmar = await showDialog<bool>(
+    bool confirmar = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Confirmar Logout'),
@@ -246,7 +236,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   child: const Text('Cancelar')),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Sair', style: TextStyle(color: AppTheme.kErrorColor)),
+                child: const Text('Sair', style: TextStyle(color: AppTheme.kErrorColor)),
               ),
             ],
           ),
@@ -271,14 +261,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _handleSearchQueryChanged(String query) {
-    // ... (seu código _handleSearchQueryChanged existente) ...
-        if (mounted) {
+     if (mounted) {
       setState(() {
         _globalSearchQuery = query;
-        // Se o usuário está digitando e não está na tela de chamados (índice 0),
-        // ou arquivados (índice 5), navega para a tela de chamados ativos.
         if (_selectedIndex != 0 && _selectedIndex != 5 && query.isNotEmpty) {
-          _onDestinationSelected(0); // Chama o método que já tem setState e lógica de limpeza
+           _selectedIndex = 0;
         }
       });
     }
@@ -286,19 +273,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (seu código build existente, passando os callbacks e a query para SideMenu e usando _currentScreenOptions) ...
-        final BorderRadius contentBorderRadius = BorderRadius.circular(12.0);
+    final BorderRadius contentBorderRadius = BorderRadius.circular(12.0);
+    int effectiveIndex = _selectedIndex;
 
-    int effectiveSelectedIndex = _selectedIndex;
-    if (_selectedIndex >= _currentScreenOptions.length || _selectedIndex < 0) {
-      effectiveSelectedIndex = 0;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _selectedIndex != effectiveSelectedIndex) {
-          setState(() {
-            _selectedIndex = effectiveSelectedIndex;
-          });
-        }
-      });
+    if (_isLoadingRole) {
+       effectiveIndex = 0;
+    } else {
+      final optionsLength = _currentScreenOptions.length;
+      if (_selectedIndex < 0 || _selectedIndex >= optionsLength || (!_isAdmin && _selectedIndex == 4) ) {
+         effectiveIndex = 0;
+         WidgetsBinding.instance.addPostFrameCallback((_) {
+           if (mounted && _selectedIndex != effectiveIndex) {
+              setState(() {
+               _selectedIndex = effectiveIndex;
+             });
+           }
+         });
+      } else {
+        effectiveIndex = _selectedIndex;
+      }
     }
 
     if (_isLoadingRole) {
@@ -313,7 +306,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             SideMenu(
-              selectedIndex: effectiveSelectedIndex,
+              selectedIndex: effectiveIndex,
               onDestinationSelected: _onDestinationSelected,
               onLogout: () => _fazerLogout(context),
               isAdminUser: _isAdmin,
@@ -341,13 +334,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   borderRadius: contentBorderRadius,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
-                    transitionBuilder:
-                        (Widget child, Animation<double> animation) {
+                    transitionBuilder: (Widget child, Animation<double> animation) {
                       return FadeTransition(opacity: animation, child: child);
                     },
                     child: IndexedStack(
-                      key: ValueKey<int>(effectiveSelectedIndex),
-                      index: effectiveSelectedIndex,
+                      key: ValueKey<int>(effectiveIndex),
+                      index: effectiveIndex,
                       children: _currentScreenOptions,
                     ),
                   ),

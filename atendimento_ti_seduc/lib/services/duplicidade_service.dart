@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Importe suas constantes, se necessário
 import '../novo_chamado_screen.dart'; // Temporário para constantes
+import 'chamado_service.dart';
 
 class DuplicidadeService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -13,8 +14,10 @@ class DuplicidadeService {
   /// Retorna o ID do chamado duplicado se encontrado, caso contrário null.
   Future<String?> verificarDuplicidade({
     required String patrimonio,
-    required String problemaSelecionado, // O valor do dropdown ('TELA AZUL', 'OUTRO', etc)
-    required String problemaOutroDescricao, // O texto do campo 'Descreva o problema'
+    required String
+        problemaSelecionado, // O valor do dropdown ('TELA AZUL', 'OUTRO', etc)
+    required String
+        problemaOutroDescricao, // O texto do campo 'Descreva o problema'
   }) async {
     if (patrimonio.isEmpty) {
       print("Verificação de duplicidade pulada: Patrimônio vazio.");
@@ -31,11 +34,13 @@ class DuplicidadeService {
       return null; // Não podemos verificar sem o problema
     }
 
-    print("Verificando duplicidade para Patrimônio: '$patrimonio', Problema: '$problemaBusca'");
+    print(
+        "Verificando duplicidade para Patrimônio: '$patrimonio', Problema: '$problemaBusca'");
 
     try {
       // Query baseada no patrimônio e status ativo
-       Query query = _db.collection(kCollectionChamados)
+      Query query = _db
+          .collection(kCollectionChamados)
           .where('numero_patrimonio', isEqualTo: patrimonio)
           .where('status', whereIn: ['aberto', 'em_andamento']);
 
@@ -43,8 +48,9 @@ class DuplicidadeService {
       // Usando Filter.or para combinar as condições
       query = query.where(Filter.or(
           Filter('problema_ocorre', isEqualTo: problemaBusca),
-          Filter(kFieldProblemaOutro, isEqualTo: problemaBusca) // Usa a constante
-      ));
+          Filter(kFieldProblemaOutro,
+              isEqualTo: problemaBusca) // Usa a constante
+          ));
 
       final QuerySnapshot snapshot = await query.limit(1).get();
 

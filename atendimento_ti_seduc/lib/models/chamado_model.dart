@@ -10,16 +10,19 @@ class Chamado {
   final String id;
   final String? tipoSolicitante;
   final String? nomeSolicitante;
-  final String? emailSolicitante; // Certifique-se que este campo existe no Firestore se for usar
+  final String?
+      emailSolicitante; // Certifique-se que este campo existe no Firestore se for usar
   final String? celularContato;
   final String? cidade;
-  final String? instituicao; // Pode ser o nome da escola ou "OUTRO (Ver Manual)"
+  final String?
+      instituicao; // Pode ser o nome da escola ou "OUTRO (Ver Manual)"
   final String? instituicaoManual;
   final String? cargoSolicitante; // Mapeado de kFieldCargoFuncao
   final String? atendimentoPara;
   final String? setorSuperintendencia; // Mapeado de kFieldSetorSuper
   final String? cidadeSuperintendencia;
-  final String? equipamentoSelecionado; // Mapeado de kFieldEquipamentoSolicitacao
+  final String?
+      equipamentoSelecionado; // Mapeado de kFieldEquipamentoSolicitacao
   final String? equipamentoOutro;
   final String? internetConectada; // Mapeado de kFieldConectadoInternet
   final String? marcaModelo;
@@ -38,7 +41,8 @@ class Chamado {
   final String? solucaoPorUid;
   final String? solucaoPorNome;
   final Timestamp? dataSolucao; // Mapeado de kFieldDataDaSolucao
-  final bool? requerenteConfirmouSolucao; // Mapeado de kFieldRequerenteConfirmou
+  final bool?
+      requerenteConfirmouSolucao; // Mapeado de kFieldRequerenteConfirmou
   final String? requerenteConfirmouUid;
   final Timestamp? requerenteConfirmouData;
   final String? nomeRequerenteConfirmador;
@@ -47,7 +51,7 @@ class Chamado {
   final String? adminFinalizouNome;
   final Timestamp? adminFinalizouData;
   final bool? adminInativo; // Mapeado de kFieldAdminInativo
-
+  final String? unidadeOrganizacionalChamado;
   Chamado({
     required this.id,
     this.tipoSolicitante,
@@ -89,6 +93,7 @@ class Chamado {
     this.adminFinalizouNome,
     this.adminFinalizouData,
     this.adminInativo,
+    this.unidadeOrganizacionalChamado,
   });
 
   factory Chamado.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -106,38 +111,49 @@ class Chamado {
       cidade: data[kFieldCidade] as String?,
       instituicao: data[kFieldInstituicao] as String?,
       instituicaoManual: data[kFieldInstituicaoManual] as String?,
-      cargoSolicitante: data[kFieldCargoFuncao] as String?, // Usando constante do service
+      cargoSolicitante:
+          data[kFieldCargoFuncao] as String?, // Usando constante do service
       atendimentoPara: data[kFieldAtendimentoPara] as String?,
       setorSuperintendencia: data[kFieldSetorSuper] as String?,
       cidadeSuperintendencia: data[kFieldCidadeSuperintendencia] as String?,
-      equipamentoSelecionado: data[kFieldEquipamentoSolicitacao] as String?, // Usando constante do service
+      equipamentoSelecionado: data[kFieldEquipamentoSolicitacao]
+          as String?, // Usando constante do service
       equipamentoOutro: data[kFieldEquipamentoOutro] as String?,
-      internetConectada: data[kFieldConectadoInternet] as String?, // Usando constante do service
+      internetConectada: data[kFieldConectadoInternet]
+          as String?, // Usando constante do service
       marcaModelo: data[kFieldMarcaModelo] as String?,
       patrimonio: data[kFieldPatrimonio] as String?,
-      problemaSelecionado: data[kFieldProblemaOcorre] as String?, // Usando constante do service
+      problemaSelecionado:
+          data[kFieldProblemaOcorre] as String?, // Usando constante do service
       problemaOutro: data[kFieldProblemaOutro] as String?,
       status: data[kFieldStatus] as String? ?? 'Desconhecido',
       prioridade: data[kFieldPrioridade] as String?,
-      dataAbertura: data[kFieldDataCriacao] as Timestamp? ?? Timestamp.now(), // Usando constante do service
+      dataAbertura: data[kFieldDataCriacao] as Timestamp? ??
+          Timestamp.now(), // Usando constante do service
       dataAtualizacao: data[kFieldDataAtualizacao] as Timestamp?,
       dataAtendimento: data[kFieldDataAtendimento] as Timestamp?,
-      solicitanteUid: data[kFieldCreatorUid] as String?, // Usando constante do service
+      solicitanteUid:
+          data[kFieldCreatorUid] as String?, // Usando constante do service
       tecnicoResponsavelNome: data[kFieldTecnicoResponsavel] as String?,
       tecnicoUid: data[kFieldTecnicoUid] as String?,
       solucao: data[kFieldSolucao] as String?,
       solucaoPorUid: data[kFieldSolucaoPorUid] as String?,
       solucaoPorNome: data[kFieldSolucaoPorNome] as String?,
-      dataSolucao: data[kFieldDataDaSolucao] as Timestamp?, // Usando constante do service
+      dataSolucao: data[kFieldDataDaSolucao]
+          as Timestamp?, // Usando constante do service
       requerenteConfirmouSolucao: data[kFieldRequerenteConfirmou] as bool?,
       requerenteConfirmouUid: data[kFieldRequerenteConfirmouUid] as String?,
-      requerenteConfirmouData: data[kFieldRequerenteConfirmouData] as Timestamp?,
-      nomeRequerenteConfirmador: data[kFieldNomeRequerenteConfirmador] as String?,
+      requerenteConfirmouData:
+          data[kFieldRequerenteConfirmouData] as Timestamp?,
+      nomeRequerenteConfirmador:
+          data[kFieldNomeRequerenteConfirmador] as String?,
       adminFinalizouChamado: data[kFieldAdminFinalizou] as bool?,
       adminFinalizouUid: data[kFieldAdminFinalizouUid] as String?,
       adminFinalizouNome: data[kFieldAdminFinalizouNome] as String?,
       adminFinalizouData: data[kFieldAdminFinalizouData] as Timestamp?,
       adminInativo: data[kFieldAdminInativo] as bool?,
+      unidadeOrganizacionalChamado:
+          data[kFieldUnidadeOrganizacionalChamado] as String?,
     );
   }
 
@@ -146,20 +162,22 @@ class Chamado {
     bool fieldContainsQuery(String? fieldValue) {
       return fieldValue?.toLowerCase().contains(queryLower) ?? false;
     }
+
     // Adicione todos os campos que você quer que sejam pesquisáveis
     return id.toLowerCase().contains(queryLower) ||
-           fieldContainsQuery(nomeSolicitante) ||
-           fieldContainsQuery(emailSolicitante) ||
-           fieldContainsQuery(patrimonio) ||
-           fieldContainsQuery(instituicao) ||
-           fieldContainsQuery(instituicaoManual) ||
-           fieldContainsQuery(equipamentoSelecionado) ||
-           fieldContainsQuery(equipamentoOutro) ||
-           fieldContainsQuery(problemaSelecionado) ||
-           fieldContainsQuery(problemaOutro) ||
-           fieldContainsQuery(marcaModelo) ||
-           fieldContainsQuery(status) || // Usa o campo status da classe
-           fieldContainsQuery(tecnicoResponsavelNome) ||
-           fieldContainsQuery(solucao);
+        fieldContainsQuery(nomeSolicitante) ||
+        fieldContainsQuery(emailSolicitante) ||
+        fieldContainsQuery(patrimonio) ||
+        fieldContainsQuery(instituicao) ||
+        fieldContainsQuery(instituicaoManual) ||
+        fieldContainsQuery(unidadeOrganizacionalChamado) ||
+        fieldContainsQuery(equipamentoSelecionado) ||
+        fieldContainsQuery(equipamentoOutro) ||
+        fieldContainsQuery(problemaSelecionado) ||
+        fieldContainsQuery(problemaOutro) ||
+        fieldContainsQuery(marcaModelo) ||
+        fieldContainsQuery(status) || // Usa o campo status da classe
+        fieldContainsQuery(tecnicoResponsavelNome) ||
+        fieldContainsQuery(solucao);
   }
 }

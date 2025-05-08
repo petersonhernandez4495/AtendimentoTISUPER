@@ -38,12 +38,11 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   bool _isAdmin = false;
   bool _isLoadingRole = true;
   User? _currentUser;
-  // String? _currentUserInstitution; // Removido pois a lógica de instituição foi alterada
+  String? _currentUserInstitution;
 
   List<Chamado> _ultimosChamadosFiltradosParaExibicao = [];
 
   // Constantes de status e ordenação
-  // Usa as constantes definidas em chamado_service.dart
   final List<String> _statusOptions = [
     kStatusAberto,
     kStatusEmAndamento,
@@ -77,49 +76,61 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
 
   String? _confirmingChamadoId;
   bool _isConfirmingAcceptance = false;
-  String? _idChamadoGerandoPdf; // Usado para controlar o loading do PDF no item
+  String? _idChamadoGerandoPdf;
   String? _idChamadoFinalizandoDaLista;
   bool _isLoadingFinalizarDaLista = false;
 
-  // --- Métodos do Ciclo de Vida ---
+  // Constante para ID de documento inexistente para queries "dummy"
+  static const String _dummyNonExistentDocId =
+      'dummy_id_para_nao_retornar_documentos_firestore_xyz123';
+
   @override
   void initState() {
     super.initState();
     _searchLogic = ChamadoSearchLogic();
-    _selectedSortOption = _sortOptions[0]; // Padrão: Mais recentes
+    _selectedSortOption = _sortOptions[0];
     _checkUserRole();
   }
 
-  // --- Métodos de Lógica ---
   Future<void> _checkUserRole() async {
     if (!mounted) return;
     setState(() => _isLoadingRole = true);
     User? user = _auth.currentUser;
     bool isAdminResult = false;
-    // String? userInstitutionResult; // Removido
+    String? userInstitutionResult;
 
     if (user != null) {
       _currentUser = user;
+      print("DEBUG: Usuário logado: ${user.email} (UID: ${user.uid})");
       try {
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection(kCollectionUsers) // Constante importada
+            .collection(kCollectionUsers)
             .doc(user.uid)
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          isAdminResult =
-              (userData[kFieldUserRole] == 'admin'); // Constante importada
-          // A lógica para buscar a instituição do usuário foi removida daqui
-          // pois não será mais usada na query principal de chamados para não-admins.
-          // Se _currentUserInstitution fosse usada em outro lugar, a remoção completa
-          // precisaria de mais análise.
+          isAdminResult = (userData[kFieldUserRole] == 'admin');
+          print("DEBUG: Usuário é admin? $isAdminResult");
+
+          if (!isAdminResult) {
+            userInstitutionResult = userData[kFieldUserInstituicao] as String?;
+            if (userInstitutionResult != null &&
+                userInstitutionResult.isEmpty) {
+              userInstitutionResult = null;
+            }
+            print(
+                "DEBUG: Instituição do perfil do usuário: '$userInstitutionResult'");
+          }
         } else {
-          // Usuário não encontrado no Firestore ou sem dados
           isAdminResult = false;
+          userInstitutionResult = null;
+          print(
+              "DEBUG: Documento do usuário não encontrado no Firestore ou sem dados.");
         }
       } catch (e) {
-        // Erro ao buscar dados do usuário
         isAdminResult = false;
+        userInstitutionResult = null;
+        print("DEBUG: Erro ao verificar permissões do usuário: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -128,15 +139,16 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
         }
       }
     } else {
-      // Usuário não logado
       _currentUser = null;
       isAdminResult = false;
+      userInstitutionResult = null;
+      print("DEBUG: Nenhum usuário logado.");
     }
 
     if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
-        // _currentUserInstitution = userInstitutionResult; // Removido
+        _currentUserInstitution = userInstitutionResult;
         _isLoadingRole = false;
       });
     }
@@ -146,54 +158,68 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     return _selectedStatusFilter != null ||
         _selectedDateFilter != null ||
         (_selectedSortOption['field'] != kFieldDataCriacao ||
-            _selectedSortOption['descending'] !=
-                true) || // Verifica se não é o sort padrão
+            _selectedSortOption['descending'] != true) ||
         widget.searchQuery.isNotEmpty;
   }
 
   Query _buildFirestoreQuery() {
     Query query = FirebaseFirestore.instance.collection(kCollectionChamados);
+    print("DEBUG: _buildFirestoreQuery INICIADO.");
 
     if (_isLoadingRole) {
-      // Retorna uma query que não trará resultados enquanto o papel do usuário está sendo carregado
-      return query.where('__inexistente__', isEqualTo: '__aguardando_role__');
+      print("DEBUG: _buildFirestoreQuery: Aguardando papel do usuário.");
+      // Retorna uma query válida que não encontrará documentos
+      return query.where(FieldPath.documentId,
+          isEqualTo: _dummyNonExistentDocId);
     }
     if (_currentUser == null && !_isAdmin) {
-      // Retorna uma query que não trará resultados se não houver usuário logado e não for admin
-      return query.where('__inexistente__',
-          isEqualTo: '__sem_resultados_user_null__');
+      print("DEBUG: _buildFirestoreQuery: Usuário não logado e não é admin.");
+      // Retorna uma query válida que não encontrará documentos
+      return query.where(FieldPath.documentId,
+          isEqualTo: _dummyNonExistentDocId);
     }
 
-    // Lógica para usuários NÃO administradores
     if (!_isAdmin && _currentUser != null) {
-      // Usuário não admin vê apenas os seus próprios chamados.
-      query = query.where(kFieldCreatorUid, isEqualTo: _currentUser!.uid);
-
-      // Aplica filtro de status padrão para requisitante (não vê finalizados/solucionados por padrão)
-      // ou o filtro de status selecionado pelo usuário.
-      if (_selectedStatusFilter == null) {
-        query = query.where(kFieldStatus, whereIn: _statusAtivosRequisitante);
+      print(
+          "DEBUG: _buildFirestoreQuery: Usuário NÃO é admin. Instituição do usuário: '$_currentUserInstitution'");
+      if (_currentUserInstitution == null || _currentUserInstitution!.isEmpty) {
+        print(
+            "DEBUG: _buildFirestoreQuery: Usuário sem instituição definida no perfil.");
+        // Retorna uma query válida que não encontrará documentos
+        return query.where(FieldPath.documentId,
+            isEqualTo: _dummyNonExistentDocId);
       } else {
-        query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
+        print(
+            "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldUnidadeOrganizacionalChamado == '$_currentUserInstitution'");
+        query = query.where(kFieldUnidadeOrganizacionalChamado,
+            isEqualTo: _currentUserInstitution);
+
+        if (_selectedStatusFilter == null) {
+          print(
+              "DEBUG: _buildFirestoreQuery: Filtrando por status em _statusAtivosRequisitante: $_statusAtivosRequisitante");
+          query = query.where(kFieldStatus, whereIn: _statusAtivosRequisitante);
+        } else {
+          print(
+              "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldStatus == '$_selectedStatusFilter'");
+          query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
+        }
+        print(
+            "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldAdminInativo == false");
+        query = query.where(kFieldAdminInativo, isEqualTo: false);
       }
-      // Todos os não-admins não veem chamados inativos administrativamente
-      query = query.where(kFieldAdminInativo, isEqualTo: false);
-
-      // Lógica para administradores
     } else if (_isAdmin) {
-      // Admin vê todos os chamados (respeitando filtros de status e data)
-      // Por padrão, admin não vê 'Finalizado', a menos que filtre especificamente por esse status
+      print("DEBUG: _buildFirestoreQuery: Usuário é ADMIN.");
       if (_selectedStatusFilter != null) {
+        print(
+            "DEBUG: _buildFirestoreQuery (Admin): Filtrando por $kFieldStatus == '$_selectedStatusFilter'");
         query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
       } else {
-        // Se nenhum filtro de status específico for aplicado pelo admin,
-        // ele não verá os chamados com status 'Finalizado'.
-        // Para ver os finalizados, o admin deve explicitamente filtrar por 'Finalizado'.
+        print(
+            "DEBUG: _buildFirestoreQuery (Admin): Filtrando por $kFieldStatus NOT IN ['$kStatusFinalizado']");
         query = query.where(kFieldStatus, whereNotIn: [kStatusFinalizado]);
       }
     }
 
-    // Aplica filtro de data de criação, se selecionado
     if (_selectedDateFilter != null) {
       final DateTime startOfDay = DateTime(_selectedDateFilter!.year,
           _selectedDateFilter!.month, _selectedDateFilter!.day, 0, 0, 0);
@@ -205,26 +231,26 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
           59,
           59,
           999);
+      print(
+          "DEBUG: _buildFirestoreQuery: Filtrando por data entre $startOfDay e $endOfDay");
       query = query.where(kFieldDataCriacao,
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
           isLessThanOrEqualTo: Timestamp.fromDate(endOfDay));
     }
 
-    // Aplica ordenação
     final String sortField = _selectedSortOption['field'] as String;
     final bool sortDescending = _selectedSortOption['descending'] as bool;
+    print(
+        "DEBUG: _buildFirestoreQuery: Ordenando por '$sortField' ${sortDescending ? 'DESC' : 'ASC'}");
     query = query.orderBy(sortField, descending: sortDescending);
 
-    // Adiciona ordenação secundária por data para consistência se a primária não for data
-    // Isso ajuda a evitar problemas com cursores do Firestore se múltiplos documentos tiverem o mesmo valor no campo de ordenação primário.
     if (sortField != kFieldDataCriacao) {
-      query = query.orderBy(kFieldDataCriacao,
-          descending: true); // Ou false, dependendo da consistência desejada
+      print(
+          "DEBUG: _buildFirestoreQuery: Ordenação secundária por '$kFieldDataCriacao' DESC");
+      query = query.orderBy(kFieldDataCriacao, descending: true);
     }
     return query;
   }
-
-  // --- Métodos de Ação e UI ---
 
   void _showFilterBottomSheet() {
     showModalBottomSheet<void>(
@@ -239,7 +265,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
             final colorScheme = theme.colorScheme;
             return DraggableScrollableSheet(
                 expand: false,
-                initialChildSize: 0.75, // Ajuste conforme necessário
+                initialChildSize: 0.75,
                 minChildSize: 0.4,
                 maxChildSize: 0.9,
                 builder: (_, scrollController) {
@@ -259,14 +285,11 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 style: theme.textTheme.titleLarge),
                             TextButton(
                               onPressed: () {
-                                // Limpa no setState principal da tela, não só do sheet
                                 setState(() {
                                   _selectedStatusFilter = null;
                                   _selectedDateFilter = null;
-                                  _selectedSortOption =
-                                      _sortOptions[0]; // Reset para o padrão
+                                  _selectedSortOption = _sortOptions[0];
                                 });
-                                // sheetSetState(() {}); // Não é mais necessário se o setState principal é chamado
                                 Navigator.pop(builderContext);
                               },
                               child: const Text('Limpar Tudo'),
@@ -287,15 +310,11 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                               label: Text(statusValue),
                               selected: isSelected,
                               onSelected: (selected) {
-                                // Atualiza o estado principal da tela
                                 setState(() {
                                   _selectedStatusFilter =
                                       selected ? statusValue : null;
                                 });
-                                // Atualiza o estado do BottomSheet
-                                sheetSetState(() {
-                                  // _selectedStatusFilter já foi atualizado pelo setState principal
-                                });
+                                sheetSetState(() {});
                               },
                               selectedColor: colorScheme.primaryContainer,
                               checkmarkColor: colorScheme.onPrimaryContainer,
@@ -328,8 +347,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 onPressed: () async {
                                   final DateTime? pickedDate =
                                       await showDatePicker(
-                                    context:
-                                        context, // Usar o context principal
+                                    context: context,
                                     initialDate:
                                         _selectedDateFilter ?? DateTime.now(),
                                     firstDate:
@@ -340,11 +358,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                   );
                                   if (pickedDate != null) {
                                     setState(() {
-                                      // Atualiza o estado principal
                                       _selectedDateFilter = pickedDate;
                                     });
-                                    sheetSetState(
-                                        () {}); // Atualiza o estado do sheet
+                                    sheetSetState(() {});
                                   }
                                 },
                               ),
@@ -359,11 +375,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 constraints: const BoxConstraints(),
                                 onPressed: () {
                                   setState(() {
-                                    // Atualiza o estado principal
                                     _selectedDateFilter = null;
                                   });
-                                  sheetSetState(
-                                      () {}); // Atualiza o estado do sheet
+                                  sheetSetState(() {});
                                 },
                               )
                             ]
@@ -385,11 +399,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                               onSelected: (selected) {
                                 if (selected) {
                                   setState(() {
-                                    // Atualiza o estado principal
                                     _selectedSortOption = option;
                                   });
-                                  sheetSetState(
-                                      () {}); // Atualiza o estado do sheet
+                                  sheetSetState(() {});
                                 }
                               },
                               selectedColor: colorScheme.primaryContainer,
@@ -444,11 +456,10 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
             ],
           ),
         ) ??
-        false; // Garante que não seja nulo
+        false;
 
     if (!confirmar || !mounted) return;
-    final scaffoldMessenger =
-        ScaffoldMessenger.of(context); // Captura antes do async
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       await _chamadoService.excluirChamado(chamadoId);
       if (mounted) {
@@ -526,9 +537,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       }
     }
   }
-  // Adicione os outros handlers (_handleGerarPdfOpcoes, etc.) aqui se necessário
 
-  // --- MÉTODO build() ---
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -547,16 +556,14 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                   Icons.filter_list_alt,
                   color: _isFilterActive
                       ? colorScheme.primary
-                      : AppTheme
-                          .kWinSecondaryText, // Verifique AppTheme.kWinSecondaryText
+                      : AppTheme.kWinSecondaryText,
                   size: 20,
                 ),
                 label: Text('Filtros',
                     style: TextStyle(
                         color: _isFilterActive
                             ? colorScheme.primary
-                            : AppTheme
-                                .kWinSecondaryText)), // Verifique AppTheme.kWinSecondaryText
+                            : AppTheme.kWinSecondaryText)),
                 onPressed: _showFilterBottomSheet,
                 style: TextButton.styleFrom(
                   padding:
@@ -574,6 +581,22 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                   builder: (BuildContext context,
                       AsyncSnapshot<QuerySnapshot> snapshot) {
                     if (snapshot.hasError) {
+                      print(
+                          "DEBUG: Erro no StreamBuilder: ${snapshot.error}"); // DEBUG
+                      // Não mostrar o erro de __inexistente__ diretamente ao usuário se for esse o caso,
+                      // pois a query dummy é interna. Mostrar uma mensagem genérica.
+                      if (snapshot.error
+                              .toString()
+                              .contains(_dummyNonExistentDocId) ||
+                          snapshot.error
+                              .toString()
+                              .contains('__inexistente__')) {
+                        return Center(
+                            child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text('Aguardando dados...',
+                                    textAlign: TextAlign.center)));
+                      }
                       return Center(
                           child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -581,25 +604,28 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                   textAlign: TextAlign.center)));
                     }
 
-                    // Mostra loading apenas na carga inicial e se não houver dados em cache ou filtros ativos
                     if (snapshot.connectionState == ConnectionState.waiting &&
                         _ultimosChamadosFiltradosParaExibicao.isEmpty &&
                         widget.searchQuery.isEmpty &&
                         _selectedStatusFilter == null &&
                         _selectedDateFilter == null) {
+                      print(
+                          "DEBUG: StreamBuilder em estado de espera (loading inicial).");
                       return const Center(child: CircularProgressIndicator());
                     }
 
                     List<Chamado> chamadosDoFirestore = [];
                     if (snapshot.hasData) {
+                      print(
+                          "DEBUG: StreamBuilder recebeu ${snapshot.data!.docs.length} documentos do Firestore.");
                       chamadosDoFirestore = snapshot.data!.docs
                           .map((doc) {
                             try {
-                              // Assegura que o doc é do tipo correto para fromFirestore
                               return Chamado.fromFirestore(doc
                                   as DocumentSnapshot<Map<String, dynamic>>);
-                            } catch (e) {
-                              // Logar erro se necessário, e.g., print('Erro ao converter chamado: $e, Doc ID: ${doc.id}');
+                            } catch (e, s) {
+                              print(
+                                  "DEBUG: Erro ao converter chamado (ID: ${doc.id}): $e\nStackTrace: $s");
                               return null;
                             }
                           })
@@ -609,7 +635,8 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                       _searchLogic.setChamadosSource(chamadosDoFirestore);
                     } else if (snapshot.connectionState !=
                         ConnectionState.waiting) {
-                      // Se não tem dados e não está esperando, usa la lista cacheada (pode estar vazia)
+                      print(
+                          "DEBUG: StreamBuilder não tem dados, mas não está em espera. Usando lista cacheada.");
                       _searchLogic.setChamadosSource(
                           _ultimosChamadosFiltradosParaExibicao);
                     }
@@ -617,10 +644,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                     _searchLogic.filterChamadosComQuery(widget.searchQuery);
                     _ultimosChamadosFiltradosParaExibicao =
                         _searchLogic.resultadosFiltrados;
+                    print(
+                        "DEBUG: Após filtro de pesquisa local, ${_ultimosChamadosFiltradosParaExibicao.length} chamados para exibição.");
 
                     if (_ultimosChamadosFiltradosParaExibicao.isEmpty) {
                       String msg = "Nenhum chamado encontrado.";
                       IconData icone = Icons.inbox_outlined;
+
                       if (_isFilterActive) {
                         msg =
                             'Nenhum chamado encontrado com os critérios aplicados.';
@@ -629,15 +659,23 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         }
                         icone = Icons.filter_alt_off_outlined;
                       } else if (!_isLoadingRole) {
-                        // Só define msg padrão se não estiver carregando role
-                        msg = _isAdmin
-                            ? 'Nenhum chamado ativo no sistema.'
-                            // Mensagem ajustada para refletir a nova lógica de visualização
-                            : 'Você não possui chamados ativos.';
-                        icone = _isAdmin
-                            ? Icons.inbox_outlined
-                            : Icons.assignment_late_outlined;
+                        if (_isAdmin) {
+                          msg = 'Nenhum chamado ativo no sistema.';
+                          icone = Icons.inbox_outlined;
+                        } else {
+                          if (_currentUserInstitution == null ||
+                              _currentUserInstitution!.isEmpty) {
+                            msg =
+                                'Sua instituição não está definida no perfil.\nNão é possível listar chamados.';
+                            icone = Icons.business_outlined;
+                          } else {
+                            msg =
+                                'Nenhum chamado encontrado para a sua instituição: "$_currentUserInstitution"';
+                            icone = Icons.assignment_late_outlined;
+                          }
+                        }
                       }
+                      print("DEBUG: Exibindo mensagem de lista vazia: $msg");
                       return Center(
                         child: Padding(
                           padding: const EdgeInsets.all(20.0),
@@ -663,9 +701,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       _selectedStatusFilter = null;
                                       _selectedDateFilter = null;
                                       _selectedSortOption = _sortOptions[0];
-                                      // A limpeza da searchQuery deve ser feita no widget pai que a controla (ex: MainNavigationScreen ou SideMenu)
-                                      // Se este widget pudesse limpar, seria: widget.searchQuery = ""; (mas props são finais)
-                                      // Ou chame um callback para o pai: widget.onClearSearch?.call();
                                     });
                                   },
                                 )
@@ -678,18 +713,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
 
                     return ListView.builder(
                       padding: const EdgeInsets.only(
-                          top: 8.0,
-                          left: 8.0,
-                          right: 8.0,
-                          bottom: 72.0), // Espaço para FAB
+                          top: 8.0, left: 8.0, right: 8.0, bottom: 72.0),
                       itemCount: _ultimosChamadosFiltradosParaExibicao.length,
                       itemBuilder: (BuildContext context, int index) {
                         final Chamado chamado =
                             _ultimosChamadosFiltradosParaExibicao[index];
                         final String chamadoId = chamado.id;
 
-                        // Tenta obter o DocumentSnapshot original para passar ao ChamadoListItem se possível
-                        // Isso é útil se ChamadoListItem espera um Map<String, dynamic> ou DocumentSnapshot
                         Map<String, dynamic> chamadoDataMap = {};
                         if (snapshot.hasData) {
                           DocumentSnapshot? originalDoc;
@@ -698,7 +728,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                               (doc) => doc.id == chamado.id,
                             );
                           } catch (e) {
-                            // firstWhere lança StateError se não encontrar
                             originalDoc = null;
                           }
 
@@ -709,28 +738,21 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                 originalDoc.data() as Map<String, dynamic>;
                           }
                         }
-                        // Fallback se não encontrar o doc original ou se precisar de campos do objeto Chamado
+
                         if (chamadoDataMap.isEmpty) {
-                          // Use o método toMap() do seu modelo Chamado se ele existir e for adequado
-                          // Exemplo: chamadoDataMap = chamado.toMap();
-                          // Ou preencha manualmente como antes, garantindo todos os campos necessários:
                           chamadoDataMap = {
-                            'id': chamado
-                                .id, // Adicione o ID se ChamadoListItem precisar
+                            'id': chamado.id,
                             'status': chamado.status,
                             'prioridade': chamado.prioridade,
-                            'data_criacao': chamado
-                                .dataAbertura, // ou dataCriacao se for o nome no modelo
+                            'data_criacao': chamado.dataAbertura,
                             'nome_solicitante': chamado.nomeSolicitante,
                             'patrimonio': chamado.patrimonio,
                             'problema_selecionado': chamado.problemaSelecionado,
                             'equipamento_selecionado':
                                 chamado.equipamentoSelecionado,
-                            'creatorUid':
-                                chamado.solicitanteUid, // ou creatorUid
-                            // Adicione outros campos que ChamadoListItem espera
-                            // Ex: 'unidadeOrganizacionalChamado': chamado.unidadeOrganizacional,
-                            // 'tecnico_responsavel': chamado.tecnicoResponsavel,
+                            'creatorUid': chamado.solicitanteUid,
+                            kFieldUnidadeOrganizacionalChamado:
+                                chamado.unidadeOrganizacionalChamado,
                           };
                         }
 
@@ -750,7 +772,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                   chamado.dataAbertura.millisecondsSinceEpoch
                                       .toString())),
                           chamadoId: chamadoId,
-                          chamadoData: chamadoDataMap, // Passa o Map construído
+                          chamadoData: chamadoDataMap,
                           currentUser: _currentUser,
                           isAdmin: _isAdmin,
                           onConfirmar: (id) {
@@ -777,15 +799,10 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       DetalhesChamadoScreen(chamadoId: id)),
                             ).then((_) {
                               if (mounted) setState(() {});
-                            }); // Atualiza a lista ao voltar
+                            });
                           },
-                          isLoadingPdfDownload:
-                              isLoadingPdfItem, // Necessita da variável de estado _idChamadoGerandoPdf
+                          isLoadingPdfDownload: isLoadingPdfItem,
                           onGerarPdfOpcoes: (id, data) {
-                            // Implementar lógica de _handleGerarPdfOpcoes ou similar
-                            // Exemplo: _handleGerarPdfOpcoes(id, data);
-                            // setState(() => _idChamadoGerandoPdf = id); // Para mostrar loading
-                            // Lembre-se de resetar _idChamadoGerandoPdf = null; no finally
                             print(
                                 'Gerar PDF para $id não implementado neste exemplo.');
                           },

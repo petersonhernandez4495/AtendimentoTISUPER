@@ -5,8 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:signature/signature.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image/image.dart' as img;
-
-// Importe suas constantes de serviço
 import '../services/chamado_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -20,15 +18,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _instituicaoManualController =
-      TextEditingController(); // Para cidade 'OUTRO'
+  final _instituicaoManualController = TextEditingController();
   String _currentEmail = '';
 
   User? _currentUser;
   Map<String, dynamic>? _userData;
 
-  // Estados para Dropdowns e Dados do Perfil
-  String? _userTipoSolicitante; // Armazena o tipo carregado do perfil
+  String? _userTipoSolicitante;
   List<String> _listaInstituicoes = [];
   String? _instituicaoSelecionada;
   bool _isLoadingInstituicoes = true;
@@ -37,18 +33,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _cargoSelecionado;
   bool _isLoadingCargos = true;
   String? _erroCarregarCargos;
-  List<String> _listaCidades = []; // Adicionado para o dropdown de cidade
-  String? _cidadeSelecionada; // Adicionado para o dropdown de cidade
-  bool _isLoadingCidades = true; // Adicionado
-  String? _erroCarregarCidades; // Adicionado
-  List<String> _instituicoesDisponiveis =
-      []; // Para filtrar instituições por cidade
-  List<String> _listaSetores = []; // Para tipo Superintendência
-  String? _setorSelecionado; // Para tipo Superintendência
-  bool _isLoadingSetores = true; // Adicionado
-  String? _erroCarregarSetores; // Adicionado
+  List<String> _listaCidades = [];
+  String? _cidadeSelecionada;
+  bool _isLoadingCidades = true;
+  String? _erroCarregarCidades;
+  List<String> _instituicoesDisponiveis = [];
+  List<String> _listaSetores = [];
+  String? _setorSelecionado;
+  bool _isLoadingSetores = true;
+  String? _erroCarregarSetores;
 
-  // Estados para Assinatura
+  List<String> _listaCidadesSuperintendenciaEdit = [];
+  String? _cidadeSuperintendenciaSelecionadaEdit;
+  bool _isLoadingCidadesSuperEdit = true;
+  String? _erroCarregarCidadesSuperEdit;
+
   String? _currentSignatureUrl;
   String? _newSignatureUrl;
   bool _isUploadingSignature = false;
@@ -56,12 +55,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   late final SignatureController _signatureController;
 
-  bool _isLoading = true; // Loading inicial da tela
-  bool _isSaving = false; // Loading ao salvar
+  bool _isLoading = true;
+  bool _isSaving = false;
 
   bool get _hasExistingSignature =>
       _currentSignatureUrl != null && _currentSignatureUrl!.isNotEmpty;
-  Map<String, List<String>> _escolasPorCidadeMap = {}; // Mapa para filtro
+  Map<String, List<String>> _escolasPorCidadeMap = {};
 
   @override
   void initState() {
@@ -84,80 +83,79 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     _currentUser = FirebaseAuth.instance.currentUser;
     if (_currentUser == null) {
-      /* ... (tratamento de erro) ... */ return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Usuário não autenticado. Por favor, faça login novamente.'),
+              backgroundColor: Colors.red),
+        );
+        Navigator.of(context).pop();
+      }
+      setState(() => _isLoading = false);
+      return;
     }
     _currentEmail = _currentUser!.email ?? 'Email não disponível';
 
     try {
-      // Carrega dados do Firestore E configurações em paralelo
       final results = await Future.wait([
         FirebaseFirestore.instance
             .collection(kCollectionUsers)
             .doc(_currentUser!.uid)
             .get(),
-        _carregarConfiguracoesDropdowns(), // Carrega todas as opções
+        _carregarConfiguracoesDropdowns(),
       ]);
 
       final userDoc = results[0] as DocumentSnapshot;
 
       if (userDoc.exists && mounted) {
         _userData = userDoc.data() as Map<String, dynamic>?;
+        if (_userData == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content:
+                    Text('Dados do perfil não encontrados ou corrompidos.'),
+                backgroundColor: Colors.red),
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+
         _nameController.text =
-            _userData?[kFieldName] ?? _currentUser!.displayName ?? '';
-        _phoneController.text = _userData?[kFieldPhone] ?? '';
+            _userData![kFieldName] ?? _currentUser!.displayName ?? '';
+        _phoneController.text = _userData![kFieldPhone] ?? '';
+        _userTipoSolicitante = _userData![kFieldUserTipoSolicitante] as String?;
+        _cargoSelecionado = _userData![kFieldJobTitle] as String?;
+        _cidadeSelecionada = _userData![kFieldCidade] as String?;
+        _instituicaoSelecionada = _userData![kFieldUserInstituicao] as String?;
+        _setorSelecionado = _userData![kFieldUserSetor] as String?;
+        _currentSignatureUrl = _userData![kFieldUserAssinaturaUrl] as String?;
 
-        // Carrega os dados do perfil
-        _userTipoSolicitante = _userData?[kFieldUserTipoSolicitante] as String?;
-        _cargoSelecionado = _userData?[kFieldJobTitle] as String?;
-        _cidadeSelecionada = _userData?[kFieldCidade] as String?;
-        _instituicaoSelecionada = _userData?[kFieldUserInstituicao] as String?;
-        _setorSelecionado =
-            _userData?[kFieldUserSetor] as String?; // Carrega setor
-        _currentSignatureUrl = _userData?[kFieldUserAssinaturaUrl] as String?;
+        if (_userTipoSolicitante == 'SUPERINTENDENCIA') {
+          _cidadeSuperintendenciaSelecionadaEdit =
+              _userData![kFieldCidadeSuperintendencia] as String?;
+        }
 
-        print("DEBUG (Edit): Tipo Solicitante: $_userTipoSolicitante");
-        print("DEBUG (Edit): Cargo: $_cargoSelecionado");
-        print("DEBUG (Edit): Cidade: $_cidadeSelecionada");
-        print("DEBUG (Edit): Instituição: $_instituicaoSelecionada");
-        print("DEBUG (Edit): Setor: $_setorSelecionado");
-
-        // Pré-filtra instituições se a cidade já estiver definida e for escola
         if (_userTipoSolicitante == 'ESCOLA' && _cidadeSelecionada != null) {
-          _atualizarInstituicoes(_cidadeSelecionada!,
-              preloading: true); // Chama para filtrar a lista inicial
-        }
-
-        // Validações e ajustes para dropdowns (como antes)...
-        if (_cargoSelecionado != null &&
-            _cargoSelecionado!.isNotEmpty &&
-            !_listaCargos.contains(_cargoSelecionado)) {
-          print(
-              "Aviso (Edit): Cargo '$_cargoSelecionado' do perfil não encontrado na lista de opções.");
-        }
-        if (_instituicaoSelecionada != null &&
-            _instituicaoSelecionada!.isNotEmpty &&
-            !_listaInstituicoes.contains(_instituicaoSelecionada) &&
-            _cidadeSelecionada != "OUTRO") {
-          print(
-              "Aviso (Edit): Instituição '$_instituicaoSelecionada' do perfil não encontrada na lista de opções.");
-          // Não adiciona mais aqui, a filtragem por cidade cuida disso
-        }
-        if (_setorSelecionado != null &&
-            _setorSelecionado!.isNotEmpty &&
-            !_listaSetores.contains(_setorSelecionado)) {
-          print(
-              "Aviso (Edit): Setor '$_setorSelecionado' do perfil não encontrado na lista de opções.");
+          _atualizarInstituicoes(_cidadeSelecionada!, preloading: true);
+          if (_cidadeSelecionada == "OUTRO" &&
+              _instituicaoSelecionada != null) {
+            _instituicaoManualController.text = _instituicaoSelecionada!;
+          }
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dados do perfil não encontrados.')),
+          const SnackBar(
+              content: Text('Dados do perfil não encontrados.'),
+              backgroundColor: Colors.red),
         );
       }
-    } catch (e) {
-      print("Erro ao carregar dados iniciais: $e");
+    } catch (e, s) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar dados: ${e.toString()}')),
+          SnackBar(
+              content: Text('Erro ao carregar dados: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -167,7 +165,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // Função unificada para carregar dados dos dropdowns (Atualizada para Setores)
   Future<void> _carregarConfiguracoesDropdowns() async {
     if (!mounted) return;
     setState(() {
@@ -178,32 +175,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _isLoadingCidades = true;
       _erroCarregarCidades = null;
       _isLoadingSetores = true;
-      _erroCarregarSetores = null; // Adicionado
+      _erroCarregarSetores = null;
+      _isLoadingCidadesSuperEdit = true;
+      _erroCarregarCidadesSuperEdit = null;
     });
+
     try {
       final db = FirebaseFirestore.instance;
       final results = await Future.wait([
         db.collection(kCollectionConfig).doc(kDocLocalidades).get(),
         db.collection(kCollectionConfig).doc(kDocOpcoes).get(),
       ]);
+
       final docLocalidades = results[0];
       final docOpcoes = results[1];
 
-      // Processa Localidades/Cidades/Instituições
-      List<String> cidades = [];
+      List<String> cidadesEscola = [];
       Map<String, List<String>> escolasMap = {};
-      String? erroLocalidades;
+      List<String> cidadesSuperintendenciaLoaded = [];
+      String? erroLocalidadesAcumulado;
+
       if (docLocalidades.exists && docLocalidades.data() != null) {
-        final data = docLocalidades.data()!;
-        const String nomeCampoMapa = 'escolasPorCidade';
-        if (data.containsKey(nomeCampoMapa) && data[nomeCampoMapa] is Map) {
+        final dataLocalidades = docLocalidades.data()!;
+        const String nomeCampoMapaEscolas = 'escolasPorCidade';
+        if (dataLocalidades.containsKey(nomeCampoMapaEscolas) &&
+            dataLocalidades[nomeCampoMapaEscolas] is Map) {
           final Map<String, dynamic> rawMap =
-              Map<String, dynamic>.from(data[nomeCampoMapa]);
+              Map<String, dynamic>.from(dataLocalidades[nomeCampoMapaEscolas]);
           rawMap.forEach((key, value) {
             if (key is String && value != null && value is List) {
               List<String> escolas = value
-                  .map((escola) => escola?.toString())
-                  .where((nome) => nome != null && nome.isNotEmpty)
+                  .map((e) => e?.toString())
+                  .where((n) => n != null && n.isNotEmpty)
                   .cast<String>()
                   .toList();
               escolas
@@ -211,135 +214,147 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               escolasMap[key] = escolas;
             }
           });
-          cidades = escolasMap.keys.toList()
+          cidadesEscola = escolasMap.keys.toList()
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           if (!escolasMap.containsKey("OUTRO")) {
             escolasMap["OUTRO"] = [];
-            if (!cidades.contains("OUTRO")) {
-              cidades.add("OUTRO");
-              cidades
-                  .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-            }
+            if (!cidadesEscola.contains("OUTRO")) cidadesEscola.add("OUTRO");
+            cidadesEscola
+                .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           }
         } else {
-          erroLocalidades = "Erro: Estrutura de dados de localidades inválida.";
+          erroLocalidadesAcumulado = (erroLocalidadesAcumulado ?? "") +
+              " Estrutura 'escolasPorCidade' inválida.\n";
+        }
+
+        const String nomeCampoCidadesSuper = 'cidadesSuperintendecia';
+        if (dataLocalidades.containsKey(nomeCampoCidadesSuper) &&
+            dataLocalidades[nomeCampoCidadesSuper] is List) {
+          cidadesSuperintendenciaLoaded =
+              (dataLocalidades[nomeCampoCidadesSuper] as List)
+                  .map((cs) => cs?.toString())
+                  .where((n) => n != null && n.isNotEmpty)
+                  .cast<String>()
+                  .toList();
+          cidadesSuperintendenciaLoaded
+              .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        } else {
+          erroLocalidadesAcumulado = (erroLocalidadesAcumulado ?? "") +
+              " Configuração 'cidadesSuperintendecia' não encontrada/inválida.\n";
         }
       } else {
-        erroLocalidades = "Erro: Configuração de localidades não encontrada.";
-      }
-      if (cidades.isEmpty && erroLocalidades == null) {
-        erroLocalidades = "Nenhuma cidade/instituição encontrada.";
+        erroLocalidadesAcumulado =
+            "Configuração de localidades não encontrada.\n";
       }
 
-      // Processa Opcoes (Cargos e Setores)
       List<String> cargos = [];
       List<String> setores = [];
-      String? erroOpcoes;
+      String? erroOpcoesAcumulado;
+
       if (docOpcoes.exists && docOpcoes.data() != null) {
-        final data = docOpcoes.data()!;
+        final dataOpcoes = docOpcoes.data()!;
         const String nomeCampoCargos = 'cargosEscola';
-        if (data.containsKey(nomeCampoCargos) &&
-            data[nomeCampoCargos] is List) {
-          cargos = (data[nomeCampoCargos] as List)
-              .map((cargo) => cargo?.toString())
-              .where((nome) => nome != null && nome.isNotEmpty)
+        if (dataOpcoes.containsKey(nomeCampoCargos) &&
+            dataOpcoes[nomeCampoCargos] is List) {
+          cargos = (dataOpcoes[nomeCampoCargos] as List)
+              .map((c) => c?.toString())
+              .where((n) => n != null && n.isNotEmpty)
               .cast<String>()
               .toList();
           cargos.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         } else {
-          erroOpcoes = "Erro: Estrutura de dados de cargos inválida.";
+          erroOpcoesAcumulado = (erroOpcoesAcumulado ?? "") +
+              " Estrutura 'cargosEscola' inválida.\n";
         }
         const String nomeCampoSetores = 'setoresSuper';
-        if (data.containsKey(nomeCampoSetores) &&
-            data[nomeCampoSetores] is List) {
-          setores = (data[nomeCampoSetores] as List)
-              .map((setor) => setor?.toString())
-              .where((nome) => nome != null && nome.isNotEmpty)
+        if (dataOpcoes.containsKey(nomeCampoSetores) &&
+            dataOpcoes[nomeCampoSetores] is List) {
+          setores = (dataOpcoes[nomeCampoSetores] as List)
+              .map((s) => s?.toString())
+              .where((n) => n != null && n.isNotEmpty)
               .cast<String>()
               .toList();
           setores.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         } else {
-          erroOpcoes = (erroOpcoes ?? "") +
-              " Erro: Estrutura de dados de setores inválida.";
+          erroOpcoesAcumulado = (erroOpcoesAcumulado ?? "") +
+              " Estrutura 'setoresSuper' inválida.\n";
         }
       } else {
-        erroOpcoes = "Erro: Configuração de opções não encontrada.";
-      }
-      if (cargos.isEmpty && erroOpcoes == null) {
-        erroOpcoes = "Nenhum cargo encontrado.";
-      }
-      if (setores.isEmpty && erroOpcoes == null) {
-        erroOpcoes = "Nenhum setor encontrado.";
+        erroOpcoesAcumulado = "Configuração de opções não encontrada.\n";
       }
 
-      // Atualiza o estado
       if (mounted) {
         setState(() {
-          _listaCidades = cidades;
+          _listaCidades = cidadesEscola;
           _escolasPorCidadeMap = escolasMap;
           _listaInstituicoes = escolasMap.values
               .expand((list) => list)
               .toSet()
               .toList()
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-          _erroCarregarCidades = erroLocalidades;
+          _erroCarregarCidades = erroLocalidadesAcumulado;
           _isLoadingCidades = false;
-          _erroCarregarInstituicoes = erroLocalidades;
+          _erroCarregarInstituicoes = erroLocalidadesAcumulado;
           _isLoadingInstituicoes = false;
           _listaCargos = cargos;
-          _erroCarregarCargos = erroOpcoes;
+          _erroCarregarCargos = erroOpcoesAcumulado;
           _isLoadingCargos = false;
           _listaSetores = setores;
-          _erroCarregarSetores = erroOpcoes;
-          _isLoadingSetores = false; // Atualiza estado dos setores
+          _erroCarregarSetores = erroOpcoesAcumulado;
+          _isLoadingSetores = false;
+          _listaCidadesSuperintendenciaEdit = cidadesSuperintendenciaLoaded;
+          _erroCarregarCidadesSuperEdit = erroLocalidadesAcumulado;
+          _isLoadingCidadesSuperEdit = false;
         });
       }
     } catch (e, s) {
-      print("Erro ao carregar configurações de dropdowns: $e\nStackTrace: $s");
       if (mounted) {
+        final errorMsg = "Erro configs: ${e.toString()}";
         setState(() {
           _isLoadingInstituicoes = false;
-          _erroCarregarInstituicoes = "Erro ao carregar instituições.";
+          _erroCarregarInstituicoes = errorMsg;
           _isLoadingCargos = false;
-          _erroCarregarCargos = "Erro ao carregar cargos.";
+          _erroCarregarCargos = errorMsg;
           _isLoadingCidades = false;
-          _erroCarregarCidades = "Erro ao carregar cidades.";
+          _erroCarregarCidades = errorMsg;
           _isLoadingSetores = false;
-          _erroCarregarSetores = "Erro ao carregar setores.";
+          _erroCarregarSetores = errorMsg;
+          _isLoadingCidadesSuperEdit = false;
+          _erroCarregarCidadesSuperEdit = errorMsg;
         });
       }
     }
   }
 
-  // Função para atualizar instituições disponíveis baseado na cidade selecionada
   void _atualizarInstituicoes(String? cidadeSelecionada,
       {bool preloading = false}) {
-    if (!preloading) {
-      // Só reseta se não for o pré-carregamento inicial
-      setState(() {
-        _instituicaoSelecionada = null;
-        _instituicaoManualController.clear();
-      });
-    }
+    if (!mounted) return;
+
+    List<String> novasInstituicoesDisponiveis = [];
     if (cidadeSelecionada != null &&
         cidadeSelecionada != "OUTRO" &&
         _escolasPorCidadeMap.containsKey(cidadeSelecionada)) {
-      _instituicoesDisponiveis =
+      novasInstituicoesDisponiveis =
           List<String>.from(_escolasPorCidadeMap[cidadeSelecionada]!);
-    } else {
-      _instituicoesDisponiveis = [];
     }
-    if (!preloading) {
-      // Atualiza estado da UI apenas se não for pré-carregamento
-      setState(() {
+
+    setState(() {
+      _instituicoesDisponiveis = novasInstituicoesDisponiveis;
+      if (!preloading) {
         _cidadeSelecionada = cidadeSelecionada;
-      });
-    }
+        _instituicaoSelecionada = null;
+        _instituicaoManualController.clear();
+      } else {
+        if (_instituicaoSelecionada != null &&
+            !novasInstituicoesDisponiveis.contains(_instituicaoSelecionada)) {
+          _instituicaoSelecionada = null;
+          _instituicaoManualController.clear();
+        }
+      }
+    });
   }
 
-  // --- FUNÇÃO PARA EXPORTAR E FAZER UPLOAD DA ASSINATURA (sem alterações) ---
   Future<String?> _exportAndUploadSignature() async {
-    // ... (lógica igual à anterior) ...
     if (_signatureController.isEmpty) {
       return null;
     }
@@ -384,11 +399,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               finalImageBytes, SettableMetadata(contentType: 'image/png'));
           TaskSnapshot snapshot = await uploadTask;
           downloadUrl = await snapshot.ref.getDownloadURL();
-          print("Assinatura com nome carregada com sucesso: $downloadUrl");
+        } else {
+          final userId = _currentUser!.uid;
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('assinaturas_usuarios')
+              .child(userId)
+              .child('assinatura.png');
+          UploadTask uploadTask = storageRef.putData(
+              signatureBytes, SettableMetadata(contentType: 'image/png'));
+          TaskSnapshot snapshot = await uploadTask;
+          downloadUrl = await snapshot.ref.getDownloadURL();
         }
       }
     } catch (e) {
-      print("Erro ao exportar/adicionar nome/carregar assinatura: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -415,7 +439,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _newSignatureUrl = null;
 
     try {
-      // Processa assinatura apenas se não houver uma existente e se foi alterada
       if (_signatureChanged &&
           !_signatureController.isEmpty &&
           !_hasExistingSignature) {
@@ -445,19 +468,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (_currentUser!.displayName != _nameController.text.trim()) {
         await _currentUser!.updateDisplayName(_nameController.text.trim());
-        print("Nome no Firebase Auth atualizado.");
       }
 
-      // --- Monta o profileData condicionalmente com base no TIPO ORIGINAL do usuário ---
       final profileDataToUpdate = <String, dynamic>{
         kFieldName: _nameController.text.trim(),
         kFieldPhone: _phoneController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
-        // Adiciona a assinatura SOMENTE se uma nova foi gerada com sucesso
         if (_newSignatureUrl != null) kFieldUserAssinaturaUrl: _newSignatureUrl,
       };
 
-      // Adiciona campos específicos baseado no _userTipoSolicitante carregado inicialmente
       if (_userTipoSolicitante == 'ESCOLA') {
         profileDataToUpdate[kFieldJobTitle] = _cargoSelecionado;
         profileDataToUpdate[kFieldUserInstituicao] =
@@ -465,24 +484,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ? _instituicaoManualController.text.trim()
                 : _instituicaoSelecionada;
         profileDataToUpdate[kFieldCidade] = _cidadeSelecionada;
-        // Remove o campo de setor se existir (caso o tipo tenha sido mudado incorretamente no DB)
         profileDataToUpdate[kFieldUserSetor] = FieldValue.delete();
+        profileDataToUpdate[kFieldCidadeSuperintendencia] = FieldValue.delete();
       } else if (_userTipoSolicitante == 'SUPERINTENDENCIA') {
         profileDataToUpdate[kFieldUserSetor] = _setorSelecionado;
-        // Remove campos de escola se existirem
+        profileDataToUpdate[kFieldCidadeSuperintendencia] =
+            _cidadeSuperintendenciaSelecionadaEdit;
+
         profileDataToUpdate[kFieldJobTitle] = FieldValue.delete();
         profileDataToUpdate[kFieldUserInstituicao] = FieldValue.delete();
         profileDataToUpdate[kFieldCidade] = FieldValue.delete();
       }
-      // Não atualiza o kFieldUserTipoSolicitante aqui, pois não permitimos a edição dele.
-      // --- Fim da montagem condicional ---
 
       await FirebaseFirestore.instance
           .collection(kCollectionUsers)
           .doc(_currentUser!.uid)
           .update(profileDataToUpdate);
-
-      print("Dados do perfil no Firestore atualizados.");
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -498,11 +515,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _newSignatureUrl = null;
         Navigator.of(context).pop(true);
       }
-    } catch (e) {
-      print("Erro ao salvar perfil: $e");
+    } catch (e, s) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar perfil: ${e.toString()}')),
+          SnackBar(
+              content: Text('Erro ao salvar perfil: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -516,7 +534,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _instituicaoManualController.dispose(); // Adicionado dispose
+    _instituicaoManualController.dispose();
     _signatureController.dispose();
     super.dispose();
   }
@@ -545,34 +563,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    // Campos Nome, Email, Telefone (como antes)...
                     TextFormField(
                       controller: _nameController,
                       enabled: !_isSaving,
                       decoration: const InputDecoration(
-                        labelText: 'Nome Completo *',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
+                          labelText: 'Nome Completo *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.person_outline)),
                       textCapitalization: TextCapitalization.words,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Por favor, digite seu nome completo.';
-                        }
-                        return null;
-                      },
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Digite seu nome.'
+                          : null,
                     ),
                     const SizedBox(height: 16.0),
                     TextFormField(
                       initialValue: _currentEmail,
                       enabled: false,
                       decoration: const InputDecoration(
-                        labelText: 'Email Institucional',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.email_outlined),
-                        fillColor: Colors.black12,
-                        filled: true,
-                      ),
+                          labelText: 'Email Institucional',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.email_outlined),
+                          fillColor: Colors.black12,
+                          filled: true),
                     ),
                     const SizedBox(height: 16.0),
                     TextFormField(
@@ -580,30 +592,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       enabled: !_isSaving,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                        labelText: 'Telefone *',
-                        hintText: '(XX) XXXXX-XXXX',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.phone_outlined),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Digite seu telefone para contato.';
-                        }
-                        return null;
-                      },
+                          labelText: 'Telefone *',
+                          hintText: '(XX) XXXXX-XXXX',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.phone_outlined)),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Digite seu telefone.'
+                          : null,
                     ),
                     const SizedBox(height: 16.0),
-
-                    // Exibe o Tipo de Lotação (Não editável)
                     _buildInfoTile(
                         icon: Icons.business_center_outlined,
-                        label: 'Tipo de Lotação',
+                        label: 'Tipo de Lotação (Não editável)',
                         value: _userTipoSolicitante ?? 'Não definido'),
                     const SizedBox(height: 16.0),
-
-                    // --- CAMPOS CONDICIONAIS ---
                     if (_userTipoSolicitante == 'ESCOLA') ...[
-                      // Dropdown de Cargo/Função
                       DropdownButtonFormField<String>(
                         value: _cargoSelecionado,
                         isExpanded: true,
@@ -617,7 +620,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 SizedBox(width: 8),
                                 Text('Carregando...')
                               ])
-                            : (_erroCarregarCargos != null
+                            : (_erroCarregarCargos != null &&
+                                    _listaCargos.isEmpty
                                 ? Text(_erroCarregarCargos!,
                                     style: TextStyle(
                                         color:
@@ -628,25 +632,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           labelText: 'Cargo / Função *',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.work_outline),
+                          errorMaxLines: 3,
                           errorText: _erroCarregarCargos != null &&
                                   !_isLoadingCargos &&
                                   _listaCargos.isEmpty
                               ? _erroCarregarCargos
                               : null,
                         ),
-                        items: _isLoadingCargos || _erroCarregarCargos != null
+                        items: _isLoadingCargos ||
+                                (_erroCarregarCargos != null &&
+                                    _listaCargos.isEmpty)
                             ? []
                             : _listaCargos
                                 .map<DropdownMenuItem<String>>((String value) {
                                 return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value,
-                                      overflow: TextOverflow.ellipsis),
-                                );
+                                    value: value,
+                                    child: Text(value,
+                                        overflow: TextOverflow.ellipsis));
                               }).toList(),
                         onChanged: (_isSaving ||
                                 _isLoadingCargos ||
-                                _erroCarregarCargos != null)
+                                (_erroCarregarCargos != null &&
+                                    _listaCargos.isEmpty))
                             ? null
                             : (String? newValue) {
                                 setState(() {
@@ -665,8 +672,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16.0),
-
-                      // Dropdown de Cidade/Distrito
                       DropdownButtonFormField<String>(
                         value: _cidadeSelecionada,
                         isExpanded: true,
@@ -680,7 +685,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 SizedBox(width: 8),
                                 Text('Carregando...')
                               ])
-                            : (_erroCarregarCidades != null
+                            : (_erroCarregarCidades != null &&
+                                    _listaCidades.isEmpty
                                 ? Text(_erroCarregarCidades!,
                                     style: TextStyle(
                                         color:
@@ -688,31 +694,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         fontSize: 14))
                                 : const Text('Selecione a cidade/distrito *')),
                         decoration: InputDecoration(
-                          labelText: 'Cidade / Distrito *',
+                          labelText: 'Cidade / Distrito (Escola)*',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.location_city_outlined),
+                          errorMaxLines: 3,
                           errorText: _erroCarregarCidades != null &&
                                   !_isLoadingCidades &&
                                   _listaCidades.isEmpty
                               ? _erroCarregarCidades
                               : null,
                         ),
-                        items: _isLoadingCidades || _erroCarregarCidades != null
+                        items: _isLoadingCidades ||
+                                (_erroCarregarCidades != null &&
+                                    _listaCidades.isEmpty)
                             ? []
                             : _listaCidades
                                 .map<DropdownMenuItem<String>>((String value) {
                                 return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value,
-                                      overflow: TextOverflow.ellipsis),
-                                );
+                                    value: value,
+                                    child: Text(value,
+                                        overflow: TextOverflow.ellipsis));
                               }).toList(),
                         onChanged: (_isSaving ||
                                 _isLoadingCidades ||
-                                _erroCarregarCidades != null)
+                                (_erroCarregarCidades != null &&
+                                    _listaCidades.isEmpty))
                             ? null
-                            : (v) => _atualizarInstituicoes(
-                                v), // Chama a função atualizada
+                            : (v) => _atualizarInstituicoes(v),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             if (_isLoadingCidades) return null;
@@ -725,8 +733,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16.0),
-
-                      // Campo Instituição (Dropdown ou Texto)
                       if (_cidadeSelecionada == "OUTRO")
                         TextFormField(
                           controller: _instituicaoManualController,
@@ -762,12 +768,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ])
                               : (_cidadeSelecionada == null
                                   ? const Text('Selecione a cidade primeiro')
-                                  : const Text('Selecione sua instituição *')),
+                                  : (_instituicoesDisponiveis.isEmpty &&
+                                          _cidadeSelecionada != null &&
+                                          !_isLoadingInstituicoes
+                                      ? const Text(
+                                          'Nenhuma instituição para esta cidade')
+                                      : const Text(
+                                          'Selecione sua instituição *'))),
                           decoration: InputDecoration(
-                            labelText: 'Instituição / Lotação *',
+                            labelText: 'Instituição / Lotação (Escola)*',
                             border: const OutlineInputBorder(),
                             prefixIcon:
                                 const Icon(Icons.account_balance_outlined),
+                            errorMaxLines: 3,
                             errorText: (_erroCarregarInstituicoes != null &&
                                     !_isLoadingInstituicoes &&
                                     _instituicoesDisponiveis.isEmpty &&
@@ -776,7 +789,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ? "Nenhuma instituição para esta cidade."
                                 : ((_erroCarregarInstituicoes != null &&
                                         !_isLoadingInstituicoes &&
-                                        _listaInstituicoes.isEmpty)
+                                        _listaInstituicoes.isEmpty &&
+                                        _cidadeSelecionada != null &&
+                                        _cidadeSelecionada != "OUTRO")
                                     ? _erroCarregarInstituicoes
                                     : null),
                           ),
@@ -784,23 +799,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   _cidadeSelecionada == null ||
                                   _cidadeSelecionada == "OUTRO" ||
                                   (_erroCarregarInstituicoes != null &&
-                                      _instituicoesDisponiveis.isEmpty)
+                                      _instituicoesDisponiveis.isEmpty &&
+                                      _cidadeSelecionada != null)
                               ? []
                               : _instituicoesDisponiveis
                                   .map<DropdownMenuItem<String>>(
                                       (String value) {
                                   return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(value,
-                                        overflow: TextOverflow.ellipsis),
-                                  );
+                                      value: value,
+                                      child: Text(value,
+                                          overflow: TextOverflow.ellipsis));
                                 }).toList(),
                           onChanged: (_isSaving ||
                                   _isLoadingInstituicoes ||
                                   _cidadeSelecionada == null ||
                                   _cidadeSelecionada == "OUTRO" ||
                                   (_erroCarregarInstituicoes != null &&
-                                      _instituicoesDisponiveis.isEmpty))
+                                      _instituicoesDisponiveis.isEmpty &&
+                                      _cidadeSelecionada != null))
                               ? null
                               : (String? newValue) {
                                   setState(() {
@@ -823,9 +839,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       const SizedBox(height: 16.0),
                     ],
-
                     if (_userTipoSolicitante == 'SUPERINTENDENCIA') ...[
-                      // Dropdown de Setor
                       DropdownButtonFormField<String>(
                         value: _setorSelecionado,
                         isExpanded: true,
@@ -839,7 +853,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 SizedBox(width: 8),
                                 Text('Carregando...')
                               ])
-                            : (_erroCarregarSetores != null
+                            : (_erroCarregarSetores != null &&
+                                    _listaSetores.isEmpty
                                 ? Text(_erroCarregarSetores!,
                                     style: TextStyle(
                                         color:
@@ -847,28 +862,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         fontSize: 14))
                                 : const Text('Selecione o setor *')),
                         decoration: InputDecoration(
-                          labelText: 'Setor do servidor *',
+                          labelText: 'Setor (Superintendência)*',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.groups_outlined),
+                          errorMaxLines: 3,
                           errorText: _erroCarregarSetores != null &&
                                   !_isLoadingSetores &&
                                   _listaSetores.isEmpty
                               ? _erroCarregarSetores
                               : null,
                         ),
-                        items: _isLoadingSetores || _erroCarregarSetores != null
+                        items: _isLoadingSetores ||
+                                (_erroCarregarSetores != null &&
+                                    _listaSetores.isEmpty)
                             ? []
                             : _listaSetores
                                 .map<DropdownMenuItem<String>>((String value) {
                                 return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value,
-                                      overflow: TextOverflow.ellipsis),
-                                );
+                                    value: value,
+                                    child: Text(value,
+                                        overflow: TextOverflow.ellipsis));
                               }).toList(),
                         onChanged: (_isSaving ||
                                 _isLoadingSetores ||
-                                _erroCarregarSetores != null)
+                                (_erroCarregarSetores != null &&
+                                    _listaSetores.isEmpty))
                             ? null
                             : (String? newValue) {
                                 setState(() {
@@ -887,9 +905,89 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16.0),
+                      DropdownButtonFormField<String>(
+                        value: _cidadeSuperintendenciaSelecionadaEdit,
+                        isExpanded: true,
+                        hint: _isLoadingCidadesSuperEdit
+                            ? const Row(children: [
+                                SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2)),
+                                SizedBox(width: 8),
+                                Text('Carregando cidades...')
+                              ])
+                            : (_erroCarregarCidadesSuperEdit != null &&
+                                    _listaCidadesSuperintendenciaEdit.isEmpty &&
+                                    !_isLoadingCidadesSuperEdit
+                                ? Text(
+                                    _erroCarregarCidadesSuperEdit!
+                                            .contains("cidadesSuperintendecia")
+                                        ? _erroCarregarCidadesSuperEdit!
+                                        : "Erro ao carregar cidades SUPER.",
+                                    style: TextStyle(
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                        fontSize: 14))
+                                : const Text(
+                                    'Selecione a Cidade da Superintendência *')),
+                        decoration: InputDecoration(
+                          labelText: 'Cidade da Superintendência *',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.map_outlined),
+                          errorMaxLines: 3,
+                          errorText: _erroCarregarCidadesSuperEdit != null &&
+                                  !_isLoadingCidadesSuperEdit &&
+                                  _listaCidadesSuperintendenciaEdit.isEmpty
+                              ? (_erroCarregarCidadesSuperEdit!
+                                      .contains("cidadesSuperintendecia")
+                                  ? _erroCarregarCidadesSuperEdit!
+                                  : "Erro ao carregar cidades da SUPER.")
+                              : null,
+                        ),
+                        items: _isLoadingCidadesSuperEdit ||
+                                (_erroCarregarCidadesSuperEdit != null &&
+                                    _listaCidadesSuperintendenciaEdit.isEmpty &&
+                                    !_isLoadingCidadesSuperEdit)
+                            ? []
+                            : _listaCidadesSuperintendenciaEdit
+                                .map<DropdownMenuItem<String>>((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value,
+                                      overflow: TextOverflow.ellipsis),
+                                );
+                              }).toList(),
+                        onChanged: (_isSaving ||
+                                _isLoadingCidadesSuperEdit ||
+                                (_erroCarregarCidadesSuperEdit != null &&
+                                    _listaCidadesSuperintendenciaEdit.isEmpty &&
+                                    !_isLoadingCidadesSuperEdit))
+                            ? null
+                            : (String? newValue) {
+                                setState(() {
+                                  _cidadeSuperintendenciaSelecionadaEdit =
+                                      newValue;
+                                });
+                              },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            if (_isLoadingCidadesSuperEdit) return null;
+                            if (_erroCarregarCidadesSuperEdit != null &&
+                                _listaCidadesSuperintendenciaEdit.isEmpty &&
+                                !_isLoadingCidadesSuperEdit)
+                              return (_erroCarregarCidadesSuperEdit!
+                                      .contains("cidadesSuperintendecia")
+                                  ? _erroCarregarCidadesSuperEdit!
+                                  : "Erro ao carregar cidades da SUPER.");
+                            return 'Selecione a cidade da Superintendência.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16.0),
                     ],
-
-                    // --- Seção de Assinatura (como antes) ---
                     Text('Assinatura Digital',
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8.0),
@@ -926,7 +1024,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'A assinatura já foi definida e não pode ser alterada.',
+                            'A assinatura já foi definida e não pode ser alterada através desta tela.',
                             style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.orange.shade800,
@@ -1008,8 +1106,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ],
                       ),
                     const SizedBox(height: 24.0),
-
-                    // Botão Salvar
                     ElevatedButton.icon(
                       icon: _isSaving
                           ? Container()
@@ -1026,9 +1122,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ? null
                               : _salvarPerfil,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          textStyle: const TextStyle(fontSize: 16)),
                     ),
                   ],
                 ),
@@ -1037,7 +1132,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Widget auxiliar para exibir informações
   Widget _buildInfoTile(
       {required IconData icon, required String label, required String value}) {
     return ListTile(
@@ -1046,31 +1140,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
       title:
           Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      subtitle: Text(
-        value,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.w500),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+      subtitle: Text(value,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w500),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis),
       contentPadding: EdgeInsets.zero,
     );
   }
 
-  // Constantes locais
   static const String kFieldName = 'name';
   static const String kFieldPhone = 'phone';
   static const String kFieldJobTitle = 'jobTitle';
   static const String kFieldUserInstituicao = 'institution';
   static const String kFieldCidade = 'cidade';
   static const String kFieldUserTipoSolicitante = 'tipo_solicitante';
-  static const String kFieldUserSetor =
-      'setor_superintendencia'; // <<< CONSTANTE LOCAL USADA
+  static const String kFieldUserSetor = 'setor_superintendencia';
+  static const String kFieldUserAssinaturaUrl = 'assinatura_url';
+  static const String kFieldCidadeSuperintendencia = 'cidadeSuperintendencia';
+
   static const String kCollectionUsers = 'users';
   static const String kCollectionConfig = 'configuracoes';
   static const String kDocOpcoes = 'opcoesChamado';
   static const String kDocLocalidades = 'localidades';
-  static const String kFieldUserAssinaturaUrl = 'assinatura_url';
 }

@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 
 // Importe suas constantes de serviço
-import '../services/chamado_service.dart';
+// Presumindo que kFieldCidadeSuperintendencia pode vir de chamado_service.dart ou um arquivo de constantes global.
+// Se não, a constante local no final deste arquivo será usada.
+// import '../services/chamado_service.dart';
 import 'main_navigation_screen.dart';
 
 class CadastroScreen extends StatefulWidget {
@@ -34,9 +36,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
   String? _instituicaoSelecionada;
   List<String> _listaCargos = []; // Apenas para tipo ESCOLA
   String? _cargoSelecionado;
-  List<String> _listaSetores =
-      []; // <<< NOVO ESTADO PARA SETORES (SUPERINTENDENCIA)
-  String? _setorSelecionado; // <<< NOVO ESTADO PARA SETOR SELECIONADO
+  List<String> _listaSetores = []; // Para tipo SUPERINTENDENCIA
+  String? _setorSelecionado;
+
+  // --- NOVOS ESTADOS PARA CIDADE DA SUPERINTENDÊNCIA ---
+  List<String> _listaCidadesSuperintendencia = [];
+  String? _cidadeSuperintendenciaSelecionada;
+  // --- FIM DOS NOVOS ESTADOS ---
 
   bool _isLoadingConfig = true;
   String? _erroCarregarConfig;
@@ -62,7 +68,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
   Map<String, List<String>> _escolasPorCidadeMap = {};
 
-  // --- FUNÇÃO UNIFICADA PARA CARREGAR CONFIGURAÇÕES (Atualizada para incluir Setores) ---
   Future<void> _carregarConfiguracoesDropdowns() async {
     if (!mounted) return;
     setState(() {
@@ -80,16 +85,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
       final docLocalidades = results[0];
       final docOpcoes = results[1];
 
-      // Processa Localidades/Cidades/Instituições (sem alterações)
+      // Processa Localidades/Cidades/Instituições e Cidades da Superintendência
       List<String> cidades = [];
       Map<String, List<String>> escolasMap = {};
+      List<String> loadedCidadesSuper = []; // <<< NOVA LISTA TEMPORÁRIA
       String? erroLocalidades;
+
       if (docLocalidades.exists && docLocalidades.data() != null) {
         final data = docLocalidades.data()!;
-        const String nomeCampoMapa = 'escolasPorCidade';
-        if (data.containsKey(nomeCampoMapa) && data[nomeCampoMapa] is Map) {
+        const String nomeCampoMapaEscolas = 'escolasPorCidade';
+        if (data.containsKey(nomeCampoMapaEscolas) &&
+            data[nomeCampoMapaEscolas] is Map) {
           final Map<String, dynamic> rawMap =
-              Map<String, dynamic>.from(data[nomeCampoMapa]);
+              Map<String, dynamic>.from(data[nomeCampoMapaEscolas]);
           rawMap.forEach((key, value) {
             if (key is String && value != null && value is List) {
               List<String> escolas = value
@@ -113,23 +121,46 @@ class _CadastroScreenState extends State<CadastroScreen> {
             }
           }
         } else {
-          erroLocalidades = "Erro: Estrutura de dados de localidades inválida.";
+          erroLocalidades =
+              "Erro: Estrutura de dados de localidades (escolas) inválida.";
         }
+
+        // --- CARREGAR CIDADES DA SUPERINTENDÊNCIA ---
+        const String nomeCampoCidadesSuper = 'cidadesSuperintendecia';
+        if (data.containsKey(nomeCampoCidadesSuper) &&
+            data[nomeCampoCidadesSuper] is List) {
+          loadedCidadesSuper = (data[nomeCampoCidadesSuper] as List)
+              .map((cs) => cs?.toString())
+              .where((nome) => nome != null && nome.isNotEmpty)
+              .cast<String>()
+              .toList();
+          loadedCidadesSuper
+              .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        } else {
+          erroLocalidades = (erroLocalidades ?? "") +
+              "\nErro: Configuração de 'cidadesSuperintendecia' não encontrada ou inválida.";
+        }
+        if (loadedCidadesSuper.isEmpty && erroLocalidades == null) {
+          // Apenas se não houver outro erro de localidades
+          // Não definir erro aqui se a lista puder ser opcionalmente vazia
+          print(
+              "WARN: Lista 'cidadesSuperintendecia' está vazia ou não foi carregada.");
+        }
+        // --- FIM CARREGAR CIDADES DA SUPERINTENDÊNCIA ---
       } else {
         erroLocalidades = "Erro: Configuração de localidades não encontrada.";
       }
       if (cidades.isEmpty && erroLocalidades == null) {
-        erroLocalidades = "Nenhuma cidade/instituição encontrada.";
+        erroLocalidades = "Nenhuma cidade/instituição (escola) encontrada.";
       }
 
       // Processa Opcoes (Cargos, Tipos e Setores)
       List<String> cargos = [];
       List<String> tipos = [];
-      List<String> setores = []; // <<< LISTA PARA SETORES
+      List<String> setores = [];
       String? erroOpcoes;
       if (docOpcoes.exists && docOpcoes.data() != null) {
         final data = docOpcoes.data()!;
-        // Carrega Cargos
         const String nomeCampoCargos = 'cargosEscola';
         if (data.containsKey(nomeCampoCargos) &&
             data[nomeCampoCargos] is List) {
@@ -142,8 +173,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
         } else {
           erroOpcoes = "Erro: Estrutura de dados de cargos inválida.";
         }
-        // Carrega Tipos
-        const String nomeCampoTipos = 'tipos';
+
+        const String nomeCampoTipos =
+            'tipos'; // Supondo que 'tipos' é o campo para "ESCOLA", "SUPERINTENDENCIA"
         if (data.containsKey(nomeCampoTipos) && data[nomeCampoTipos] is List) {
           tipos = (data[nomeCampoTipos] as List)
               .map((tipo) => tipo?.toString())
@@ -152,11 +184,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
               .toList();
         } else {
           erroOpcoes = (erroOpcoes ?? "") +
-              " Erro: Estrutura de dados de tipos inválida.";
+              "\nErro: Estrutura de dados de tipos de solicitante inválida.";
         }
-        // Carrega Setores <<< NOVO
-        const String nomeCampoSetores =
-            'setoresSuper'; // Use a constante kFieldSetorSuper se definida no service
+
+        const String nomeCampoSetores = 'setoresSuper';
         if (data.containsKey(nomeCampoSetores) &&
             data[nomeCampoSetores] is List) {
           setores = (data[nomeCampoSetores] as List)
@@ -167,22 +198,29 @@ class _CadastroScreenState extends State<CadastroScreen> {
           setores.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         } else {
           erroOpcoes = (erroOpcoes ?? "") +
-              " Erro: Estrutura de dados de setores inválida.";
+              "\nErro: Estrutura de dados de setores inválida.";
         }
       } else {
         erroOpcoes = "Erro: Configuração de opções não encontrada.";
       }
-      if (cargos.isEmpty && erroOpcoes == null) {
-        erroOpcoes = "Nenhum cargo encontrado.";
+
+      if (cargos.isEmpty && tipos.contains('ESCOLA') && erroOpcoes == null) {
+        // Cargos são para escola
+        erroOpcoes = "Nenhum cargo encontrado para Escola.";
       }
       if (tipos.isEmpty && erroOpcoes == null) {
         erroOpcoes = "Nenhum tipo de solicitante encontrado.";
       }
-      if (setores.isEmpty && erroOpcoes == null) {
-        erroOpcoes = "Nenhum setor encontrado.";
-      } // <<< VALIDAÇÃO PARA SETORES
+      if (setores.isEmpty &&
+          tipos.contains('SUPERINTENDENCIA') &&
+          erroOpcoes == null) {
+        // Setores são para SUPERINTENDENCIA
+        erroOpcoes = "Nenhum setor encontrado para Superintendência.";
+      }
 
-      _erroCarregarConfig = erroLocalidades ?? erroOpcoes;
+      _erroCarregarConfig = (erroLocalidades != null || erroOpcoes != null)
+          ? "${erroLocalidades ?? ''}${erroOpcoes ?? ''}".trim()
+          : null;
 
       if (mounted) {
         setState(() {
@@ -196,7 +234,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
           _instituicoesDisponiveis = [];
           _listaCargos = cargos;
           _listaTipos = tipos;
-          _listaSetores = setores; // <<< ATRIBUI LISTA DE SETORES
+          _listaSetores = setores;
+          _listaCidadesSuperintendencia =
+              loadedCidadesSuper; // <<< ATRIBUI LISTA DE CIDADES SUPER
           _isLoadingConfig = false;
         });
       }
@@ -205,13 +245,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
       if (mounted) {
         setState(() {
           _isLoadingConfig = false;
-          _erroCarregarConfig = "Erro ao carregar configurações.";
+          _erroCarregarConfig =
+              "Erro crítico ao carregar configurações: ${e.toString()}";
         });
       }
     }
   }
 
-  // --- FUNÇÃO PARA ATUALIZAR INSTITUIÇÕES (sem alterações) ---
   void _atualizarInstituicoes(String? cidadeSelecionada) {
     setState(() {
       _cidadeSelecionada = cidadeSelecionada;
@@ -228,24 +268,29 @@ class _CadastroScreenState extends State<CadastroScreen> {
     });
   }
 
-  // --- Função Cadastrar (Atualizada para salvar dados condicionais) ---
   Future<void> _cadastrar() async {
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
       const String dominioPermitido = '@seduc.ro.gov.br';
 
       if (!email.toLowerCase().endsWith(dominioPermitido)) {
-        /* ... (validação email) ... */ return;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('O email deve ser do domínio $dominioPermitido.'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
-      // Validação de professor só se aplica se o tipo for ESCOLA
+
       if (_tipoSelecionado == 'ESCOLA' &&
           _cargoSelecionado?.toUpperCase() == 'PROFESSOR') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text(
-                'Apenas Gestores, Coordenadores do LIE e Secretários são permitidos criar um Perfil de acesso.'),
+                'Apenas Gestores, Coordenadores do LIE e Secretários podem criar um Perfil de acesso para abertura de chamados escolares.'),
             backgroundColor: Colors.orange[800],
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 8),
           ));
         }
         return;
@@ -257,7 +302,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
       String? instituicaoFinal;
       if (_tipoSelecionado == 'ESCOLA') {
-        // Determina instituição apenas para ESCOLA
         if (_cidadeSelecionada == "OUTRO") {
           instituicaoFinal = _instituicaoManualController.text.trim();
         } else {
@@ -277,16 +321,15 @@ class _CadastroScreenState extends State<CadastroScreen> {
           await user.updateDisplayName(_nameController.text.trim());
 
           final uid = user.uid;
-          // --- Monta o profileData condicionalmente ---
           final profileData = <String, dynamic>{
             'uid': uid,
             kFieldName: _nameController.text.trim(),
             kFieldEmail: email,
             kFieldPhone: _phoneController.text.trim(),
-            kFieldUserTipoSolicitante:
-                _tipoSelecionado, // Salva o tipo selecionado
-            'role': 'inativo',
+            kFieldUserTipoSolicitante: _tipoSelecionado,
+            'role': 'inativo', // ou 'pendente_aprovacao'
             'createdAt': FieldValue.serverTimestamp(),
+            'ativo': true, // Adicionado para consistência com edit_profile
           };
 
           if (_tipoSelecionado == 'ESCOLA') {
@@ -294,12 +337,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
             profileData[kFieldUserInstituicao] = instituicaoFinal;
             profileData[kFieldCidade] = _cidadeSelecionada;
           } else if (_tipoSelecionado == 'SUPERINTENDENCIA') {
-            profileData[kFieldUserSetor] =
-                _setorSelecionado; // <<< SALVA O SETOR (Use a constante correta)
-            // Opcional: Salvar a cidade da superintendência se necessário no perfil
-            // profileData[kFieldCidadeSuperintendencia] = _cidadeSuperController.text.trim();
+            profileData[kFieldUserSetor] = _setorSelecionado;
+            profileData[kFieldCidadeSuperintendencia] =
+                _cidadeSuperintendenciaSelecionada; // <<< SALVA A CIDADE DA SUPERINTENDÊNCIA
           }
-          // --- Fim da montagem condicional ---
 
           await FirebaseFirestore.instance
               .collection(kCollectionUsers)
@@ -307,13 +348,28 @@ class _CadastroScreenState extends State<CadastroScreen> {
               .set(profileData);
 
           if (mounted) {
+            // Enviar email de verificação
+            // try {
+            //   await user.sendEmailVerification();
+            //   ScaffoldMessenger.of(context).showSnackBar(
+            //     const SnackBar(content: Text('Email de verificação enviado! Por favor, verifique sua caixa de entrada.'), backgroundColor: Colors.blue),
+            //   );
+            // } catch (e) {
+            //   print("Erro ao enviar email de verificação: $e");
+            //    ScaffoldMessenger.of(context).showSnackBar(
+            //     SnackBar(content: Text('Não foi possível enviar o email de verificação: ${e.toString()}'), backgroundColor: Colors.orange),
+            //   );
+            // }
+
             Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const MainNavigationScreen()));
+                    builder: (_) =>
+                        const MainNavigationScreen())); // Ou para uma tela de "Verifique seu email"
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content: Text('Conta criada com sucesso! Faça login.'),
+                  content: Text(
+                      'Conta criada com sucesso! Faça login ou verifique seu email se necessário.'),
                   backgroundColor: Colors.green),
             );
           }
@@ -368,7 +424,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                // --- Campo Nome ---
                 TextFormField(
                   controller: _nameController,
                   enabled: !_isLoading,
@@ -387,7 +442,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Campo Email ---
                 TextFormField(
                   controller: _emailController,
                   enabled: !_isLoading,
@@ -405,16 +459,19 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     if (!value.contains('@') || !value.contains('.')) {
                       return 'Formato de email inválido.';
                     }
+                    if (!value.toLowerCase().endsWith('@seduc.ro.gov.br')) {
+                      return 'O email deve ser do domínio @seduc.ro.gov.br.';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Campo Telefone ---
                 TextFormField(
                   controller: _phoneController,
                   enabled: !_isLoading,
                   keyboardType: TextInputType.phone,
+                  // TODO: Adicionar MaskTextInputFormatter se desejar
                   decoration: const InputDecoration(
                     labelText: 'Telefone *',
                     hintText: '(XX) XXXXX-XXXX',
@@ -425,12 +482,12 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Digite seu telefone para contato.';
                     }
+                    // Pode adicionar validação de formato de telefone aqui
                     return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Dropdown Tipo Solicitante ---
                 DropdownButtonFormField<String>(
                   value: _tipoSelecionado,
                   isExpanded: true,
@@ -454,6 +511,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     labelText: 'Tipo de Lotação *',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.business_center_outlined),
+                    errorMaxLines: 3,
                     errorText: _erroCarregarConfig != null &&
                             !_isLoadingConfig &&
                             _listaTipos.isEmpty
@@ -475,22 +533,25 @@ class _CadastroScreenState extends State<CadastroScreen> {
                           (_erroCarregarConfig != null && _listaTipos.isEmpty))
                       ? null
                       : (String? newValue) {
-                          // Reseta campos dependentes ao mudar o tipo
                           setState(() {
                             _tipoSelecionado = newValue;
+                            // Resetar campos dependentes
                             _cargoSelecionado = null;
                             _cidadeSelecionada = null;
                             _instituicaoSelecionada = null;
                             _instituicaoManualController.clear();
                             _instituicoesDisponiveis = [];
                             _setorSelecionado = null;
+                            _cidadeSuperintendenciaSelecionada =
+                                null; // <<< RESETAR NOVO CAMPO
                           });
                         },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      if (_isLoadingConfig) return null;
+                      if (_isLoadingConfig)
+                        return null; // Não mostrar erro durante o carregamento inicial
                       if (_erroCarregarConfig != null && _listaTipos.isEmpty)
-                        return _erroCarregarConfig;
+                        return _erroCarregarConfig; // Mostrar erro de config se houver
                       return 'Por favor, selecione o tipo de lotação.';
                     }
                     return null;
@@ -500,7 +561,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
                 // --- CAMPOS CONDICIONAIS PARA ESCOLA ---
                 if (_tipoSelecionado == 'ESCOLA') ...[
-                  // --- Dropdown de Cargo/Função ---
                   DropdownButtonFormField<String>(
                     value: _cargoSelecionado,
                     isExpanded: true,
@@ -524,6 +584,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                       labelText: 'Cargo / Função *',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.work_outline),
+                      errorMaxLines: 3,
                       errorText: _erroCarregarConfig != null &&
                               !_isLoadingConfig &&
                               _listaCargos.isEmpty
@@ -537,10 +598,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         : _listaCargos
                             .map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
-                              value: value,
-                              child:
-                                  Text(value, overflow: TextOverflow.ellipsis),
-                            );
+                                value: value,
+                                child: Text(value,
+                                    overflow: TextOverflow.ellipsis));
                           }).toList(),
                     onChanged: (_isLoading ||
                             _isLoadingConfig ||
@@ -563,8 +623,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     },
                   ),
                   const SizedBox(height: 16.0),
-
-                  // --- Dropdown de Cidade/Distrito ---
                   DropdownButtonFormField<String>(
                     value: _cidadeSelecionada,
                     isExpanded: true,
@@ -585,9 +643,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                                     fontSize: 14))
                             : const Text('Selecione a cidade/distrito *')),
                     decoration: InputDecoration(
-                      labelText: 'Cidade / Distrito *',
+                      labelText: 'Cidade / Distrito (Escola)*',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.location_city_outlined),
+                      errorMaxLines: 3,
                       errorText: _erroCarregarConfig != null &&
                               !_isLoadingConfig &&
                               _listaCidades.isEmpty
@@ -601,10 +660,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         : _listaCidades
                             .map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
-                              value: value,
-                              child:
-                                  Text(value, overflow: TextOverflow.ellipsis),
-                            );
+                                value: value,
+                                child: Text(value,
+                                    overflow: TextOverflow.ellipsis));
                           }).toList(),
                     onChanged: (_isLoading ||
                             _isLoadingConfig ||
@@ -623,8 +681,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     },
                   ),
                   const SizedBox(height: 16.0),
-
-                  // --- Campo Instituição (Dropdown ou Texto) ---
                   if (_cidadeSelecionada == "OUTRO")
                     TextFormField(
                       controller: _instituicaoManualController,
@@ -660,11 +716,17 @@ class _CadastroScreenState extends State<CadastroScreen> {
                             ])
                           : (_cidadeSelecionada == null
                               ? const Text('Selecione a cidade primeiro')
-                              : const Text('Selecione sua instituição *')),
+                              : (_instituicoesDisponiveis.isEmpty &&
+                                      _cidadeSelecionada != null &&
+                                      !_isLoadingConfig
+                                  ? const Text(
+                                      'Nenhuma instituição para esta cidade')
+                                  : const Text('Selecione sua instituição *'))),
                       decoration: InputDecoration(
-                        labelText: 'Instituição / Lotação *',
+                        labelText: 'Instituição / Lotação (Escola)*',
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.account_balance_outlined),
+                        errorMaxLines: 3,
                         errorText: (_erroCarregarConfig != null &&
                                 !_isLoadingConfig &&
                                 _instituicoesDisponiveis.isEmpty &&
@@ -673,7 +735,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                             ? "Nenhuma instituição para esta cidade."
                             : ((_erroCarregarConfig != null &&
                                     !_isLoadingConfig &&
-                                    _listaInstituicoes.isEmpty)
+                                    _listaInstituicoes.isEmpty &&
+                                    _cidadeSelecionada != null &&
+                                    _cidadeSelecionada !=
+                                        "OUTRO") // Adicionado para erro geral de instituições
                                 ? _erroCarregarConfig
                                 : null),
                       ),
@@ -681,22 +746,23 @@ class _CadastroScreenState extends State<CadastroScreen> {
                               _cidadeSelecionada == null ||
                               _cidadeSelecionada == "OUTRO" ||
                               (_erroCarregarConfig != null &&
-                                  _instituicoesDisponiveis.isEmpty)
+                                  _instituicoesDisponiveis.isEmpty &&
+                                  _cidadeSelecionada != null)
                           ? []
                           : _instituicoesDisponiveis
                               .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value,
-                                    overflow: TextOverflow.ellipsis),
-                              );
+                                  value: value,
+                                  child: Text(value,
+                                      overflow: TextOverflow.ellipsis));
                             }).toList(),
                       onChanged: (_isLoading ||
                               _isLoadingConfig ||
                               _cidadeSelecionada == null ||
                               _cidadeSelecionada == "OUTRO" ||
                               (_erroCarregarConfig != null &&
-                                  _instituicoesDisponiveis.isEmpty))
+                                  _instituicoesDisponiveis.isEmpty &&
+                                  _cidadeSelecionada != null))
                           ? null
                           : (String? newValue) {
                               setState(() {
@@ -720,7 +786,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   const SizedBox(height: 16.0),
                 ],
 
-                // --- CAMPO CONDICIONAL PARA SUPERINTENDENCIA ---
+                // --- CAMPOS CONDICIONAIS PARA SUPERINTENDENCIA ---
                 if (_tipoSelecionado == 'SUPERINTENDENCIA') ...[
                   DropdownButtonFormField<String>(
                     value: _setorSelecionado,
@@ -742,10 +808,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                                     fontSize: 14))
                             : const Text('Selecione o setor *')),
                     decoration: InputDecoration(
-                      labelText: 'Setor do servidor *',
+                      labelText: 'Setor (Superintendência)*',
                       border: const OutlineInputBorder(),
-                      prefixIcon:
-                          const Icon(Icons.groups_outlined), // Ícone exemplo
+                      prefixIcon: const Icon(Icons.groups_outlined),
+                      errorMaxLines: 3,
                       errorText: _erroCarregarConfig != null &&
                               !_isLoadingConfig &&
                               _listaSetores.isEmpty
@@ -759,10 +825,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         : _listaSetores
                             .map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
-                              value: value,
-                              child:
-                                  Text(value, overflow: TextOverflow.ellipsis),
-                            );
+                                value: value,
+                                child: Text(value,
+                                    overflow: TextOverflow.ellipsis));
                           }).toList(),
                     onChanged: (_isLoading ||
                             _isLoadingConfig ||
@@ -785,9 +850,92 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     },
                   ),
                   const SizedBox(height: 16.0),
+
+                  // --- NOVO DROPDOWN PARA CIDADE DA SUPERINTENDÊNCIA ---
+                  DropdownButtonFormField<String>(
+                    value: _cidadeSuperintendenciaSelecionada,
+                    isExpanded: true,
+                    hint: _isLoadingConfig
+                        ? const Row(children: [
+                            SizedBox(
+                                width: 12,
+                                height: 12,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 8),
+                            Text('Carregando cidades...')
+                          ])
+                        : (_erroCarregarConfig != null &&
+                                _listaCidadesSuperintendencia.isEmpty &&
+                                !_isLoadingConfig // Modificado para checar _isLoadingConfig
+                            ? Text(
+                                _erroCarregarConfig!
+                                        .contains("cidadesSuperintendecia")
+                                    ? _erroCarregarConfig!
+                                    : "Erro ao carregar cidades SUPER.", // Mensagem mais específica
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14))
+                            : const Text(
+                                'Selecione a Cidade da Superintendência *')),
+                    decoration: InputDecoration(
+                      labelText: 'Cidade da Superintendência *',
+                      border: const OutlineInputBorder(),
+                      prefixIcon:
+                          const Icon(Icons.map_outlined), // Ícone exemplo
+                      errorMaxLines: 3,
+                      errorText: _erroCarregarConfig != null &&
+                              !_isLoadingConfig &&
+                              _listaCidadesSuperintendencia.isEmpty
+                          ? (_erroCarregarConfig!
+                                  .contains("cidadesSuperintendecia")
+                              ? _erroCarregarConfig!
+                              : "Erro ao carregar cidades da SUPER.")
+                          : null,
+                    ),
+                    items: _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaCidadesSuperintendencia.isEmpty &&
+                                !_isLoadingConfig)
+                        ? []
+                        : _listaCidadesSuperintendencia
+                            .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child:
+                                  Text(value, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                    onChanged: (_isLoading ||
+                            _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaCidadesSuperintendencia.isEmpty &&
+                                !_isLoadingConfig))
+                        ? null
+                        : (String? newValue) {
+                            setState(() {
+                              _cidadeSuperintendenciaSelecionada = newValue;
+                            });
+                          },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        if (_isLoadingConfig) return null;
+                        if (_erroCarregarConfig != null &&
+                            _listaCidadesSuperintendencia.isEmpty &&
+                            !_isLoadingConfig)
+                          return (_erroCarregarConfig!
+                                  .contains("cidadesSuperintendecia")
+                              ? _erroCarregarConfig!
+                              : "Erro ao carregar cidades da SUPER.");
+                        return 'Selecione a cidade da Superintendência.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16.0),
+                  // --- FIM NOVO DROPDOWN ---
                 ],
 
-                // --- Campo Senha ---
                 TextFormField(
                   controller: _passwordController,
                   enabled: !_isLoading,
@@ -810,7 +958,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Campo Confirmar Senha ---
                 TextFormField(
                   controller: _confirmPasswordController,
                   enabled: !_isLoading,
@@ -832,7 +979,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 24.0),
 
-                // --- Botão Cadastrar ---
                 ElevatedButton(
                   onPressed: _isLoading || _isLoadingConfig ? null : _cadastrar,
                   style: ElevatedButton.styleFrom(
@@ -848,12 +994,11 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Botão Voltar para Login ---
                 TextButton(
                   onPressed: _isLoading
                       ? null
                       : () {
-                          Navigator.pop(context);
+                          Navigator.pop(context); // Volta para a tela de Login
                         },
                   child: const Text('Já tem uma conta? Faça login'),
                 ),
@@ -865,16 +1010,22 @@ class _CadastroScreenState extends State<CadastroScreen> {
     );
   }
 
-  // Constantes locais para nomes de campos
+  // Constantes locais para nomes de campos do Firestore
+  // É recomendável ter estas constantes em um arquivo compartilhado se usadas em múltiplos lugares.
   static const String kFieldName = 'name';
   static const String kFieldEmail = 'email';
   static const String kFieldPhone = 'phone';
-  static const String kFieldJobTitle = 'jobTitle';
-  static const String kFieldUserInstituicao = 'institution';
-  static const String kFieldCidade = 'cidade';
+  static const String kFieldJobTitle = 'jobTitle'; // Para ESCOLA
+  static const String kFieldUserInstituicao = 'institution'; // Para ESCOLA
+  static const String kFieldCidade = 'cidade'; // Para ESCOLA
   static const String kFieldUserTipoSolicitante = 'tipo_solicitante';
   static const String kFieldUserSetor =
-      'setor_superintendencia'; // <<< CONSTANTE LOCAL USADA
+      'setor_superintendencia'; // Para SUPERINTENDENCIA
+  static const String kFieldCidadeSuperintendencia =
+      'cidadeSuperintendencia'; // <<< NOVA CONSTANTE LOCAL (Para SUPERINTENDENCIA)
+  // Certifique-se que é a mesma string usada no NovoChamadoScreen: `userData[kFieldCidadeSuperintendencia]`
+  // No NovoChamadoScreen.dart, parece ser usada diretamente como 'cidadeSuperintendencia'.
+
   static const String kCollectionUsers = 'users';
   static const String kCollectionConfig = 'configuracoes';
   static const String kDocOpcoes = 'opcoesChamado';

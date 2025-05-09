@@ -16,9 +16,9 @@ import 'novo_chamado_screen.dart';
 import 'agenda_screen.dart';
 import 'profile_screen.dart';
 import 'user_management_screen.dart';
-import 'login_screen.dart';
+import 'login_screen.dart'; // Certifique-se que LoginScreen está importada
 import 'chamados_arquivados_screen.dart';
-import 'screens/tutorial_screen.dart';
+import 'screens/tutorial_screen.dart'; // Supondo que este é o caminho correto
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -92,7 +92,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<void> _checkUserRole() async {
-    // ... (lógica de _checkUserRole como antes)
     final User? currentUserFromAuth = FirebaseAuth.instance.currentUser;
     if (mounted) {
       setState(() {
@@ -130,11 +129,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       } catch (e) {
         isAdminResult = false;
         roleResult = 'inativo';
+        print("Erro ao verificar papel do usuário: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao verificar permissões: $e')),
+          );
+        }
       }
     } else {
       roleResult = 'inativo';
       isAdminResult = false;
+      if (mounted) {
+        Future.delayed(Duration.zero, () {
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (Route<dynamic> route) => false,
+            );
+          }
+        });
+      }
     }
+
     if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
@@ -148,35 +164,109 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> _verificarAtualizacoesApp() async {/* ... (como antes) ... */}
+  Future<void> _verificarAtualizacoesApp() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = Version.parse(packageInfo.version);
+
+      final response = await http.get(Uri.parse(
+          'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/version.json')); //TODO: Substituir pela URL correta
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        final newVersionStr = jsonResponse['latest_version'] as String?;
+        final notes = jsonResponse['release_notes'] as String?;
+        final url = jsonResponse['download_url'] as String?;
+
+        if (newVersionStr != null && url != null) {
+          final newVersion = Version.parse(newVersionStr);
+          if (newVersion > currentVersion) {
+            if (mounted) {
+              _mostrarDialogoAtualizacao(
+                  newVersionStr, notes ?? 'Notas não disponíveis.', url);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Erro ao verificar atualizações: $e');
+    }
+  }
+
   Future<void> _mostrarDialogoAtualizacao(
       String newVersion, String notes, String url) async {
-    /* ... (como antes) ... */
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Nova Versão Disponível: $newVersion'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                const Text('Uma nova versão do aplicativo está disponível.'),
+                const SizedBox(height: 10),
+                Text('Notas da versão:\n$notes'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Mais Tarde'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              child: const Text('Atualizar Agora'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _abrirUrlDownload(url);
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
-  Future<void> _abrirUrlDownload(String url) async {/* ... (como antes) ... */}
+
+  Future<void> _abrirUrlDownload(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível abrir o link: $url')),
+        );
+      }
+    }
+  }
 
   void _onDestinationSelected(int newScreenIndexFromSideMenu) {
     print(
         "DEBUG: _onDestinationSelected - newScreenIndexFromSideMenu: $newScreenIndexFromSideMenu, _isAdmin: $_isAdmin, _userRole: $_userRole");
 
-    int targetListIndex =
-        newScreenIndexFromSideMenu; // O índice para _adminScreens ou o índice mapeado para _userScreens
+    int targetListIndex = newScreenIndexFromSideMenu;
 
     if (!_isAdmin) {
-      // Bloqueios específicos para não-admins
+      // MODIFICAÇÃO: Bloqueia "Novo Chamado" para usuários inativos
       if (_userRole == 'inativo' &&
           newScreenIndexFromSideMenu == novoChamadoIndex) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Permissão negada. Espere a ativação da conta.'),
+            content: Text(
+                'Abertura de chamados bloqueada. Sua conta está aguardando ativação.'),
             backgroundColor: Colors.orangeAccent,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
           ));
         }
-        return;
+        return; // Impede a navegação
       }
+      // FIM DA MODIFICAÇÃO
+
       if (newScreenIndexFromSideMenu == agendaIndex) {
-        // Tentativa de acessar Agenda
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -186,7 +276,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         return;
       }
       if (newScreenIndexFromSideMenu == gerenciarUsuariosIndex) {
-        // Tentativa de acessar Gerenciar Usuários
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Acesso restrito a administradores.')),
@@ -195,18 +284,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         return;
       }
 
-      // Mapeamento de índices para _userScreens
       if (newScreenIndexFromSideMenu == perfilIndex) {
-        // Admin index 3
-        targetListIndex = 2; // User index 2
+        targetListIndex = 2;
       } else if (newScreenIndexFromSideMenu == arquivadosIndex) {
-        // Admin index 5
-        targetListIndex = 3; // User index 3
+        targetListIndex = 3;
       } else if (newScreenIndexFromSideMenu == tutoriaisIndex) {
-        // Admin index 6
-        targetListIndex = 4; // User index 4
+        targetListIndex = 4;
       }
-      // Índices 0 (Lista) e 1 (Novo) são os mesmos para _userScreens
     }
 
     final optionsLength = _currentScreenOptions.length;
@@ -214,9 +298,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       if (mounted) {
         setState(() {
           _selectedIndex = targetListIndex;
-          // Limpa a busca global se sair das telas de listagem de chamados
-          int arquivadosListIndex =
-              _isAdmin ? arquivadosIndex : 3; // Mapeado para _userScreens
+          int arquivadosListIndex = _isAdmin ? arquivadosIndex : 3;
           if (_globalSearchQuery.isNotEmpty &&
               _selectedIndex != listaChamadosIndex &&
               _selectedIndex != arquivadosListIndex) {
@@ -236,20 +318,61 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Future<void> _fazerLogout(BuildContext context) async {
-    /* ... (como antes) ... */
+    final bool? confirmarLogout = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirmar Saída'),
+          content: const Text('Deseja realmente sair do aplicativo?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+            ),
+            TextButton(
+              child: Text('Sair',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmarLogout == true) {
+      try {
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (Route<dynamic> route) => false,
+          );
+        }
+      } catch (e) {
+        print("Erro ao fazer logout: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao fazer logout: ${e.toString()}')),
+          );
+        }
+      }
+    }
   }
 
   void _handleSearchQueryChanged(String query) {
     if (mounted) {
       setState(() {
         _globalSearchQuery = query;
-        int arquivadosListIndex =
-            _isAdmin ? arquivadosIndex : 3; // Mapeado para _userScreens
+        int arquivadosListIndex = _isAdmin ? arquivadosIndex : 3;
         if (_selectedIndex != listaChamadosIndex &&
             _selectedIndex != arquivadosListIndex &&
             query.isNotEmpty) {
-          _selectedIndex =
-              listaChamadosIndex; // Volta para a lista de chamados principal
+          _selectedIndex = listaChamadosIndex;
         }
       });
     }
@@ -257,12 +380,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (lógica de build como antes, usando _selectedIndex que agora está corretamente mapeado) ...
     final BorderRadius contentBorderRadius = BorderRadius.circular(12.0);
     int effectiveIndex = _selectedIndex;
 
     if (_isLoadingRole) {
-      effectiveIndex = 0;
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     } else {
       final optionsLength = _currentScreenOptions.length;
       if (_selectedIndex < 0 || _selectedIndex >= optionsLength) {
@@ -281,20 +405,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       }
     }
 
-    if (_isLoadingRole) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
       body: GradientBackgroundContainer(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             SideMenu(
-              selectedIndex:
-                  _selectedIndex, // Passa o _selectedIndex já mapeado
+              selectedIndex: _selectedIndex,
               onDestinationSelected: _onDestinationSelected,
               onLogout: () => _fazerLogout(context),
               isAdminUser: _isAdmin,

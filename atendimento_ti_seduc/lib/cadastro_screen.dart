@@ -285,7 +285,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
             kFieldPhone: _phoneController.text.trim(),
             kFieldUserTipoSolicitante:
                 _tipoSelecionado, // Salva o tipo selecionado
-            'role': 'requester',
+            'role': 'inativo',
             'createdAt': FieldValue.serverTimestamp(),
           };
 

@@ -48,6 +48,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
 
   List<Chamado> _ultimosChamadosFiltradosParaExibicao = [];
 
+  // MODIFICAÇÃO: Removido kStatusFinalizado das opções de filtro desta tela
   final List<String> _statusOptions = [
     kStatusAberto,
     kStatusEmAndamento,
@@ -60,23 +61,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     kStatusAguardandoEquipamento,
     kStatusAtribuidoGSIOR,
     kStatusGarantiaFabricante,
+    // kStatusFinalizado, // Removido daqui
   ];
   final List<Map<String, dynamic>> _sortOptions = [
     {'label': 'Mais Recentes', 'field': kFieldDataCriacao, 'descending': true},
     {'label': 'Mais Antigos', 'field': kFieldDataCriacao, 'descending': false},
     {'label': 'Prioridade', 'field': kFieldPrioridade, 'descending': true},
     {'label': 'Status', 'field': kFieldStatus, 'descending': false},
-  ];
-  final List<String> _statusAtivosRequisitante = [
-    kStatusAberto,
-    kStatusEmAndamento,
-    kStatusPendente,
-    kStatusAguardandoAprovacao,
-    kStatusAguardandoPeca,
-    kStatusChamadoDuplicado,
-    kStatusAguardandoEquipamento,
-    kStatusAtribuidoGSIOR,
-    kStatusGarantiaFabricante,
   ];
 
   String? _confirmingChamadoId;
@@ -182,17 +173,21 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       } else {
         query = query.where(kFieldUnidadeOrganizacionalChamado,
             isEqualTo: _currentUserInstitution);
-        if (_selectedStatusFilter == null) {
-          query = query.where(kFieldStatus, whereIn: _statusAtivosRequisitante);
-        } else {
+
+        if (_selectedStatusFilter != null) {
           query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
+        } else {
+          // Por padrão, NÃO mostra os finalizados para não-admins
+          query = query.where(kFieldStatus, whereNotIn: [kStatusFinalizado]);
         }
         query = query.where(kFieldAdminInativo, isEqualTo: false);
       }
     } else if (_isAdmin) {
       if (_selectedStatusFilter != null) {
+        // Admin pode filtrar por qualquer status (exceto Finalizado, pois foi removido de _statusOptions)
         query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
       } else {
+        // Por padrão, Admin também não vê os finalizados nesta tela
         query = query.where(kFieldStatus, whereNotIn: [kStatusFinalizado]);
       }
     } else {
@@ -277,6 +272,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         spacing: 8.0,
                         runSpacing: 4.0,
                         children: _statusOptions.map((statusValue) {
+                          // _statusOptions já não contém "Finalizado"
                           final bool isSelected =
                               _selectedStatusFilter == statusValue;
                           return FilterChip(
@@ -862,7 +858,8 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         icone = Icons.filter_alt_off_outlined;
                       } else if (!_isLoadingRole) {
                         if (_isAdmin) {
-                          msg = 'Nenhum chamado ativo no sistema.';
+                          msg =
+                              'Nenhum chamado ativo no sistema (chamados finalizados não são exibidos aqui).';
                           icone = Icons.inbox_outlined;
                         } else {
                           if (_currentUserInstitution == null ||
@@ -872,7 +869,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             icone = Icons.business_outlined;
                           } else {
                             msg =
-                                'Nenhum chamado encontrado para a sua instituição:\n"$_currentUserInstitution"';
+                                'Nenhum chamado encontrado para a sua instituição (chamados finalizados não são exibidos aqui):\n"$_currentUserInstitution"';
                             icone = Icons.assignment_late_outlined;
                           }
                         }
@@ -942,8 +939,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                           chamadoDataMap =
                               originalDoc.data() as Map<String, dynamic>;
                         } else {
-                          // Fallback: Construct map from 'chamado' object's properties.
-                          // **REVISE ESTE BLOCO CUIDADOSAMENTE PARA CORRESPONDER AO SEU MODELO `Chamado`**
                           chamadoDataMap = {
                             'id': chamado.id,
                             kFieldStatus: chamado.status,
@@ -966,10 +961,9 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             kFieldProblemaOutro: chamado.problemaOutro,
                             kFieldEquipamentoOutro: chamado.equipamentoOutro,
                             kFieldAuthUserDisplay:
-                                (_auth.currentUser?.displayName ??
-                                    ''), // Use current user info if available
-                            kFieldAuthUserEmail: (_auth.currentUser?.email ??
-                                ''), // Use current user info if available
+                                (_auth.currentUser?.displayName ?? ''),
+                            kFieldAuthUserEmail:
+                                (_auth.currentUser?.email ?? ''),
                             kFieldDataAtendimento: chamado.dataAtendimento,
                             kFieldCidade: chamado.cidade,
                             kFieldInstituicao: chamado.instituicao,
@@ -979,7 +973,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             kFieldSetorSuper: chamado.setorSuperintendencia,
                             kFieldCidadeSuperintendencia:
                                 chamado.cidadeSuperintendencia,
-                            // kFieldObservacaoCargo: chamado.observacaoCargo, // Verifique se existe no modelo
+                            // kFieldObservacaoCargo: chamado.observacaoCargo, // Verifique se 'observacaoCargo' existe em ChamadoModel
                             kFieldSolucao: chamado.solucao,
                             kFieldRequerenteConfirmou:
                                 chamado.requerenteConfirmouSolucao,

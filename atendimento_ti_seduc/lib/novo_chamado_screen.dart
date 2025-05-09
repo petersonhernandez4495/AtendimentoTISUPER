@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'dart:math';
 
 // Importe os novos serviços e as constantes
-import 'services/chamado_service.dart';
-import 'services/duplicidade_service.dart';
+import '../services/chamado_service.dart';
+import '../services/duplicidade_service.dart';
 
 class NovoChamadoScreen extends StatefulWidget {
   const NovoChamadoScreen({super.key});
@@ -32,14 +33,16 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   final _marcaModeloController = TextEditingController();
   final _patrimonioController = TextEditingController();
   String? _problemaSelecionado;
-  String? _cidadeSelecionada;
-  String? _instituicaoSelecionada;
-  String? _cargoSelecionado;
+  String? _cidadeSelecionada; // Para Escola
+  String? _instituicaoSelecionada; // Para Escola
+  String? _cargoSelecionado; // Para Escola
   String? _userTipoSolicitante;
-  String? _atendimentoParaSelecionado;
-  bool _isProfessorSelecionado = false;
-  String? _setorSuperSelecionado;
-  final _cidadeSuperController = TextEditingController();
+  String? _atendimentoParaSelecionado; // Para Escola
+  bool _isProfessorSelecionado = false; // Para Escola
+  String? _setorSuperSelecionado; // Para Superintendencia
+
+  String? _cidadeSuperSelecionada;
+
   final _instituicaoManualController = TextEditingController();
   final _equipamentoOutroController = TextEditingController();
   final _problemaOutroController = TextEditingController();
@@ -52,6 +55,12 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   List<String> _setoresSuper = [];
   Map<String, List<String>> _escolasPorCidade = {};
   List<String> _cidadesDisponiveis = [];
+
+  List<String> _instituicoesDisponiveis = [];
+
+  List<String> _listaCidadesSuperintendencia = [];
+  bool _isLoadingCidadesSuper = true;
+  String? _erroCarregarCidadesSuper;
 
   final _phoneMaskFormatter = MaskTextInputFormatter(
       mask: '(##) #####-####',
@@ -78,7 +87,6 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     _celularController.dispose();
     _marcaModeloController.dispose();
     _patrimonioController.dispose();
-    _cidadeSuperController.dispose();
     _instituicaoManualController.dispose();
     _equipamentoOutroController.dispose();
     _problemaOutroController.dispose();
@@ -86,7 +94,6 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   Future<void> _carregarConfiguracoes() async {
-    // ... (Lógica de carregamento de configurações como antes)
     print("--- Iniciando _carregarConfiguracoes ---");
     if (!_isLoadingConfig && !_hasLoadingError) {
       print("--- Carregamento já realizado. Saindo. ---");
@@ -95,6 +102,8 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     setState(() {
       _isLoadingConfig = true;
       _hasLoadingError = false;
+      _isLoadingCidadesSuper = true;
+      _erroCarregarCidadesSuper = null;
     });
     try {
       final db = FirebaseFirestore.instance;
@@ -126,15 +135,25 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
       Map<String, dynamic>? dataLocalidades = docLocalidades.data();
       Map<String, List<String>> loadedEscolasPorCidade = {};
       List<String> loadedCidadesDisponiveis = [];
-      const String nomeCampoMapa = 'escolasPorCidade';
+      List<String> loadedCidadesSuper = [];
+
+      const String nomeCampoMapaEscolas = 'escolasPorCidade';
       if (dataLocalidades != null &&
-          dataLocalidades.containsKey(nomeCampoMapa)) {
-        dynamic escolasMapData = dataLocalidades[nomeCampoMapa];
+          dataLocalidades.containsKey(nomeCampoMapaEscolas)) {
+        dynamic escolasMapData = dataLocalidades[nomeCampoMapaEscolas];
         if (escolasMapData is Map) {
           escolasMapData.forEach((key, value) {
             if (key is String && value != null) {
-              List<String> escolas =
-                  _parseStringListFromDynamic(value, 'escolas para "$key"');
+              List<String> escolas;
+              if (key == "OUTRO" && value is String) {
+                print(
+                    "WARN (parse): Campo 'escolas para \"Outro\"' era String, tratando como lista vazia. Valor original: \"$value\"");
+                escolas = [];
+              } else {
+                escolas =
+                    _parseStringListFromDynamic(value, 'escolas para "$key"');
+              }
+
               if (escolas.isNotEmpty || key == "OUTRO") {
                 loadedEscolasPorCidade[key] = escolas
                   ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -148,7 +167,30 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         }
       }
+
+      const String nomeCampoCidadesSuper = 'cidadesSuperintendecia';
+      if (dataLocalidades != null &&
+          dataLocalidades.containsKey(nomeCampoCidadesSuper)) {
+        loadedCidadesSuper = _parseStringListFromDynamic(
+            dataLocalidades[nomeCampoCidadesSuper], nomeCampoCidadesSuper);
+        loadedCidadesSuper
+            .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        if (loadedCidadesSuper.isEmpty &&
+            dataLocalidades[nomeCampoCidadesSuper] is List) {
+          _erroCarregarCidadesSuper =
+              "Nenhuma cidade da superintendência configurada.";
+          print(
+              "WARN: Campo '$nomeCampoCidadesSuper' está vazio em configuracoes/localidades.");
+        }
+      } else {
+        _erroCarregarCidadesSuper =
+            "Configuração '$nomeCampoCidadesSuper' não encontrada.";
+        print(
+            "WARN: Campo '$nomeCampoCidadesSuper' não encontrado em configuracoes/localidades. Verifique o nome e a existência do campo no Firestore.");
+      }
+
       bool configEssentialsOk = loadedCidadesDisponiveis.isNotEmpty;
+
       if (mounted) {
         setState(() {
           if (configEssentialsOk) {
@@ -160,28 +202,35 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
             _setoresSuper = loadedSetoresSuper;
             _escolasPorCidade = loadedEscolasPorCidade;
             _cidadesDisponiveis = loadedCidadesDisponiveis;
+            _listaCidadesSuperintendencia = loadedCidadesSuper;
             _hasLoadingError = false;
           } else {
             _hasLoadingError = true;
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Erro crítico ao carregar configurações!'),
+            String erroMsg =
+                'Erro crítico ao carregar configurações de localidades (escolas)!';
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(erroMsg),
                 backgroundColor: Colors.red,
-                duration: Duration(seconds: 10)));
+                duration: const Duration(seconds: 10)));
           }
           _isLoadingConfig = false;
+          _isLoadingCidadesSuper = false;
         });
       }
     } catch (e, stacktrace) {
-      print("--- ERRO INESPERADO ---");
+      print("--- ERRO INESPERADO em _carregarConfiguracoes ---");
       print("Erro CRÍTICO: $e");
       print(stacktrace);
       if (mounted) {
         setState(() {
           _isLoadingConfig = false;
           _hasLoadingError = true;
+          _isLoadingCidadesSuper = false;
+          _erroCarregarCidadesSuper = "Erro fatal ao carregar configurações.";
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Erro fatal config: ${e.toString()}'),
+            content:
+                Text('Erro fatal ao carregar configurações: ${e.toString()}'),
             backgroundColor: Colors.red));
       }
     }
@@ -190,7 +239,8 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
 
   List<String> _parseStringList(Map<String, dynamic>? data, String fieldName) {
     if (data == null || !data.containsKey(fieldName)) {
-      print("WARN (parse): Campo '$fieldName' não encontrado.");
+      print(
+          "WARN (parse): Campo '$fieldName' não encontrado no mapa de opções.");
       return [];
     }
     return _parseStringListFromDynamic(data[fieldName], fieldName);
@@ -206,21 +256,33 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
       List<String> result = data
           .where((item) => item != null)
           .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
           .toList();
-      if (data.any((item) => item is! String && item != null)) {
-        print(
-            "WARN (parse): Itens não-string convertidos em '$fieldDescription'.");
-      }
       return result;
     } else {
       print(
-          "WARN (parse): Campo '$fieldDescription' não é Lista/Array. Tipo: ${data.runtimeType}");
+          "WARN (parse): Campo '$fieldDescription' não é Lista/Array no Firestore. Tipo encontrado: ${data.runtimeType}. Valor: $data");
       return [];
     }
   }
 
+  void _atualizarInstituicoes(String? cidadeSelecionada) {
+    setState(() {
+      _cidadeSelecionada = cidadeSelecionada;
+      _instituicaoSelecionada = null;
+      _instituicaoManualController.clear();
+      if (cidadeSelecionada != null &&
+          cidadeSelecionada != "OUTRO" &&
+          _escolasPorCidade.containsKey(cidadeSelecionada)) {
+        _instituicoesDisponiveis =
+            List<String>.from(_escolasPorCidade[cidadeSelecionada]!);
+      } else {
+        _instituicoesDisponiveis = [];
+      }
+    });
+  }
+
   Future<void> _preencherDadosUsuario() async {
-    // ... (Lógica de preencher dados do usuário como antes) ...
     if (_profileDataFilled) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -237,7 +299,11 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         final userData = userDoc.data()!;
         _userTipoSolicitante = userData[kFieldUserTipoSolicitante] as String?;
         if (_userTipoSolicitante == null || _userTipoSolicitante!.isEmpty) {
-          _hasLoadingError = true; /* ... snackbar ... */
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Tipo de solicitante não definido no perfil. Verifique seu cadastro.'),
+                backgroundColor: Colors.orange));
         }
         final String? phoneFromProfile = userData[kFieldPhone] as String?;
         if (phoneFromProfile != null && phoneFromProfile.isNotEmpty) {
@@ -248,38 +314,65 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
             _celularController.text = phoneFromProfile;
           }
         } else {
-          _hasLoadingError = true; /* ... snackbar ... */
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Telefone não definido no perfil. Preencha para continuar.'),
+                backgroundColor: Colors.orange));
         }
-        final String? cargoFromProfile = userData[kFieldJobTitle] as String?;
-        if (cargoFromProfile != null &&
-            _cargosEscola.contains(cargoFromProfile)) {
-          _cargoSelecionado = cargoFromProfile;
-          _isProfessorSelecionado = (cargoFromProfile == 'PROFESSOR');
-        }
-        final String? cidadeFromProfile = userData[kFieldCidade] as String?;
-        if (cidadeFromProfile != null &&
-            _cidadesDisponiveis.contains(cidadeFromProfile)) {
-          _cidadeSelecionada = cidadeFromProfile;
-          final String? instituicaoFromProfile =
-              userData[kFieldUserInstituicao] as String?;
-          final instituicoesDaCidade =
-              _escolasPorCidade[_cidadeSelecionada] ?? [];
-          if (_cidadeSelecionada != "OUTRO" &&
-              instituicaoFromProfile != null &&
-              instituicoesDaCidade.contains(instituicaoFromProfile)) {
-            _instituicaoSelecionada = instituicaoFromProfile;
-          } else if (_cidadeSelecionada == "OUTRO" &&
-              instituicaoFromProfile != null) {
-            _instituicaoSelecionada = instituicaoFromProfile;
+
+        if (_userTipoSolicitante == 'ESCOLA') {
+          final String? cargoFromProfile = userData[kFieldJobTitle] as String?;
+          if (cargoFromProfile != null &&
+              _cargosEscola.contains(cargoFromProfile)) {
+            _cargoSelecionado = cargoFromProfile;
+            _isProfessorSelecionado = (cargoFromProfile == 'PROFESSOR');
+          }
+          final String? cidadeFromProfile = userData[kFieldCidade] as String?;
+          if (cidadeFromProfile != null &&
+              _cidadesDisponiveis.contains(cidadeFromProfile)) {
+            _atualizarInstituicoes(cidadeFromProfile);
+
+            final String? instituicaoFromProfile =
+                userData[kFieldUserInstituicao] as String?;
+            if (_cidadeSelecionada != "OUTRO" &&
+                instituicaoFromProfile != null &&
+                _instituicoesDisponiveis.contains(instituicaoFromProfile)) {
+              _instituicaoSelecionada = instituicaoFromProfile;
+            } else if (_cidadeSelecionada == "OUTRO" &&
+                instituicaoFromProfile != null) {
+              _instituicaoManualController.text = instituicaoFromProfile;
+              _instituicaoSelecionada = instituicaoFromProfile;
+            }
+          }
+        } else if (_userTipoSolicitante == 'SUPERINTENDENCIA') {
+          final String? setorFromProfile = userData[kFieldUserSetor] as String?;
+          if (setorFromProfile != null &&
+              _setoresSuper.contains(setorFromProfile)) {
+            _setorSuperSelecionado = setorFromProfile;
+          }
+          final String? cidadeSuperFromProfile =
+              userData[kFieldCidadeSuperintendencia] as String?;
+          if (cidadeSuperFromProfile != null &&
+              !_isLoadingCidadesSuper &&
+              _listaCidadesSuperintendencia.contains(cidadeSuperFromProfile)) {
+            _cidadeSuperSelecionada = cidadeSuperFromProfile;
           }
         }
         _profileDataFilled = true;
       } else {
-        _hasLoadingError = true; /* ... snackbar ... */
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Dados do perfil não encontrados. Preencha os campos manualmente.'),
+              backgroundColor: Colors.orange));
       }
     } catch (e, s) {
       print("Erro ao preencher dados do usuário: $e\n$s");
-      _hasLoadingError = true; /* ... snackbar ... */
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Erro ao carregar dados do perfil.'),
+            backgroundColor: Colors.red));
     } finally {
       if (mounted) {
         setState(() {
@@ -291,38 +384,57 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   void _resetDependentFields() {
-    // ... (Lógica de reset como antes) ...
     _setorSuperSelecionado = null;
     _atendimentoParaSelecionado = null;
     _isProfessorSelecionado = false;
-    _cidadeSuperController.clear();
+    _cidadeSuperSelecionada = null;
     _instituicaoManualController.clear();
     _equipamentoOutroController.clear();
     _problemaOutroController.clear();
     _equipamentoSelecionado = null;
     _problemaSelecionado = null;
-    _profileDataFilled = false;
   }
 
-  // --- FUNÇÃO ENVIAR CHAMADO (Modificada para aviso de duplicidade) ---
   Future<void> _enviarChamado() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Por favor, preencha todos os campos obrigatórios.')));
       return;
     }
-    // Validações de perfil e professor (como antes)
     if (_userTipoSolicitante == null || _userTipoSolicitante!.isEmpty) {
-      /* ... erro ... */ return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Tipo de solicitante não definido. Verifique seu perfil.'),
+          backgroundColor: Colors.red));
+      return;
     }
     if (_userTipoSolicitante == 'ESCOLA' &&
         (_cidadeSelecionada == null ||
-            _instituicaoSelecionada == null ||
+            (_cidadeSelecionada == "OUTRO"
+                ? _instituicaoManualController.text.trim().isEmpty
+                : _instituicaoSelecionada == null) ||
             _cargoSelecionado == null)) {
-      /* ... erro ... */ return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Dados da escola incompletos. Verifique seu perfil ou preenchimento.'),
+          backgroundColor: Colors.red));
+      return;
     }
+    if (_userTipoSolicitante == 'SUPERINTENDENCIA' &&
+        (_setorSuperSelecionado == null || _cidadeSuperSelecionada == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Dados da superintendência incompletos.'),
+          backgroundColor: Colors.red));
+      return;
+    }
+
     if (_userTipoSolicitante == 'ESCOLA' && _isProfessorSelecionado) {
-      /* ... aviso ... */ /* return; */
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
+            'Lembrete: Professores devem solicitar via Coordenação ou Direção.'),
+        backgroundColor: Colors.orange.shade800,
+        duration: const Duration(seconds: 5),
+      ));
     }
 
     setState(() {
@@ -332,24 +444,20 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
     final String patrimonio = _patrimonioController.text.trim();
     final String? problemaSel = _problemaSelecionado;
     final String problemaOutro = _problemaOutroController.text.trim();
-    final String? equipamentoSel =
-        _equipamentoSelecionado; // <<< Pega equipamento
-    final String equipamentoOutro =
-        _equipamentoOutroController.text.trim(); // <<< Pega equipamento outro
+    final String? equipamentoSel = _equipamentoSelecionado;
+    final String equipamentoOutro = _equipamentoOutroController.text.trim();
 
     try {
-      // Verifica duplicidade com os novos parâmetros
       final String? duplicateId =
           await _duplicidadeService.verificarDuplicidade(
         patrimonio: patrimonio,
         problemaSelecionado: problemaSel,
         problemaOutroDescricao: problemaOutro,
-        equipamentoSelecionado: equipamentoSel, // <<< PASSA EQUIPAMENTO
-        equipamentoOutroDescricao:
-            equipamentoOutro, // <<< PASSA EQUIPAMENTO OUTRO
+        equipamentoSelecionado: equipamentoSel,
+        equipamentoOutroDescricao: equipamentoOutro,
       );
 
-      bool prosseguirComCriacao = true; // Assume que vai prosseguir por padrão
+      bool prosseguirComCriacao = true;
 
       if (duplicateId != null && mounted) {
         prosseguirComCriacao = await showDialog<bool>(
@@ -359,41 +467,39 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
                 return AlertDialog(
                   title: const Text('Possível Duplicidade Encontrada'),
                   content: Text(
-                      'Já existe um chamado ativo (#$duplicateId) com problema e equipamento semelhantes para este patrimônio. Deseja abrir um novo chamado mesmo assim?'),
+                      'Já existe um chamado ativo (#${duplicateId.substring(0, min(6, duplicateId.length))}...) com problema e equipamento semelhantes para este patrimônio. Deseja abrir um novo chamado mesmo assim?'),
                   actions: <Widget>[
                     TextButton(
                       child: const Text('Cancelar'),
                       onPressed: () {
-                        Navigator.of(dialogContext)
-                            .pop(false); // Não prosseguir
+                        Navigator.of(dialogContext).pop(false);
                       },
                     ),
                     ElevatedButton(
                       child: const Text('Continuar'),
                       onPressed: () {
-                        Navigator.of(dialogContext).pop(true); // Prosseguir
+                        Navigator.of(dialogContext).pop(true);
                       },
                     ),
                   ],
                 );
               },
             ) ??
-            false; // Se o diálogo for dispensado, considera como 'false'
+            false;
 
         if (!prosseguirComCriacao) {
           setState(() {
             _isLoading = false;
           });
-          return; // Usuário cancelou
+          return;
         }
       }
 
-      // Se prosseguirComCriacao for true (ou se não houve duplicidade)
       final String novoChamadoId = await _chamadoService.criarChamado(
         tipoSelecionado: _userTipoSolicitante,
         celularContato: _celularController.text,
-        equipamentoSelecionado: equipamentoSel, // Passa o equipamento
-        equipamentoOutro: equipamentoOutro, // Passa o equipamento outro
+        equipamentoSelecionado: equipamentoSel,
+        equipamentoOutro: equipamentoOutro,
         internetConectadaSelecionado: _internetConectadaSelecionado,
         marcaModelo: _marcaModeloController.text.trim(),
         patrimonio: patrimonio,
@@ -401,14 +507,19 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         problemaOutro: problemaOutro,
         tecnicoResponsavel: '',
         cidadeSelecionada: _cidadeSelecionada,
-        instituicaoSelecionada: _instituicaoSelecionada,
+        instituicaoSelecionada:
+            (_cidadeSelecionada == "OUTRO" && _userTipoSolicitante == 'ESCOLA')
+                ? _instituicaoManualController.text.trim()
+                : _instituicaoSelecionada,
         cargoSelecionado: _cargoSelecionado,
         atendimentoParaSelecionado: _atendimentoParaSelecionado,
         isProfessorSelecionado: _isProfessorSelecionado,
         setorSuperSelecionado: _setorSuperSelecionado,
-        cidadeSuper: _cidadeSuperController.text.trim(),
+        cidadeSuper: _cidadeSuperSelecionada ?? '',
         instituicaoManual:
-            (_cidadeSelecionada == "OUTRO") ? _instituicaoSelecionada : null,
+            (_cidadeSelecionada == "OUTRO" && _userTipoSolicitante == 'ESCOLA')
+                ? _instituicaoManualController.text.trim()
+                : null,
       );
 
       if (mounted) {
@@ -433,14 +544,11 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   void _resetFormAndNavigate(String chamadoId) {
-    // ... (Lógica de reset e navegação como antes) ...
     print("DEBUG: Iniciando _resetFormAndNavigate...");
     try {
       _formKey.currentState?.reset();
-      _celularController.clear();
       _marcaModeloController.clear();
       _patrimonioController.clear();
-      _cidadeSuperController.clear();
       _instituicaoManualController.clear();
       _equipamentoOutroController.clear();
       _problemaOutroController.clear();
@@ -448,7 +556,9 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         _equipamentoSelecionado = null;
         _internetConectadaSelecionado = null;
         _problemaSelecionado = null;
-        _resetDependentFields();
+        _atendimentoParaSelecionado = null;
+        _isProfessorSelecionado = false;
+        _cidadeSuperSelecionada = null;
         _currentStep = 0;
       });
       print("DEBUG: Campos resetados.");
@@ -482,7 +592,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   void _handleStepContinue() {
-    /* ... (Lógica como antes) ... */ bool isStepValid = true;
+    bool isStepValid = true;
     if (_currentStep == 0) {
       isStepValid = _validateStep1();
     } else if (_currentStep == 1) {
@@ -504,7 +614,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   void _handleStepCancel() {
-    /* ... (Lógica como antes) ... */ if (_currentStep > 0) {
+    if (_currentStep > 0) {
       setState(() {
         _currentStep -= 1;
       });
@@ -512,20 +622,20 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
   }
 
   bool _validateStep1() {
-    /* ... (Lógica como antes) ... */ if (_userTipoSolicitante == null ||
-        _userTipoSolicitante!.isEmpty) return false;
+    if (_userTipoSolicitante == null || _userTipoSolicitante!.isEmpty)
+      return false;
     if (_userTipoSolicitante == 'ESCOLA') {
       if (_atendimentoParaSelecionado == null) return false;
     } else if (_userTipoSolicitante == 'SUPERINTENDENCIA') {
       if (_setorSuperSelecionado == null) return false;
-      if (_cidadeSuperController.text.trim().isEmpty) return false;
+      if (_cidadeSuperSelecionada == null || _cidadeSuperSelecionada!.isEmpty)
+        return false;
     }
     return true;
   }
 
   bool _validateStep2() {
-    /* ... (Lógica como antes, validando form) ... */ if (_equipamentoSelecionado ==
-        null) return false;
+    if (_equipamentoSelecionado == null) return false;
     if (_equipamentoSelecionado == "OUTRO" &&
         _equipamentoOutroController.text.trim().isEmpty) return false;
     if (_internetConectadaSelecionado == null) return false;
@@ -540,7 +650,6 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Build method e builders dos steps como antes, sem alterações visuais diretas aqui) ...
     if ((_isLoadingConfig || _isLoading) && !_hasLoadingError) {
       return Scaffold(
         appBar: AppBar(title: const Text('Abrir Novo Chamado')),
@@ -641,7 +750,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
 
   List<Step> _buildSteps() {
     StepState getStepState(int stepIndex) {
-      if (_hasLoadingError) return StepState.error;
+      if (_hasLoadingError && stepIndex == 0) return StepState.error;
       if (_currentStep > stepIndex) return StepState.complete;
       if (_currentStep == stepIndex) return StepState.editing;
       return StepState.indexed;
@@ -652,6 +761,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
         !_hasLoadingError &&
         _userTipoSolicitante != null &&
         _userTipoSolicitante!.isNotEmpty;
+
     return [
       Step(
         title: const Text('1. Identificação e Local'),
@@ -665,7 +775,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
                 _userTipoSolicitante!.isNotEmpty
             ? _buildStep2Content()
             : _buildStepPlaceholder(
-                "Dados do perfil (tipo de solicitante) não carregados ou inválidos."),
+                "Complete os dados do seu perfil ou selecione o tipo de solicitante para prosseguir."),
         isActive: isStep2Active,
         state: getStepState(1),
       ),
@@ -772,19 +882,35 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
             isExpanded: true,
           ),
           const SizedBox(height: 16.0),
-          _buildTextFormField(
-            controller: _cidadeSuperController,
+          _buildDropdown<String>(
             labelText: 'Cidade da Superintendência*',
-            hintText: 'Digite o nome da cidade',
+            hintText: _isLoadingCidadesSuper
+                ? 'Carregando cidades...'
+                : (_erroCarregarCidadesSuper != null &&
+                        _listaCidadesSuperintendencia.isEmpty
+                    ? _erroCarregarCidadesSuper
+                    : 'Selecione a cidade da SUPER'),
+            value: _cidadeSuperSelecionada,
+            items: _listaCidadesSuperintendencia,
+            onChanged: (v) => setState(() => _cidadeSuperSelecionada = v),
             validator: (value) {
               if (_userTipoSolicitante == 'SUPERINTENDENCIA' &&
-                  (value == null || value.trim().isEmpty)) {
-                return 'Informe a cidade da Superintendência';
+                  (value == null || value.isEmpty)) {
+                if (_isLoadingCidadesSuper) return null;
+                if (_erroCarregarCidadesSuper != null &&
+                    _listaCidadesSuperintendencia.isEmpty) return null;
+                return 'Selecione a cidade da Superintendência';
               }
               return null;
             },
-            keyboardType: TextInputType.text,
-            textCapitalization: TextCapitalization.words,
+            enabled: !_isLoadingCidadesSuper &&
+                (_erroCarregarCidadesSuper == null ||
+                    _listaCidadesSuperintendencia.isNotEmpty),
+            errorText: (_erroCarregarCidadesSuper != null &&
+                    _listaCidadesSuperintendencia.isEmpty &&
+                    !_isLoadingCidadesSuper)
+                ? _erroCarregarCidadesSuper
+                : null,
           ),
         ],
         const SizedBox(height: 8.0),
@@ -810,7 +936,7 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
           ),
           validator: (v) {
             if (v == null || v.trim().isEmpty)
-              return 'Telefone não carregado do perfil.';
+              return 'Telefone não carregado do perfil. Verifique seu cadastro.';
             return null;
           },
         ),
@@ -915,24 +1041,26 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
 
   Widget _buildDropdown<T>({
     required String labelText,
-    required String hintText,
+    String? hintText, // MODIFICADO para aceitar String?
     required T? value,
     required List<T> items,
     required ValueChanged<T?> onChanged,
     FormFieldValidator<T>? validator,
     bool isExpanded = true,
     bool enabled = true,
+    String? errorText,
   }) {
-    final effectiveOnChanged =
-        enabled && !_isLoading && !_isLoadingConfig ? onChanged : null;
-    final bool fieldEnabled = enabled && !_isLoading && !_isLoadingConfig;
+    final bool effectiveEnabled = enabled && !_isLoading && !_isLoadingConfig;
+
     return DropdownButtonFormField<T>(
       decoration: InputDecoration(
-          labelText: labelText,
-          hintText: hintText,
-          border: const OutlineInputBorder(),
-          filled: !fieldEnabled,
-          fillColor: Theme.of(context).disabledColor.withOpacity(0.05)),
+        labelText: labelText,
+        hintText: hintText, // Agora aceita String?
+        border: const OutlineInputBorder(),
+        filled: !effectiveEnabled,
+        fillColor: Theme.of(context).disabledColor.withOpacity(0.05),
+        errorText: errorText,
+      ),
       value: value,
       isExpanded: isExpanded,
       items: items.map((item) {
@@ -941,10 +1069,10 @@ class _NovoChamadoScreenState extends State<NovoChamadoScreen> {
           child: Text(item.toString(), overflow: TextOverflow.ellipsis),
         );
       }).toList(),
-      onChanged: effectiveOnChanged,
-      validator: fieldEnabled ? validator : null,
+      onChanged: effectiveEnabled ? onChanged : null,
+      validator: effectiveEnabled ? validator : null,
       style: TextStyle(
-          color: fieldEnabled
+          color: effectiveEnabled
               ? Theme.of(context).textTheme.titleMedium?.color
               : Theme.of(context).disabledColor),
       iconDisabledColor: Theme.of(context).disabledColor,

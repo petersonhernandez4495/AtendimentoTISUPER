@@ -1,17 +1,24 @@
 // lib/lista_chamados_screen.dart
+import 'dart:math';
+import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:pdf/pdf.dart' as pdf_page_format;
+import 'package:printing/printing.dart';
 
-// Seus imports de projeto
 import '../models/chamado_model.dart';
 import '../services/chamado_search_logic.dart';
 import '../widgets/chamado_list_item.dart';
-import '../detalhes_chamado_screen.dart';
-import '../config/theme/app_theme.dart'; // Verifique se este arquivo existe e está correto
-// Importa o serviço que agora (ou já) contém as constantes
+// Removida a constante conflitante da importação de detalhes_chamado_screen
+import '../detalhes_chamado_screen.dart' hide kFieldNomeRequerenteConfirmador;
+import '../config/theme/app_theme.dart';
 import '../services/chamado_service.dart';
+import '../pdf_generator.dart' as pdfGen;
 
 class ListaChamadosScreen extends StatefulWidget {
   final String searchQuery;
@@ -25,9 +32,7 @@ class ListaChamadosScreen extends StatefulWidget {
   State<ListaChamadosScreen> createState() => _ListaChamadosScreenState();
 }
 
-// --- INÍCIO DA CLASSE _ListaChamadosScreenState ---
 class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
-  // --- Variáveis de Estado e Serviços ---
   final ChamadoService _chamadoService = ChamadoService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late ChamadoSearchLogic _searchLogic;
@@ -36,14 +41,13 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   late Map<String, dynamic> _selectedSortOption;
   DateTime? _selectedDateFilter;
   bool _isAdmin = false;
-  String _userRole = 'inativo'; // <<<< Adicionado estado para role
+  String _userRole = 'inativo';
   bool _isLoadingRole = true;
   User? _currentUser;
   String? _currentUserInstitution;
 
   List<Chamado> _ultimosChamadosFiltradosParaExibicao = [];
 
-  // Constantes de status e ordenação
   final List<String> _statusOptions = [
     kStatusAberto,
     kStatusEmAndamento,
@@ -81,7 +85,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
   String? _idChamadoFinalizandoDaLista;
   bool _isLoadingFinalizarDaLista = false;
 
-  // Constante para ID de documento inexistente para queries "dummy"
   static const String _dummyNonExistentDocId =
       'dummy_id_para_nao_retornar_documentos_firestore_xyz123';
 
@@ -90,7 +93,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     super.initState();
     _searchLogic = ChamadoSearchLogic();
     _selectedSortOption = _sortOptions[0];
-    _checkUserRole(); // Chama a função para verificar a role
+    _checkUserRole();
   }
 
   Future<void> _checkUserRole() async {
@@ -99,19 +102,17 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     User? user = _auth.currentUser;
     bool isAdminResult = false;
     String? userInstitutionResult;
-    String roleResult = 'inativo'; // Padrão para inativo
+    String roleResult = 'inativo';
 
     if (user != null) {
       _currentUser = user;
-      print("DEBUG: Usuário logado: ${user.email} (UID: ${user.uid})");
       try {
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection(kCollectionUsers) // Use a constante correta
+            .collection(kCollectionUsers)
             .doc(user.uid)
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
-          // Verifica a role (prioriza role_temp)
           if (userData.containsKey('role_temp') &&
               userData['role_temp'] != null &&
               (userData['role_temp'] as String).isNotEmpty) {
@@ -119,55 +120,36 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
           } else if (userData.containsKey(kFieldUserRole) &&
               userData[kFieldUserRole] != null &&
               (userData[kFieldUserRole] as String).isNotEmpty) {
-            // Usa constante kFieldUserRole
             roleResult = userData[kFieldUserRole] as String;
           }
-          if (roleResult.isEmpty)
-            roleResult = 'inativo'; // Garante que string vazia vire inativo
-
+          if (roleResult.isEmpty) roleResult = 'inativo';
           isAdminResult = (roleResult == 'admin');
-          print("DEBUG: Usuário é admin? $isAdminResult. Role: $roleResult");
-
           if (!isAdminResult) {
             userInstitutionResult = userData[kFieldUserInstituicao] as String?;
             if (userInstitutionResult != null &&
                 userInstitutionResult.isEmpty) {
               userInstitutionResult = null;
             }
-            print(
-                "DEBUG: Instituição do perfil do usuário: '$userInstitutionResult'");
           }
         } else {
-          isAdminResult = false;
-          userInstitutionResult = null;
-          roleResult = 'inativo'; // Usuário sem doc é inativo
-          print(
-              "DEBUG: Documento do usuário não encontrado no Firestore ou sem dados.");
+          roleResult = 'inativo';
         }
       } catch (e) {
-        isAdminResult = false;
-        userInstitutionResult = null;
-        roleResult = 'inativo'; // Erro ao buscar, assume inativo
-        print("DEBUG: Erro ao verificar permissões do usuário: $e");
+        roleResult = 'inativo';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Erro ao verificar permissões do usuário: $e')),
+            SnackBar(content: Text('Erro ao verificar permissões: $e')),
           );
         }
       }
     } else {
-      _currentUser = null;
-      isAdminResult = false;
-      userInstitutionResult = null;
-      roleResult = 'inativo'; // Sem usuário logado, é inativo
-      print("DEBUG: Nenhum usuário logado.");
+      roleResult = 'inativo';
     }
 
     if (mounted) {
       setState(() {
         _isAdmin = isAdminResult;
-        _userRole = roleResult; // Atualiza a role no estado
+        _userRole = roleResult;
         _currentUserInstitution = userInstitutionResult;
         _isLoadingRole = false;
       });
@@ -182,80 +164,42 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
         widget.searchQuery.isNotEmpty;
   }
 
-  // --- MÉTODO _buildFirestoreQuery ATUALIZADO ---
   Query _buildFirestoreQuery() {
     Query query = FirebaseFirestore.instance.collection(kCollectionChamados);
-    print("DEBUG: _buildFirestoreQuery INICIADO.");
-
     if (_isLoadingRole) {
-      print("DEBUG: _buildFirestoreQuery: Aguardando papel do usuário.");
-      // Retorna uma query válida que não encontrará documentos enquanto carrega
       return query.where(FieldPath.documentId,
           isEqualTo: _dummyNonExistentDocId);
     }
-
-    // <<<--- ADICIONADO: Verificação para usuário INATIVO --- >>>
     if (!_isAdmin && _userRole == 'inativo') {
-      print(
-          "DEBUG: _buildFirestoreQuery: Usuário inativo, retornando query vazia.");
-      // Retorna uma query que garantidamente não encontrará documentos
       return query.where(FieldPath.documentId,
           isEqualTo: _dummyNonExistentDocId);
     }
-    // <<<--- FIM DA VERIFICAÇÃO --- >>>
 
-    // Lógica existente para usuários não-admin (mas agora sabemos que não são inativos)
     if (!_isAdmin && _currentUser != null) {
-      print(
-          "DEBUG: _buildFirestoreQuery: Usuário NÃO é admin (Role: $_userRole). Instituição: '$_currentUserInstitution'");
       if (_currentUserInstitution == null || _currentUserInstitution!.isEmpty) {
-        print(
-            "DEBUG: _buildFirestoreQuery: Usuário sem instituição definida no perfil.");
         return query.where(FieldPath.documentId,
             isEqualTo: _dummyNonExistentDocId);
       } else {
-        print(
-            "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldUnidadeOrganizacionalChamado == '$_currentUserInstitution'");
         query = query.where(kFieldUnidadeOrganizacionalChamado,
             isEqualTo: _currentUserInstitution);
-
         if (_selectedStatusFilter == null) {
-          print(
-              "DEBUG: _buildFirestoreQuery: Filtrando por status em _statusAtivosRequisitante: $_statusAtivosRequisitante");
           query = query.where(kFieldStatus, whereIn: _statusAtivosRequisitante);
         } else {
-          print(
-              "DEBUG: _buildFirestoreQuery: Filtrando por $kFieldStatus == '$_selectedStatusFilter'");
           query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
         }
-        // Removido filtro kFieldAdminInativo, pois não parece relevante para o requisitante comum
-        // print("DEBUG: _buildFirestoreQuery: Filtrando por $kFieldAdminInativo == false");
-        // query = query.where(kFieldAdminInativo, isEqualTo: false);
+        query = query.where(kFieldAdminInativo, isEqualTo: false);
       }
-    }
-    // Lógica existente para admin
-    else if (_isAdmin) {
-      print("DEBUG: _buildFirestoreQuery: Usuário é ADMIN.");
+    } else if (_isAdmin) {
       if (_selectedStatusFilter != null) {
-        print(
-            "DEBUG: _buildFirestoreQuery (Admin): Filtrando por $kFieldStatus == '$_selectedStatusFilter'");
         query = query.where(kFieldStatus, isEqualTo: _selectedStatusFilter);
       } else {
-        print(
-            "DEBUG: _buildFirestoreQuery (Admin): Filtrando por $kFieldStatus NOT IN ['$kStatusFinalizado']");
-        // Mostra todos exceto os finalizados por padrão para admin
         query = query.where(kFieldStatus, whereNotIn: [kStatusFinalizado]);
       }
-    }
-    // Se não for admin e não tiver usuário logado (caso raro, mas seguro tratar)
-    else {
-      print(
-          "DEBUG: _buildFirestoreQuery: Caso não previsto (não admin, sem usuário?). Retornando query vazia.");
+    } else {
       return query.where(FieldPath.documentId,
           isEqualTo: _dummyNonExistentDocId);
     }
 
-    // Lógica de filtro de data e ordenação (permanece igual)
     if (_selectedDateFilter != null) {
       final DateTime startOfDay = DateTime(_selectedDateFilter!.year,
           _selectedDateFilter!.month, _selectedDateFilter!.day, 0, 0, 0);
@@ -267,8 +211,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
           59,
           59,
           999);
-      print(
-          "DEBUG: _buildFirestoreQuery: Filtrando por data entre $startOfDay e $endOfDay");
       query = query.where(kFieldDataCriacao,
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
           isLessThanOrEqualTo: Timestamp.fromDate(endOfDay));
@@ -276,20 +218,14 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
 
     final String sortField = _selectedSortOption['field'] as String;
     final bool sortDescending = _selectedSortOption['descending'] as bool;
-    print(
-        "DEBUG: _buildFirestoreQuery: Ordenando por '$sortField' ${sortDescending ? 'DESC' : 'ASC'}");
     query = query.orderBy(sortField, descending: sortDescending);
 
-    // Adiciona ordenação secundária por data se a primária não for data
     if (sortField != kFieldDataCriacao) {
-      print(
-          "DEBUG: _buildFirestoreQuery: Ordenação secundária por '$kFieldDataCriacao' DESC");
       query = query.orderBy(kFieldDataCriacao, descending: true);
     }
     return query;
   }
 
-  // --- Função _showFilterBottomSheet (sem alterações) ---
   void _showFilterBottomSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -298,182 +234,176 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(16.0))),
       builder: (BuildContext builderContext) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter sheetSetState) {
-            final theme = Theme.of(context);
-            final colorScheme = theme.colorScheme;
-            return DraggableScrollableSheet(
-                expand: false,
-                initialChildSize: 0.75,
-                minChildSize: 0.4,
-                maxChildSize: 0.9,
-                builder: (_, scrollController) {
-                  return SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(16.0).copyWith(
-                        bottom:
-                            MediaQuery.of(context).viewInsets.bottom + 16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Filtros e Ordenação',
-                                style: theme.textTheme.titleLarge),
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _selectedStatusFilter = null;
-                                  _selectedDateFilter = null;
-                                  _selectedSortOption = _sortOptions[0];
-                                });
-                                Navigator.pop(builderContext);
-                              },
-                              child: const Text('Limpar Tudo'),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 24),
-                        Text('Filtrar por Status:',
-                            style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8.0,
-                          runSpacing: 4.0,
-                          children: _statusOptions.map((statusValue) {
-                            final bool isSelected =
-                                _selectedStatusFilter == statusValue;
-                            return FilterChip(
-                              label: Text(statusValue),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _selectedStatusFilter =
-                                      selected ? statusValue : null;
-                                });
-                                sheetSetState(() {});
-                              },
-                              selectedColor: colorScheme.primaryContainer,
-                              checkmarkColor: colorScheme.onPrimaryContainer,
-                              labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? colorScheme.onPrimaryContainer
-                                      : colorScheme.onSurfaceVariant),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        Text('Filtrar por Data de Criação:',
-                            style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon:
-                                    const Icon(Icons.calendar_today, size: 18),
-                                label: Text(
-                                  _selectedDateFilter == null
-                                      ? 'Selecionar Data do Chamado'
-                                      : 'Data: ${DateFormat('dd/MM/yyyy', 'pt_BR').format(_selectedDateFilter!)}',
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                onPressed: () async {
-                                  final DateTime? pickedDate =
-                                      await showDatePicker(
-                                    context: context,
-                                    initialDate:
-                                        _selectedDateFilter ?? DateTime.now(),
-                                    firstDate:
-                                        DateTime(DateTime.now().year - 5),
-                                    lastDate: DateTime.now()
-                                        .add(const Duration(days: 365)),
-                                    locale: const Locale('pt', 'BR'),
-                                  );
-                                  if (pickedDate != null) {
-                                    setState(() {
-                                      _selectedDateFilter = pickedDate;
-                                    });
-                                    sheetSetState(() {});
-                                  }
-                                },
+            builder: (BuildContext context, StateSetter sheetSetState) {
+          final theme = Theme.of(context);
+          final colorScheme = theme.colorScheme;
+          return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.75,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              builder: (_, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16.0).copyWith(
+                      bottom: MediaQuery.of(context).viewInsets.bottom + 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Filtros e Ordenação',
+                              style: theme.textTheme.titleLarge),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedStatusFilter = null;
+                                _selectedDateFilter = null;
+                                _selectedSortOption = _sortOptions[0];
+                              });
+                              Navigator.pop(builderContext);
+                            },
+                            child: const Text('Limpar Tudo'),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Text('Filtrar por Status:',
+                          style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: _statusOptions.map((statusValue) {
+                          final bool isSelected =
+                              _selectedStatusFilter == statusValue;
+                          return FilterChip(
+                            label: Text(statusValue),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedStatusFilter =
+                                    selected ? statusValue : null;
+                              });
+                              sheetSetState(() {});
+                            },
+                            selectedColor: colorScheme.primaryContainer,
+                            checkmarkColor: colorScheme.onPrimaryContainer,
+                            labelStyle: TextStyle(
+                                color: isSelected
+                                    ? colorScheme.onPrimaryContainer
+                                    : colorScheme.onSurfaceVariant),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+                      Text('Filtrar por Data de Criação:',
+                          style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.calendar_today, size: 18),
+                              label: Text(
+                                _selectedDateFilter == null
+                                    ? 'Selecionar Data do Chamado'
+                                    : 'Data: ${DateFormat('dd/MM/yyyy', 'pt_BR').format(_selectedDateFilter!)}',
                               ),
-                            ),
-                            if (_selectedDateFilter != null) ...[
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: Icon(Icons.clear,
-                                    color: Colors.grey.shade600),
-                                tooltip: 'Limpar Filtro de Data',
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () {
+                              style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () async {
+                                final DateTime? pickedDate =
+                                    await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      _selectedDateFilter ?? DateTime.now(),
+                                  firstDate: DateTime(DateTime.now().year - 5),
+                                  lastDate: DateTime.now()
+                                      .add(const Duration(days: 365)),
+                                  locale: const Locale('pt', 'BR'),
+                                );
+                                if (pickedDate != null) {
                                   setState(() {
-                                    _selectedDateFilter = null;
-                                  });
-                                  sheetSetState(() {});
-                                },
-                              )
-                            ]
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text('Ordenar por:',
-                            style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8.0,
-                          runSpacing: 4.0,
-                          children: _sortOptions.map((option) {
-                            final bool isSelected =
-                                _selectedSortOption['label'] == option['label'];
-                            return ChoiceChip(
-                              label: Text(option['label'] as String),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                if (selected) {
-                                  setState(() {
-                                    _selectedSortOption = option;
+                                    _selectedDateFilter = pickedDate;
                                   });
                                   sheetSetState(() {});
                                 }
                               },
-                              selectedColor: colorScheme.primaryContainer,
-                              labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? colorScheme.onPrimaryContainer
-                                      : colorScheme.onSurfaceVariant,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            child: const Text('Aplicar Filtros e Ordenação'),
-                            onPressed: () {
-                              Navigator.pop(builderContext);
-                            },
+                            ),
                           ),
+                          if (_selectedDateFilter != null) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: Icon(Icons.clear,
+                                  color: Colors.grey.shade600),
+                              tooltip: 'Limpar Filtro de Data',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedDateFilter = null;
+                                });
+                                sheetSetState(() {});
+                              },
+                            )
+                          ]
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text('Ordenar por:', style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: _sortOptions.map((option) {
+                          final bool isSelected =
+                              _selectedSortOption['label'] == option['label'];
+                          return ChoiceChip(
+                            label: Text(option['label'] as String),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() {
+                                  _selectedSortOption = option;
+                                });
+                                sheetSetState(() {});
+                              }
+                            },
+                            selectedColor: colorScheme.primaryContainer,
+                            labelStyle: TextStyle(
+                                color: isSelected
+                                    ? colorScheme.onPrimaryContainer
+                                    : colorScheme.onSurfaceVariant,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          child: const Text('Aplicar Filtros e Ordenação'),
+                          onPressed: () {
+                            Navigator.pop(builderContext);
+                          },
                         ),
-                      ],
-                    ),
-                  );
-                });
-          },
-        );
+                      ),
+                    ],
+                  ),
+                );
+              });
+        });
       },
     );
   }
 
-  // --- Funções _excluirChamado, _handleRequerenteConfirmar, _handleFinalizarArquivarChamado (sem alterações) ---
   Future<void> _excluirChamado(BuildContext context, String chamadoId) async {
     if (!_isAdmin || !mounted) return;
     bool confirmar = await showDialog<bool>(
@@ -577,6 +507,247 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
     }
   }
 
+  Future<String?> _getSignatureUrlFromFirestoreLista(String? userId) async {
+    if (userId == null || userId.isEmpty) return null;
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (userDoc.exists && userDoc.data() != null) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        return userData['assinatura_url'] as String?;
+      }
+    } catch (e) {
+      print(
+          "ListaChamadosScreen: Erro ao buscar URL da assinatura para $userId: $e");
+    }
+    return null;
+  }
+
+  Future<void> _handleGerarPdfOpcoes(
+      String chamadoId, Map<String, dynamic> chamadoData) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContext = context;
+
+    setState(() {
+      _idChamadoGerandoPdf = chamadoId;
+    });
+
+    showDialog(
+      context: currentContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) => const PopScope(
+          canPop: false,
+          child: Center(
+              child: CircularProgressIndicator(semanticsLabel: "Gerando PDF"))),
+    );
+
+    Uint8List? pdfBytes;
+    try {
+      String? adminSigUrl;
+      final String? adminSolucionouUid =
+          chamadoData[kFieldSolucaoPorUid] as String?;
+      if (adminSolucionouUid != null && adminSolucionouUid.isNotEmpty) {
+        adminSigUrl =
+            await _getSignatureUrlFromFirestoreLista(adminSolucionouUid);
+      }
+
+      String? requesterSigUrl;
+      final bool requerenteConfirmou =
+          chamadoData[kFieldRequerenteConfirmou] as bool? ?? false;
+      final String? uidDoRequerenteQueConfirmou =
+          chamadoData[kFieldRequerenteConfirmouUid] as String?;
+      if (requerenteConfirmou &&
+          uidDoRequerenteQueConfirmou != null &&
+          uidDoRequerenteQueConfirmou.isNotEmpty) {
+        requesterSigUrl = await _getSignatureUrlFromFirestoreLista(
+            uidDoRequerenteQueConfirmou);
+      }
+
+      pdfBytes = await pdfGen.PdfGenerator.generateTicketPdfBytes(
+        chamadoId: chamadoId,
+        dadosChamado: chamadoData,
+        adminSignatureUrl: adminSigUrl,
+        requesterSignatureUrl: requesterSigUrl,
+      );
+    } catch (e) {
+      if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+        Navigator.of(currentContext, rootNavigator: true).pop();
+      }
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+              content: Text('Erro ao gerar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+      setState(() {
+        _idChamadoGerandoPdf = null;
+      });
+      return;
+    }
+
+    if (Navigator.of(currentContext, rootNavigator: true).canPop()) {
+      Navigator.of(currentContext, rootNavigator: true).pop();
+    }
+
+    setState(() {
+      _idChamadoGerandoPdf = null;
+    });
+
+    if (!mounted || pdfBytes == null) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+              content: Text('Falha ao gerar bytes do PDF.'),
+              backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Opções do PDF'),
+          content:
+              const Text('O que você gostaria de fazer com o PDF do chamado?'),
+          actionsPadding:
+              const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          actions: <Widget>[
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Compartilhar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _compartilharPdfLista(pdfBytes!, chamadoId);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.print_outlined),
+                  label: const Text('Imprimir / Salvar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _imprimirPdfLista(pdfBytes!);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.open_in_new_outlined),
+                  label: const Text('Abrir / Visualizar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    _abrirPdfLocalmenteLista(pdfBytes!, chamadoId);
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  child: const Text('Cancelar'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _compartilharPdfLista(
+      Uint8List pdfBytes, String chamadoId) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      await Printing.sharePdf(
+          bytes: pdfBytes,
+          filename:
+              'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}.pdf');
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+              content: Text('Erro ao compartilhar PDF: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _imprimirPdfLista(Uint8List pdfBytes) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      await Printing.layoutPdf(
+          onLayout: (pdf_page_format.PdfPageFormat format) async => pdfBytes);
+    } catch (e) {
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+              content: Text('Erro ao preparar impressão: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _abrirPdfLocalmenteLista(
+      Uint8List pdfBytes, String chamadoId) async {
+    if (!mounted) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    BuildContext currentContextForDialog = context;
+
+    showDialog(
+      context: currentContextForDialog,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+              child: CircularProgressIndicator(semanticsLabel: "Abrindo PDF"))),
+    );
+
+    try {
+      final outputDir = await getTemporaryDirectory();
+      final filename =
+          'chamado_${chamadoId.substring(0, min(6, chamadoId.length))}.pdf';
+      final outputFile = File("${outputDir.path}/$filename");
+      await outputFile.writeAsBytes(pdfBytes);
+
+      if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+        Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+      }
+
+      final result = await OpenFilex.open(outputFile.path);
+
+      if (result.type != ResultType.done && mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+              content: Text('Não foi possível abrir o PDF: ${result.message}')),
+        );
+      }
+    } catch (e) {
+      if (Navigator.of(currentContextForDialog, rootNavigator: true).canPop()) {
+        Navigator.of(currentContextForDialog, rootNavigator: true).pop();
+      }
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+              content: Text('Erro ao abrir PDF localmente: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -620,8 +791,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                   builder: (BuildContext context,
                       AsyncSnapshot<QuerySnapshot> snapshot) {
                     if (snapshot.hasError) {
-                      print(
-                          "DEBUG: Erro no StreamBuilder: ${snapshot.error}"); // DEBUG
                       if (snapshot.error
                               .toString()
                               .contains(_dummyNonExistentDocId) ||
@@ -646,15 +815,11 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                         widget.searchQuery.isEmpty &&
                         _selectedStatusFilter == null &&
                         _selectedDateFilter == null) {
-                      print(
-                          "DEBUG: StreamBuilder em estado de espera (loading inicial).");
                       return const Center(child: CircularProgressIndicator());
                     }
 
                     List<Chamado> chamadosDoFirestore = [];
                     if (snapshot.hasData) {
-                      print(
-                          "DEBUG: StreamBuilder recebeu ${snapshot.data!.docs.length} documentos do Firestore.");
                       chamadosDoFirestore = snapshot.data!.docs
                           .map((doc) {
                             try {
@@ -672,8 +837,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                       _searchLogic.setChamadosSource(chamadosDoFirestore);
                     } else if (snapshot.connectionState !=
                         ConnectionState.waiting) {
-                      print(
-                          "DEBUG: StreamBuilder não tem dados, mas não está em espera. Usando lista cacheada.");
                       _searchLogic.setChamadosSource(
                           _ultimosChamadosFiltradosParaExibicao);
                     }
@@ -681,32 +844,23 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                     _searchLogic.filterChamadosComQuery(widget.searchQuery);
                     _ultimosChamadosFiltradosParaExibicao =
                         _searchLogic.resultadosFiltrados;
-                    print(
-                        "DEBUG: Após filtro de pesquisa local, ${_ultimosChamadosFiltradosParaExibicao.length} chamados para exibição.");
 
-                    // --- LÓGICA DE MENSAGEM DE LISTA VAZIA ATUALIZADA ---
                     if (_ultimosChamadosFiltradosParaExibicao.isEmpty) {
                       String msg = "Nenhum chamado encontrado.";
                       IconData icone = Icons.inbox_outlined;
 
-                      // Verifica PRIMEIRO se o usuário é inativo
                       if (!_isAdmin && _userRole == 'inativo') {
                         msg =
                             'Nenhum chamado disponível.\nSua conta está aguardando ativação.';
-                        icone = Icons
-                            .hourglass_empty_rounded; // Ícone diferente para inativo
-                      }
-                      // Se não for inativo, verifica se há filtros ativos
-                      else if (_isFilterActive) {
+                        icone = Icons.hourglass_empty_rounded;
+                      } else if (_isFilterActive) {
                         msg =
                             'Nenhum chamado encontrado com os critérios aplicados.';
                         if (widget.searchQuery.isNotEmpty) {
                           msg += '\nPesquisa: "${widget.searchQuery}"';
                         }
                         icone = Icons.filter_alt_off_outlined;
-                      }
-                      // Se não for inativo e não houver filtros, mostra mensagens padrão
-                      else if (!_isLoadingRole) {
+                      } else if (!_isLoadingRole) {
                         if (_isAdmin) {
                           msg = 'Nenhum chamado ativo no sistema.';
                           icone = Icons.inbox_outlined;
@@ -723,9 +877,7 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                           }
                         }
                       }
-                      // --- FIM DA LÓGICA ATUALIZADA ---
 
-                      print("DEBUG: Exibindo mensagem de lista vazia: $msg");
                       return Center(
                         child: Padding(
                           padding: const EdgeInsets.all(20.0),
@@ -742,7 +894,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       ?.copyWith(color: Colors.grey[600])),
                               if (_isFilterActive &&
                                   !(_userRole == 'inativo' && !_isAdmin)) ...[
-                                // Não mostra botão de limpar para inativo
                                 const SizedBox(height: 20),
                                 ElevatedButton.icon(
                                   icon: const Icon(Icons.clear_all),
@@ -753,7 +904,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                       _selectedStatusFilter = null;
                                       _selectedDateFilter = null;
                                       _selectedSortOption = _sortOptions[0];
-                                      // Limpar a busca na MainNavigationScreen também seria ideal
                                     });
                                   },
                                 )
@@ -764,7 +914,6 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                       );
                     }
 
-                    // Constrói a lista se houver chamados
                     return ListView.builder(
                       padding: const EdgeInsets.only(
                           top: 8.0, left: 8.0, right: 8.0, bottom: 72.0),
@@ -774,9 +923,10 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                             _ultimosChamadosFiltradosParaExibicao[index];
                         final String chamadoId = chamado.id;
 
-                        Map<String, dynamic> chamadoDataMap = {};
+                        Map<String, dynamic> chamadoDataMap;
+                        DocumentSnapshot? originalDoc;
+
                         if (snapshot.hasData) {
-                          DocumentSnapshot? originalDoc;
                           try {
                             originalDoc = snapshot.data!.docs.firstWhere(
                               (doc) => doc.id == chamado.id,
@@ -784,30 +934,75 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                           } catch (e) {
                             originalDoc = null;
                           }
-
-                          if (originalDoc != null &&
-                              originalDoc.exists &&
-                              originalDoc.data() != null) {
-                            chamadoDataMap =
-                                originalDoc.data() as Map<String, dynamic>;
-                          }
                         }
 
-                        if (chamadoDataMap.isEmpty) {
-                          // Fallback para dados do objeto Chamado se o snapshot não tiver
+                        if (originalDoc != null &&
+                            originalDoc.exists &&
+                            originalDoc.data() != null) {
+                          chamadoDataMap =
+                              originalDoc.data() as Map<String, dynamic>;
+                        } else {
+                          // Fallback: Construct map from 'chamado' object's properties.
+                          // **REVISE ESTE BLOCO CUIDADOSAMENTE PARA CORRESPONDER AO SEU MODELO `Chamado`**
                           chamadoDataMap = {
                             'id': chamado.id,
-                            'status': chamado.status,
-                            'prioridade': chamado.prioridade,
-                            'data_criacao': chamado.dataAbertura,
-                            'nome_solicitante': chamado.nomeSolicitante,
-                            'patrimonio': chamado.patrimonio,
-                            'problema_selecionado': chamado.problemaSelecionado,
-                            'equipamento_selecionado':
+                            kFieldStatus: chamado.status,
+                            kFieldPrioridade: chamado.prioridade,
+                            kFieldDataCriacao: chamado.dataAbertura,
+                            kFieldNomeSolicitante: chamado.nomeSolicitante,
+                            kFieldPatrimonio: chamado.patrimonio,
+                            kFieldProblemaOcorre: chamado.problemaSelecionado,
+                            kFieldEquipamentoSolicitacao:
                                 chamado.equipamentoSelecionado,
-                            'creatorUid': chamado.solicitanteUid,
+                            kFieldCreatorUid: chamado.solicitanteUid,
                             kFieldUnidadeOrganizacionalChamado:
                                 chamado.unidadeOrganizacionalChamado,
+
+                            kFieldTipoSolicitante: chamado.tipoSolicitante,
+                            kFieldCelularContato: chamado.celularContato,
+                            kFieldEmailSolicitante: chamado.emailSolicitante,
+                            kFieldConectadoInternet: chamado.internetConectada,
+                            kFieldMarcaModelo: chamado.marcaModelo,
+                            kFieldProblemaOutro: chamado.problemaOutro,
+                            kFieldEquipamentoOutro: chamado.equipamentoOutro,
+                            kFieldAuthUserDisplay:
+                                (_auth.currentUser?.displayName ??
+                                    ''), // Use current user info if available
+                            kFieldAuthUserEmail: (_auth.currentUser?.email ??
+                                ''), // Use current user info if available
+                            kFieldDataAtendimento: chamado.dataAtendimento,
+                            kFieldCidade: chamado.cidade,
+                            kFieldInstituicao: chamado.instituicao,
+                            kFieldInstituicaoManual: chamado.instituicaoManual,
+                            kFieldCargoFuncao: chamado.cargoSolicitante,
+                            kFieldAtendimentoPara: chamado.atendimentoPara,
+                            kFieldSetorSuper: chamado.setorSuperintendencia,
+                            kFieldCidadeSuperintendencia:
+                                chamado.cidadeSuperintendencia,
+                            // kFieldObservacaoCargo: chamado.observacaoCargo, // Verifique se existe no modelo
+                            kFieldSolucao: chamado.solucao,
+                            kFieldRequerenteConfirmou:
+                                chamado.requerenteConfirmouSolucao,
+                            kFieldRequerenteConfirmouData:
+                                chamado.requerenteConfirmouData,
+                            kFieldNomeRequerenteConfirmador:
+                                chamado.nomeRequerenteConfirmador,
+                            kFieldAdminFinalizou: chamado.adminFinalizouChamado,
+                            kFieldAdminFinalizouNome:
+                                chamado.adminFinalizouNome,
+                            kFieldAdminFinalizouData:
+                                chamado.adminFinalizouData,
+                            kFieldAdminFinalizouUid: chamado.adminFinalizouUid,
+                            kFieldSolucaoPorNome: chamado.solucaoPorNome,
+                            kFieldSolucaoPorUid: chamado.solucaoPorUid,
+                            kFieldDataDaSolucao: chamado.dataSolucao,
+                            kFieldAdminInativo: chamado.adminInativo,
+                            kFieldRequerenteConfirmouUid:
+                                chamado.requerenteConfirmouUid,
+                            kFieldTecnicoResponsavel:
+                                chamado.tecnicoResponsavelNome,
+                            kFieldTecnicoUid: chamado.tecnicoUid,
+                            kFieldDataAtualizacao: chamado.dataAtualizacao,
                           };
                         }
 
@@ -853,15 +1048,12 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
                                   builder: (_) =>
                                       DetalhesChamadoScreen(chamadoId: id)),
                             ).then((_) {
-                              // Atualiza a lista após voltar dos detalhes, se necessário
                               if (mounted) setState(() {});
                             });
                           },
                           isLoadingPdfDownload: isLoadingPdfItem,
                           onGerarPdfOpcoes: (id, data) {
-                            // Implementar lógica de geração de PDF aqui
-                            print(
-                                'Gerar PDF para $id não implementado neste exemplo.');
+                            _handleGerarPdfOpcoes(id, data);
                           },
                           onFinalizarArquivar: (id) {
                             _handleFinalizarArquivarChamado(id);
@@ -876,5 +1068,4 @@ class _ListaChamadosScreenState extends State<ListaChamadosScreen> {
       ],
     );
   }
-// --- FIM DA CLASSE _ListaChamadosScreenState ---
-} // <--- CHAVE FINAL DA CLASSE
+}

@@ -16,9 +16,11 @@ import 'novo_chamado_screen.dart';
 import 'agenda_screen.dart';
 import 'profile_screen.dart';
 import 'user_management_screen.dart';
-import 'login_screen.dart'; // Certifique-se que LoginScreen está importada
+import 'login_screen.dart';
 import 'chamados_arquivados_screen.dart';
-import 'screens/tutorial_screen.dart'; // Supondo que este é o caminho correto
+import 'screens/tutorial_screen.dart';
+// Importe as constantes de chamado_service.dart para usar kFieldUserTipoSolicitante, etc.
+import 'services/chamado_service.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -33,6 +35,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   bool _isLoadingRole = true;
   User? _firebaseUserInstance;
   String _globalSearchQuery = "";
+  String?
+      _currentUserOrganizationalUnit; // Usado para armazenar escola ou setor
 
   // Índices canônicos (baseados na lista de admin)
   static const int listaChamadosIndex = 0;
@@ -45,34 +49,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<Widget> get _adminScreens => [
         ListaChamadosScreen(
-            key: ValueKey('admin_chamados_$_globalSearchQuery'), // 0
+            key: ValueKey('admin_chamados_$_globalSearchQuery'),
             searchQuery: _globalSearchQuery),
-        const NovoChamadoScreen(key: ValueKey('admin_novo_chamado')), // 1
-        const AgendaScreen(key: ValueKey('admin_agenda')), // 2
-        const ProfileScreen(key: ValueKey('admin_perfil')), // 3
-        const UserManagementScreen(key: ValueKey('admin_user_management')), // 4
+        const NovoChamadoScreen(key: ValueKey('admin_novo_chamado')),
+        const AgendaScreen(key: ValueKey('admin_agenda')),
+        const ProfileScreen(key: ValueKey('admin_perfil')),
+        const UserManagementScreen(key: ValueKey('admin_user_management')),
         ListaChamadosArquivadosScreen(
-            key: ValueKey('admin_arquivados_$_globalSearchQuery'), // 5
+            key: ValueKey('admin_arquivados_$_globalSearchQuery'),
             searchQuery: _globalSearchQuery),
-        const TutorialScreen(key: ValueKey('admin_tutoriais')), // 6
+        const TutorialScreen(key: ValueKey('admin_tutoriais')),
       ];
 
   List<Widget> get _userScreens {
     return [
       ListaChamadosScreen(
-          key: ValueKey('user_chamados_$_globalSearchQuery'), // 0
+          key: ValueKey('user_chamados_$_globalSearchQuery'),
           searchQuery: _globalSearchQuery),
-      const NovoChamadoScreen(key: ValueKey('user_novo_chamado')), // 1
-      const ProfileScreen(
-          key: ValueKey(
-              'user_perfil')), // 2 (corresponde ao admin perfilIndex 3)
+      const NovoChamadoScreen(key: ValueKey('user_novo_chamado')),
+      const ProfileScreen(key: ValueKey('user_perfil')),
       ListaChamadosArquivadosScreen(
-          key: ValueKey(
-              'user_arquivados_$_globalSearchQuery'), // 3 (corresponde ao admin arquivadosIndex 5)
+          key: ValueKey('user_arquivados_$_globalSearchQuery'),
           searchQuery: _globalSearchQuery),
-      const TutorialScreen(
-          key: ValueKey(
-              'user_tutoriais')), // 4 (corresponde ao admin tutoriaisIndex 6)
+      const TutorialScreen(key: ValueKey('user_tutoriais')),
     ];
   }
 
@@ -100,28 +99,50 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
     bool isAdminResult = false;
     String roleResult = 'inativo';
+    String? organizationalUnitResult; // Para armazenar escola ou setor
+
     if (currentUserFromAuth != null) {
       try {
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection(
+                kCollectionUsers) // Usando constante de chamado_service.dart
             .doc(currentUserFromAuth.uid)
             .get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data() as Map<String, dynamic>;
+
+          // Determina a role
           if (userData.containsKey('role_temp') &&
               userData['role_temp'] != null &&
               (userData['role_temp'] as String).isNotEmpty) {
             roleResult = userData['role_temp'] as String;
-          } else if (userData.containsKey('role') &&
-              userData['role'] != null &&
-              (userData['role'] as String).isNotEmpty) {
-            roleResult = userData['role'] as String;
+          } else if (userData.containsKey(
+                  kFieldUserRole) && // kFieldUserRole de chamado_service.dart
+              userData[kFieldUserRole] != null &&
+              (userData[kFieldUserRole] as String).isNotEmpty) {
+            roleResult = userData[kFieldUserRole] as String;
           }
           if (roleResult.isEmpty) {
             roleResult = 'inativo';
           }
-          if (roleResult == 'admin') {
-            isAdminResult = true;
+          isAdminResult = (roleResult == 'admin');
+
+          // Determina a unidade organizacional para não-admins
+          if (!isAdminResult) {
+            final String? tipoSolicitante = userData[kFieldUserTipoSolicitante]
+                as String?; // Constante de chamado_service.dart
+            if (tipoSolicitante == 'ESCOLA') {
+              organizationalUnitResult = userData[kFieldUserInstituicao]
+                  as String?; // Constante de chamado_service.dart
+            } else if (tipoSolicitante == 'SUPERINTENDENCIA') {
+              organizationalUnitResult = userData[kFieldUserSetor]
+                  as String?; // Constante de chamado_service.dart
+            }
+            // Garante que é nulo se vazio
+            if (organizationalUnitResult != null &&
+                organizationalUnitResult.isEmpty) {
+              organizationalUnitResult = null;
+            }
           }
         } else {
           roleResult = 'inativo';
@@ -129,6 +150,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       } catch (e) {
         isAdminResult = false;
         roleResult = 'inativo';
+        organizationalUnitResult = null;
         print("Erro ao verificar papel do usuário: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -139,6 +161,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     } else {
       roleResult = 'inativo';
       isAdminResult = false;
+      organizationalUnitResult = null;
       if (mounted) {
         Future.delayed(Duration.zero, () {
           if (mounted) {
@@ -155,6 +178,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         _isAdmin = isAdminResult;
         _userRole = roleResult;
+        _currentUserOrganizationalUnit =
+            organizationalUnitResult; // Atualiza a unidade organizacional
         _isLoadingRole = false;
         final optionsLength = _currentScreenOptions.length;
         if (_selectedIndex >= optionsLength || _selectedIndex < 0) {
@@ -251,7 +276,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     int targetListIndex = newScreenIndexFromSideMenu;
 
     if (!_isAdmin) {
-      // MODIFICAÇÃO: Bloqueia "Novo Chamado" para usuários inativos
       if (_userRole == 'inativo' &&
           newScreenIndexFromSideMenu == novoChamadoIndex) {
         if (mounted) {
@@ -262,9 +286,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             duration: Duration(seconds: 4),
           ));
         }
-        return; // Impede a navegação
+        return;
       }
-      // FIM DA MODIFICAÇÃO
 
       if (newScreenIndexFromSideMenu == agendaIndex) {
         if (mounted) {

@@ -3,11 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 
-// Importe suas constantes de serviço, se aplicável, para nomes de campos.
-import '../services/chamado_service.dart'; // Exemplo, ajuste o caminho
+// Importe suas constantes de serviço
+import '../services/chamado_service.dart';
 import 'main_navigation_screen.dart';
-// Considere importar a tela de Login se for redirecionar para lá após cadastro
-// import 'login_screen.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -27,13 +25,18 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _instituicaoManualController = TextEditingController();
 
   // Estados para Dropdowns
+  List<String> _listaTipos = [];
+  String? _tipoSelecionado;
   List<String> _listaCidades = [];
   String? _cidadeSelecionada;
   List<String> _listaInstituicoes = [];
   List<String> _instituicoesDisponiveis = [];
   String? _instituicaoSelecionada;
-  List<String> _listaCargos = [];
+  List<String> _listaCargos = []; // Apenas para tipo ESCOLA
   String? _cargoSelecionado;
+  List<String> _listaSetores =
+      []; // <<< NOVO ESTADO PARA SETORES (SUPERINTENDENCIA)
+  String? _setorSelecionado; // <<< NOVO ESTADO PARA SETOR SELECIONADO
 
   bool _isLoadingConfig = true;
   String? _erroCarregarConfig;
@@ -59,6 +62,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
   Map<String, List<String>> _escolasPorCidadeMap = {};
 
+  // --- FUNÇÃO UNIFICADA PARA CARREGAR CONFIGURAÇÕES (Atualizada para incluir Setores) ---
   Future<void> _carregarConfiguracoesDropdowns() async {
     if (!mounted) return;
     setState(() {
@@ -76,6 +80,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
       final docLocalidades = results[0];
       final docOpcoes = results[1];
 
+      // Processa Localidades/Cidades/Instituições (sem alterações)
       List<String> cidades = [];
       Map<String, List<String>> escolasMap = {};
       String? erroLocalidades;
@@ -117,10 +122,14 @@ class _CadastroScreenState extends State<CadastroScreen> {
         erroLocalidades = "Nenhuma cidade/instituição encontrada.";
       }
 
+      // Processa Opcoes (Cargos, Tipos e Setores)
       List<String> cargos = [];
-      String? erroCargos;
+      List<String> tipos = [];
+      List<String> setores = []; // <<< LISTA PARA SETORES
+      String? erroOpcoes;
       if (docOpcoes.exists && docOpcoes.data() != null) {
         final data = docOpcoes.data()!;
+        // Carrega Cargos
         const String nomeCampoCargos = 'cargosEscola';
         if (data.containsKey(nomeCampoCargos) &&
             data[nomeCampoCargos] is List) {
@@ -131,16 +140,49 @@ class _CadastroScreenState extends State<CadastroScreen> {
               .toList();
           cargos.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         } else {
-          erroCargos = "Erro: Estrutura de dados de cargos inválida.";
+          erroOpcoes = "Erro: Estrutura de dados de cargos inválida.";
+        }
+        // Carrega Tipos
+        const String nomeCampoTipos = 'tipos';
+        if (data.containsKey(nomeCampoTipos) && data[nomeCampoTipos] is List) {
+          tipos = (data[nomeCampoTipos] as List)
+              .map((tipo) => tipo?.toString())
+              .where((nome) => nome != null && nome.isNotEmpty)
+              .cast<String>()
+              .toList();
+        } else {
+          erroOpcoes = (erroOpcoes ?? "") +
+              " Erro: Estrutura de dados de tipos inválida.";
+        }
+        // Carrega Setores <<< NOVO
+        const String nomeCampoSetores =
+            'setoresSuper'; // Use a constante kFieldSetorSuper se definida no service
+        if (data.containsKey(nomeCampoSetores) &&
+            data[nomeCampoSetores] is List) {
+          setores = (data[nomeCampoSetores] as List)
+              .map((setor) => setor?.toString())
+              .where((nome) => nome != null && nome.isNotEmpty)
+              .cast<String>()
+              .toList();
+          setores.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        } else {
+          erroOpcoes = (erroOpcoes ?? "") +
+              " Erro: Estrutura de dados de setores inválida.";
         }
       } else {
-        erroCargos = "Erro: Configuração de opções não encontrada.";
+        erroOpcoes = "Erro: Configuração de opções não encontrada.";
       }
-      if (cargos.isEmpty && erroCargos == null) {
-        erroCargos = "Nenhum cargo encontrado.";
+      if (cargos.isEmpty && erroOpcoes == null) {
+        erroOpcoes = "Nenhum cargo encontrado.";
       }
+      if (tipos.isEmpty && erroOpcoes == null) {
+        erroOpcoes = "Nenhum tipo de solicitante encontrado.";
+      }
+      if (setores.isEmpty && erroOpcoes == null) {
+        erroOpcoes = "Nenhum setor encontrado.";
+      } // <<< VALIDAÇÃO PARA SETORES
 
-      _erroCarregarConfig = erroLocalidades ?? erroCargos;
+      _erroCarregarConfig = erroLocalidades ?? erroOpcoes;
 
       if (mounted) {
         setState(() {
@@ -153,6 +195,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
           _instituicoesDisponiveis = [];
           _listaCargos = cargos;
+          _listaTipos = tipos;
+          _listaSetores = setores; // <<< ATRIBUI LISTA DE SETORES
           _isLoadingConfig = false;
         });
       }
@@ -167,6 +211,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
     }
   }
 
+  // --- FUNÇÃO PARA ATUALIZAR INSTITUIÇÕES (sem alterações) ---
   void _atualizarInstituicoes(String? cidadeSelecionada) {
     setState(() {
       _cidadeSelecionada = cidadeSelecionada;
@@ -183,24 +228,18 @@ class _CadastroScreenState extends State<CadastroScreen> {
     });
   }
 
-  // --- Função Cadastrar (Com Validação de Cargo e Mensagem) ---
+  // --- Função Cadastrar (Atualizada para salvar dados condicionais) ---
   Future<void> _cadastrar() async {
     if (_formKey.currentState!.validate()) {
       final String email = _emailController.text.trim();
       const String dominioPermitido = '@seduc.ro.gov.br';
 
       if (!email.toLowerCase().endsWith(dominioPermitido)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                  'Cadastro permitido apenas para emails $dominioPermitido'),
-              backgroundColor: Colors.orange[800]));
-        }
-        return;
+        /* ... (validação email) ... */ return;
       }
-
-      // Validação de Cargo
-      if (_cargoSelecionado?.toUpperCase() == 'PROFESSOR') {
+      // Validação de professor só se aplica se o tipo for ESCOLA
+      if (_tipoSelecionado == 'ESCOLA' &&
+          _cargoSelecionado?.toUpperCase() == 'PROFESSOR') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text(
@@ -217,10 +256,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
       });
 
       String? instituicaoFinal;
-      if (_cidadeSelecionada == "OUTRO") {
-        instituicaoFinal = _instituicaoManualController.text.trim();
-      } else {
-        instituicaoFinal = _instituicaoSelecionada;
+      if (_tipoSelecionado == 'ESCOLA') {
+        // Determina instituição apenas para ESCOLA
+        if (_cidadeSelecionada == "OUTRO") {
+          instituicaoFinal = _instituicaoManualController.text.trim();
+        } else {
+          instituicaoFinal = _instituicaoSelecionada;
+        }
       }
 
       try {
@@ -235,20 +277,29 @@ class _CadastroScreenState extends State<CadastroScreen> {
           await user.updateDisplayName(_nameController.text.trim());
 
           final uid = user.uid;
-          final profileData = {
+          // --- Monta o profileData condicionalmente ---
+          final profileData = <String, dynamic>{
             'uid': uid,
             kFieldName: _nameController.text.trim(),
             kFieldEmail: email,
             kFieldPhone: _phoneController.text.trim(),
-            kFieldJobTitle: _cargoSelecionado,
-            kFieldUserInstituicao: instituicaoFinal,
-            kFieldCidade: _cidadeSelecionada,
-            // ALTERADO: Define a role inicial como 'inativo' usando o campo 'role_temp'
-            'role_temp': 'inativo',
+            kFieldUserTipoSolicitante:
+                _tipoSelecionado, // Salva o tipo selecionado
+            'role': 'requester',
             'createdAt': FieldValue.serverTimestamp(),
-            // Você pode optar por remover o campo 'role' antigo ou mantê-lo também como 'inativo'
-            // 'role': 'inativo', // Exemplo se quiser manter ambos sincronizados inicialmente
           };
+
+          if (_tipoSelecionado == 'ESCOLA') {
+            profileData[kFieldJobTitle] = _cargoSelecionado;
+            profileData[kFieldUserInstituicao] = instituicaoFinal;
+            profileData[kFieldCidade] = _cidadeSelecionada;
+          } else if (_tipoSelecionado == 'SUPERINTENDENCIA') {
+            profileData[kFieldUserSetor] =
+                _setorSelecionado; // <<< SALVA O SETOR (Use a constante correta)
+            // Opcional: Salvar a cidade da superintendência se necessário no perfil
+            // profileData[kFieldCidadeSuperintendencia] = _cidadeSuperController.text.trim();
+          }
+          // --- Fim da montagem condicional ---
 
           await FirebaseFirestore.instance
               .collection(kCollectionUsers)
@@ -256,23 +307,15 @@ class _CadastroScreenState extends State<CadastroScreen> {
               .set(profileData);
 
           if (mounted) {
-            // ALTERADO: Mensagem de sucesso atualizada
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text(
-                      'Conta criada! Aguardando aprovação do administrador.'), // <<<< MENSAGEM ATUALIZADA
-                  backgroundColor: Colors.green),
-            );
-            // Navega para a tela principal ou para a tela de login
             Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
                     builder: (_) => const MainNavigationScreen()));
-            // Ou, para forçar o login novamente:
-            // Navigator.of(context).pushAndRemoveUntil(
-            //   MaterialPageRoute(builder: (context) => const LoginScreen()),
-            //   (Route<dynamic> route) => false,
-            // );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Conta criada com sucesso! Faça login.'),
+                  backgroundColor: Colors.green),
+            );
           }
         } else {
           throw Exception('Falha ao obter usuário após criação.');
@@ -325,8 +368,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                // --- Campos do Formulário (Nome, Email, Telefone, Dropdowns, Senha) ---
-                // ... (código dos campos do formulário permanece o mesmo) ...
                 // --- Campo Nome ---
                 TextFormField(
                   controller: _nameController,
@@ -389,9 +430,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Dropdown de Cargo/Função ---
+                // --- Dropdown Tipo Solicitante ---
                 DropdownButtonFormField<String>(
-                  value: _cargoSelecionado,
+                  value: _tipoSelecionado,
                   isExpanded: true,
                   hint: _isLoadingConfig
                       ? const Row(children: [
@@ -402,26 +443,27 @@ class _CadastroScreenState extends State<CadastroScreen> {
                           SizedBox(width: 8),
                           Text('Carregando...')
                         ])
-                      : (_erroCarregarConfig != null && _listaCargos.isEmpty
+                      : (_erroCarregarConfig != null && _listaTipos.isEmpty
                           ? Text(_erroCarregarConfig!,
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
                                   fontSize: 14))
-                          : const Text('Selecione seu cargo/função *')),
+                          : const Text(
+                              'Você é de Escola ou Superintendência? *')),
                   decoration: InputDecoration(
-                    labelText: 'Cargo / Função *',
+                    labelText: 'Tipo de Lotação *',
                     border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.work_outline),
+                    prefixIcon: const Icon(Icons.business_center_outlined),
                     errorText: _erroCarregarConfig != null &&
                             !_isLoadingConfig &&
-                            _listaCargos.isEmpty
+                            _listaTipos.isEmpty
                         ? _erroCarregarConfig
                         : null,
                   ),
                   items: _isLoadingConfig ||
-                          (_erroCarregarConfig != null && _listaCargos.isEmpty)
+                          (_erroCarregarConfig != null && _listaTipos.isEmpty)
                       ? []
-                      : _listaCargos
+                      : _listaTipos
                           .map<DropdownMenuItem<String>>((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
@@ -430,105 +472,37 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         }).toList(),
                   onChanged: (_isLoading ||
                           _isLoadingConfig ||
-                          (_erroCarregarConfig != null && _listaCargos.isEmpty))
+                          (_erroCarregarConfig != null && _listaTipos.isEmpty))
                       ? null
                       : (String? newValue) {
+                          // Reseta campos dependentes ao mudar o tipo
                           setState(() {
-                            _cargoSelecionado = newValue;
+                            _tipoSelecionado = newValue;
+                            _cargoSelecionado = null;
+                            _cidadeSelecionada = null;
+                            _instituicaoSelecionada = null;
+                            _instituicaoManualController.clear();
+                            _instituicoesDisponiveis = [];
+                            _setorSelecionado = null;
                           });
                         },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       if (_isLoadingConfig) return null;
-                      if (_erroCarregarConfig != null && _listaCargos.isEmpty)
+                      if (_erroCarregarConfig != null && _listaTipos.isEmpty)
                         return _erroCarregarConfig;
-                      return 'Por favor, selecione seu cargo/função.';
+                      return 'Por favor, selecione o tipo de lotação.';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16.0),
 
-                // --- Dropdown de Cidade/Distrito ---
-                DropdownButtonFormField<String>(
-                  value: _cidadeSelecionada,
-                  isExpanded: true,
-                  hint: _isLoadingConfig
-                      ? const Row(children: [
-                          SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(strokeWidth: 2)),
-                          SizedBox(width: 8),
-                          Text('Carregando...')
-                        ])
-                      : (_erroCarregarConfig != null && _listaCidades.isEmpty
-                          ? Text(_erroCarregarConfig!,
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                  fontSize: 14))
-                          : const Text('Selecione a cidade/distrito *')),
-                  decoration: InputDecoration(
-                    labelText: 'Cidade / Distrito *',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.location_city_outlined),
-                    errorText: _erroCarregarConfig != null &&
-                            !_isLoadingConfig &&
-                            _listaCidades.isEmpty
-                        ? _erroCarregarConfig
-                        : null,
-                  ),
-                  items: _isLoadingConfig ||
-                          (_erroCarregarConfig != null && _listaCidades.isEmpty)
-                      ? []
-                      : _listaCidades
-                          .map<DropdownMenuItem<String>>((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value, overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList(),
-                  onChanged: (_isLoading ||
-                          _isLoadingConfig ||
-                          (_erroCarregarConfig != null &&
-                              _listaCidades.isEmpty))
-                      ? null
-                      : _atualizarInstituicoes,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      if (_isLoadingConfig) return null;
-                      if (_erroCarregarConfig != null && _listaCidades.isEmpty)
-                        return _erroCarregarConfig;
-                      return 'Por favor, selecione a cidade/distrito.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16.0),
-
-                // --- Campo Instituição (Dropdown ou Texto) ---
-                if (_cidadeSelecionada == "OUTRO")
-                  TextFormField(
-                    controller: _instituicaoManualController,
-                    enabled: !_isLoading,
-                    decoration: const InputDecoration(
-                      labelText: 'Nome da Instituição (Escola)*',
-                      hintText: 'Digite o nome completo da escola',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.account_balance_outlined),
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if (_cidadeSelecionada == "OUTRO" &&
-                          (value == null || value.trim().isEmpty)) {
-                        return 'Informe o nome da instituição';
-                      }
-                      return null;
-                    },
-                  )
-                else
+                // --- CAMPOS CONDICIONAIS PARA ESCOLA ---
+                if (_tipoSelecionado == 'ESCOLA') ...[
+                  // --- Dropdown de Cargo/Função ---
                   DropdownButtonFormField<String>(
-                    value: _instituicaoSelecionada,
+                    value: _cargoSelecionado,
                     isExpanded: true,
                     hint: _isLoadingConfig
                         ? const Row(children: [
@@ -540,32 +514,27 @@ class _CadastroScreenState extends State<CadastroScreen> {
                             SizedBox(width: 8),
                             Text('Carregando...')
                           ])
-                        : (_cidadeSelecionada == null
-                            ? const Text('Selecione a cidade primeiro')
-                            : const Text('Selecione sua instituição *')),
+                        : (_erroCarregarConfig != null && _listaCargos.isEmpty
+                            ? Text(_erroCarregarConfig!,
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14))
+                            : const Text('Selecione seu cargo/função *')),
                     decoration: InputDecoration(
-                      labelText: 'Instituição / Lotação *',
+                      labelText: 'Cargo / Função *',
                       border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.account_balance_outlined),
-                      errorText: (_erroCarregarConfig != null &&
+                      prefixIcon: const Icon(Icons.work_outline),
+                      errorText: _erroCarregarConfig != null &&
                               !_isLoadingConfig &&
-                              _instituicoesDisponiveis.isEmpty &&
-                              _cidadeSelecionada != null &&
-                              _cidadeSelecionada != "OUTRO")
-                          ? "Nenhuma instituição para esta cidade."
-                          : ((_erroCarregarConfig != null &&
-                                  !_isLoadingConfig &&
-                                  _listaInstituicoes.isEmpty)
-                              ? _erroCarregarConfig
-                              : null),
+                              _listaCargos.isEmpty
+                          ? _erroCarregarConfig
+                          : null,
                     ),
                     items: _isLoadingConfig ||
-                            _cidadeSelecionada == null ||
-                            _cidadeSelecionada == "OUTRO" ||
                             (_erroCarregarConfig != null &&
-                                _instituicoesDisponiveis.isEmpty)
+                                _listaCargos.isEmpty)
                         ? []
-                        : _instituicoesDisponiveis
+                        : _listaCargos
                             .map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
                               value: value,
@@ -575,31 +544,248 @@ class _CadastroScreenState extends State<CadastroScreen> {
                           }).toList(),
                     onChanged: (_isLoading ||
                             _isLoadingConfig ||
-                            _cidadeSelecionada == null ||
-                            _cidadeSelecionada == "OUTRO" ||
                             (_erroCarregarConfig != null &&
-                                _instituicoesDisponiveis.isEmpty))
+                                _listaCargos.isEmpty))
                         ? null
                         : (String? newValue) {
                             setState(() {
-                              _instituicaoSelecionada = newValue;
+                              _cargoSelecionado = newValue;
                             });
                           },
                     validator: (value) {
-                      if (_cidadeSelecionada != null &&
-                          _cidadeSelecionada != "OUTRO") {
-                        if (value == null || value.isEmpty) {
-                          if (_isLoadingConfig) return null;
-                          if (_erroCarregarConfig != null &&
-                              _instituicoesDisponiveis.isEmpty)
-                            return "Nenhuma instituição para esta cidade.";
-                          return 'Por favor, selecione sua instituição.';
-                        }
+                      if (value == null || value.isEmpty) {
+                        if (_isLoadingConfig) return null;
+                        if (_erroCarregarConfig != null && _listaCargos.isEmpty)
+                          return _erroCarregarConfig;
+                        return 'Por favor, selecione seu cargo/função.';
                       }
                       return null;
                     },
                   ),
-                const SizedBox(height: 16.0),
+                  const SizedBox(height: 16.0),
+
+                  // --- Dropdown de Cidade/Distrito ---
+                  DropdownButtonFormField<String>(
+                    value: _cidadeSelecionada,
+                    isExpanded: true,
+                    hint: _isLoadingConfig
+                        ? const Row(children: [
+                            SizedBox(
+                                width: 12,
+                                height: 12,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 8),
+                            Text('Carregando...')
+                          ])
+                        : (_erroCarregarConfig != null && _listaCidades.isEmpty
+                            ? Text(_erroCarregarConfig!,
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14))
+                            : const Text('Selecione a cidade/distrito *')),
+                    decoration: InputDecoration(
+                      labelText: 'Cidade / Distrito *',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_city_outlined),
+                      errorText: _erroCarregarConfig != null &&
+                              !_isLoadingConfig &&
+                              _listaCidades.isEmpty
+                          ? _erroCarregarConfig
+                          : null,
+                    ),
+                    items: _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaCidades.isEmpty)
+                        ? []
+                        : _listaCidades
+                            .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child:
+                                  Text(value, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                    onChanged: (_isLoading ||
+                            _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaCidades.isEmpty))
+                        ? null
+                        : _atualizarInstituicoes,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        if (_isLoadingConfig) return null;
+                        if (_erroCarregarConfig != null &&
+                            _listaCidades.isEmpty) return _erroCarregarConfig;
+                        return 'Por favor, selecione a cidade/distrito.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16.0),
+
+                  // --- Campo Instituição (Dropdown ou Texto) ---
+                  if (_cidadeSelecionada == "OUTRO")
+                    TextFormField(
+                      controller: _instituicaoManualController,
+                      enabled: !_isLoading,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome da Instituição (Escola)*',
+                        hintText: 'Digite o nome completo da escola',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.account_balance_outlined),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (value) {
+                        if (_cidadeSelecionada == "OUTRO" &&
+                            (value == null || value.trim().isEmpty)) {
+                          return 'Informe o nome da instituição';
+                        }
+                        return null;
+                      },
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      value: _instituicaoSelecionada,
+                      isExpanded: true,
+                      hint: _isLoadingConfig
+                          ? const Row(children: [
+                              SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                              SizedBox(width: 8),
+                              Text('Carregando...')
+                            ])
+                          : (_cidadeSelecionada == null
+                              ? const Text('Selecione a cidade primeiro')
+                              : const Text('Selecione sua instituição *')),
+                      decoration: InputDecoration(
+                        labelText: 'Instituição / Lotação *',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.account_balance_outlined),
+                        errorText: (_erroCarregarConfig != null &&
+                                !_isLoadingConfig &&
+                                _instituicoesDisponiveis.isEmpty &&
+                                _cidadeSelecionada != null &&
+                                _cidadeSelecionada != "OUTRO")
+                            ? "Nenhuma instituição para esta cidade."
+                            : ((_erroCarregarConfig != null &&
+                                    !_isLoadingConfig &&
+                                    _listaInstituicoes.isEmpty)
+                                ? _erroCarregarConfig
+                                : null),
+                      ),
+                      items: _isLoadingConfig ||
+                              _cidadeSelecionada == null ||
+                              _cidadeSelecionada == "OUTRO" ||
+                              (_erroCarregarConfig != null &&
+                                  _instituicoesDisponiveis.isEmpty)
+                          ? []
+                          : _instituicoesDisponiveis
+                              .map<DropdownMenuItem<String>>((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value,
+                                    overflow: TextOverflow.ellipsis),
+                              );
+                            }).toList(),
+                      onChanged: (_isLoading ||
+                              _isLoadingConfig ||
+                              _cidadeSelecionada == null ||
+                              _cidadeSelecionada == "OUTRO" ||
+                              (_erroCarregarConfig != null &&
+                                  _instituicoesDisponiveis.isEmpty))
+                          ? null
+                          : (String? newValue) {
+                              setState(() {
+                                _instituicaoSelecionada = newValue;
+                              });
+                            },
+                      validator: (value) {
+                        if (_cidadeSelecionada != null &&
+                            _cidadeSelecionada != "OUTRO") {
+                          if (value == null || value.isEmpty) {
+                            if (_isLoadingConfig) return null;
+                            if (_erroCarregarConfig != null &&
+                                _instituicoesDisponiveis.isEmpty)
+                              return "Nenhuma instituição para esta cidade.";
+                            return 'Por favor, selecione sua instituição.';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                  const SizedBox(height: 16.0),
+                ],
+
+                // --- CAMPO CONDICIONAL PARA SUPERINTENDENCIA ---
+                if (_tipoSelecionado == 'SUPERINTENDENCIA') ...[
+                  DropdownButtonFormField<String>(
+                    value: _setorSelecionado,
+                    isExpanded: true,
+                    hint: _isLoadingConfig
+                        ? const Row(children: [
+                            SizedBox(
+                                width: 12,
+                                height: 12,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 8),
+                            Text('Carregando...')
+                          ])
+                        : (_erroCarregarConfig != null && _listaSetores.isEmpty
+                            ? Text(_erroCarregarConfig!,
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 14))
+                            : const Text('Selecione o setor *')),
+                    decoration: InputDecoration(
+                      labelText: 'Setor do servidor *',
+                      border: const OutlineInputBorder(),
+                      prefixIcon:
+                          const Icon(Icons.groups_outlined), // Ícone exemplo
+                      errorText: _erroCarregarConfig != null &&
+                              !_isLoadingConfig &&
+                              _listaSetores.isEmpty
+                          ? _erroCarregarConfig
+                          : null,
+                    ),
+                    items: _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaSetores.isEmpty)
+                        ? []
+                        : _listaSetores
+                            .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child:
+                                  Text(value, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                    onChanged: (_isLoading ||
+                            _isLoadingConfig ||
+                            (_erroCarregarConfig != null &&
+                                _listaSetores.isEmpty))
+                        ? null
+                        : (String? newValue) {
+                            setState(() {
+                              _setorSelecionado = newValue;
+                            });
+                          },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        if (_isLoadingConfig) return null;
+                        if (_erroCarregarConfig != null &&
+                            _listaSetores.isEmpty) return _erroCarregarConfig;
+                        return 'Por favor, selecione o setor.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16.0),
+                ],
 
                 // --- Campo Senha ---
                 TextFormField(
@@ -679,13 +865,16 @@ class _CadastroScreenState extends State<CadastroScreen> {
     );
   }
 
-  // Constantes locais para nomes de campos (usadas no _cadastrar)
+  // Constantes locais para nomes de campos
   static const String kFieldName = 'name';
   static const String kFieldEmail = 'email';
   static const String kFieldPhone = 'phone';
   static const String kFieldJobTitle = 'jobTitle';
   static const String kFieldUserInstituicao = 'institution';
   static const String kFieldCidade = 'cidade';
+  static const String kFieldUserTipoSolicitante = 'tipo_solicitante';
+  static const String kFieldUserSetor =
+      'setor_superintendencia'; // <<< CONSTANTE LOCAL USADA
   static const String kCollectionUsers = 'users';
   static const String kCollectionConfig = 'configuracoes';
   static const String kDocOpcoes = 'opcoesChamado';

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart'; // Para a navegação do Logout
 import 'edit_profile_screen.dart'; // Para navegar para a tela de edição
+import 'services/chamado_service.dart'; // <<< ADICIONADO IMPORT PARA CONSTANTES
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,14 +21,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Chama a função para carregar os dados quando a tela inicia
     _loadUserData();
   }
 
-  // Função para buscar os dados do usuário logado (Auth e Firestore)
   Future<void> _loadUserData() async {
-    // Garante que está no estado inicial antes de carregar
-    if (!mounted) return; // Verifica se o widget ainda está na árvore
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -46,34 +44,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    // Recarrega o usuário do Firebase Auth para pegar dados atualizados (como displayName)
-    // Faça isso ANTES de buscar no Firestore se você atualizou o Auth na tela de edição
     try {
       await _currentUser!.reload();
-      _currentUser =
-          FirebaseAuth.instance.currentUser; // Pega a instância atualizada
+      _currentUser = FirebaseAuth.instance.currentUser;
     } catch (e) {
       print("Erro ao recarregar usuário do Auth: $e");
-      // Lidar com o erro, talvez mostrar mensagem ou proceder com dados antigos
-      // Poderia ocorrer se o token expirou ou houve problema de rede
     }
 
     try {
-      // Busca o documento do usuário na coleção 'users' usando o UID do Auth
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(kCollectionUsers) // Usa constante
           .doc(_currentUser!.uid)
           .get();
 
-      if (userDoc.exists) {
-        _userData = userDoc.data() as Map<String, dynamic>?;
+      if (userDoc.exists && userDoc.data() != null) {
+        // Verifica se data não é nulo
+        _userData = userDoc.data() as Map<String, dynamic>?; // Faz cast seguro
         print(
             "Dados do Firestore carregados para ${_currentUser!.uid}: $_userData");
       } else {
         print(
             "Documento de perfil não encontrado no Firestore para UID: ${_currentUser!.uid}");
-        _userData = {}; // Define como vazio para evitar erros de null
-        // Poderia mostrar uma mensagem indicando perfil incompleto
+        _userData = {};
       }
       if (mounted) {
         setState(() {
@@ -86,14 +78,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _isLoading = false;
           _errorMessage = "Erro ao carregar dados do perfil do Firestore.";
-          _userData = {}; // Define como vazio em caso de erro
+          _userData = {};
         });
       }
     }
   }
 
-  // Função de Logout (com confirmação)
   Future<void> _fazerLogout(BuildContext context) async {
+    // ... (Lógica de logout sem alterações) ...
     bool confirmar = await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
@@ -114,13 +106,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           },
         ) ??
-        false; // Garante que retorna false se o diálogo for dispensado
+        false;
 
     if (!confirmar || !mounted) return;
 
     try {
       await FirebaseAuth.instance.signOut();
-      // Garante que a navegação ocorra apenas se o widget ainda estiver montado
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -137,9 +128,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Função para enviar Email de Redefinição de Senha
   Future<void> _enviarEmailRedefinicaoSenha() async {
-    // Verifica se o usuário e o email são válidos
+    // ... (Lógica de redefinição de senha sem alterações) ...
     if (_currentUser == null ||
         _currentUser!.email == null ||
         _currentUser!.email!.isEmpty) {
@@ -152,10 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       return;
     }
-
     final String email = _currentUser!.email!;
-
-    // Confirmação com o usuário
     bool confirmar = await showDialog<bool>(
           context: context,
           builder: (BuildContext context) {
@@ -195,7 +182,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (e.code == 'user-not-found') {
         errorMessage = 'Nenhum usuário encontrado com este email.';
       }
-      // Adicione outros tratamentos de erro específicos do Firebase Auth se necessário
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMessage)),
@@ -213,13 +199,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Nota: Esta tela NÃO tem Scaffold/AppBar próprios, pois será exibida
-    // dentro da MainNavigationScreen que já tem o Scaffold principal.
-    // Se precisar de um AppBar específico para o Perfil, adicione um Scaffold aqui.
     return _buildBody();
   }
 
-  // Constrói o corpo da tela baseado no estado (loading, erro, dados)
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -240,31 +222,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ));
     }
 
-    // Se chegou aqui, temos _currentUser (verificado e recarregado em _loadUserData)
-    // Extrai os dados com segurança, usando fallbacks
-    // Prioriza dados do Auth para nome/email, pois eles foram recarregados
-    final String displayName = _currentUser!.displayName?.isNotEmpty ?? false
+    // Extrai os dados com segurança, usando fallbacks e constantes
+    final String displayName = _currentUser?.displayName?.isNotEmpty ?? false
         ? _currentUser!.displayName!
-        : (_userData?['name'] as String? ??
-            'Nome não definido'); // Fallback para Firestore se Auth estiver vazio
-    final String email = _currentUser!.email?.isNotEmpty ?? false
+        : (_userData?[kFieldName] as String? ?? 'Nome não definido');
+    final String email = _currentUser?.email?.isNotEmpty ?? false
         ? _currentUser!.email!
-        : (_userData?['email'] as String? ??
-            'Email não disponível'); // Fallback para Firestore
-    // Pega dados extras do Firestore (do mapa _userData)
-    final String phone = _userData?['phone'] as String? ?? 'Não informado';
-    final String jobTitle =
-        _userData?['jobTitle'] as String? ?? 'Não informado';
-    final String institution =
-        _userData?['institution'] as String? ?? 'Não informada';
-    final String photoURL =
-        _currentUser!.photoURL ?? ''; // Exemplo se usar foto
+        : (_userData?[kFieldEmail] as String? ?? 'Email não disponível');
+    final String phone = _userData?[kFieldPhone] as String? ?? 'Não informado';
+    final String photoURL = _currentUser?.photoURL ?? '';
+
+    // <<<--- Lê os campos condicionais --- >>>
+    final String? tipoSolicitante =
+        _userData?[kFieldUserTipoSolicitante] as String?;
+    final String? jobTitle =
+        _userData?[kFieldJobTitle] as String?; // Para Escola
+    final String? cidade = _userData?[kFieldCidade] as String?; // Para Escola
+    final String? institution =
+        _userData?[kFieldUserInstituicao] as String?; // Para Escola
+    final String? setor =
+        _userData?[kFieldUserSetor] as String?; // Para Superintendência
 
     return RefreshIndicator(
-      // Permite puxar para atualizar
-      onRefresh: _loadUserData, // Chama a função de carregar dados
+      onRefresh: _loadUserData,
       child: ListView(
-        // Permite rolagem
         padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 20.0),
         children: [
           // --- Seção de Avatar e Nome/Email ---
@@ -291,43 +272,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ?.copyWith(color: Colors.grey[600]))),
           const SizedBox(height: 30),
 
-          // --- Seção de Informações Adicionais ---
+          // --- Seção de Informações Adicionais (Condicional) ---
           _buildProfileInfoTile(
               context, 'Telefone', phone, Icons.phone_outlined),
+
+          // Mostra Tipo de Lotação
           _buildProfileInfoTile(
-              context, 'Cargo/Função', jobTitle, Icons.work_outline),
-          _buildProfileInfoTile(context, 'Instituição/Lotação', institution,
-              Icons.account_balance_outlined),
+              context,
+              'Tipo de Lotação',
+              tipoSolicitante ?? 'Não informado',
+              Icons.business_center_outlined),
+
+          // Mostra campos de Escola
+          if (tipoSolicitante == 'ESCOLA') ...[
+            _buildProfileInfoTile(context, 'Cargo/Função',
+                jobTitle ?? 'Não informado', Icons.work_outline),
+            _buildProfileInfoTile(
+                context,
+                'Cidade/Distrito',
+                cidade ?? 'Não informada',
+                Icons.location_city_outlined), // <<<--- CIDADE ADICIONADA AQUI
+            _buildProfileInfoTile(context, 'Instituição/Lotação',
+                institution ?? 'Não informada', Icons.account_balance_outlined),
+          ],
+
+          // Mostra campos de Superintendência
+          if (tipoSolicitante == 'SUPERINTENDENCIA') ...[
+            _buildProfileInfoTile(context, 'Setor do Servidor',
+                setor ?? 'Não informado', Icons.groups_outlined),
+          ],
 
           const SizedBox(height: 30),
 
           // --- Botões de Ação ---
           Wrap(
-            // Usa Wrap para caso os botões não caibam lado a lado em telas menores
-            spacing: 10.0, // Espaço horizontal entre os botões
-            runSpacing: 10.0, // Espaço vertical se quebrar linha
+            spacing: 10.0,
+            runSpacing: 10.0,
             alignment: WrapAlignment.center,
             children: [
-              // --- BOTÃO EDITAR PERFIL ---
               OutlinedButton.icon(
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text('Editar Perfil'),
                 onPressed: () async {
-                  // Torna o onPressed async
-                  // Navega para a tela de edição
                   final result = await Navigator.push<bool>(
-                    // Espera um resultado booleano
                     context,
                     MaterialPageRoute(
                         builder: (context) => const EditProfileScreen()),
                   );
-
-                  // Se a tela de edição retornou 'true' (indicando sucesso ao salvar),
-                  // recarrega os dados do perfil na tela atual.
                   if (result == true && mounted) {
                     print(
                         "Retornou da edição com sucesso, recarregando dados do perfil...");
-                    // Chama _loadUserData para buscar dados atualizados (incluindo reload do Auth)
                     _loadUserData();
                   }
                 },
@@ -336,27 +330,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Theme.of(context).colorScheme.primary),
                     foregroundColor: Theme.of(context).colorScheme.primary),
               ),
-              // --- FIM BOTÃO EDITAR PERFIL ---
-
-              // --- BOTÃO REDEFINIR SENHA ---
               OutlinedButton.icon(
                 icon: const Icon(Icons.lock_reset_outlined, size: 18),
                 label: const Text('Redefinir Senha'),
-                onPressed:
-                    _enviarEmailRedefinicaoSenha, // Chama a função de redefinição
+                onPressed: _enviarEmailRedefinicaoSenha,
                 style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.orange.shade800),
                     foregroundColor: Colors.orange.shade800),
               ),
-              // --- FIM BOTÃO REDEFINIR SENHA ---
             ],
           ),
 
-          const Divider(
-              height: 40,
-              thickness: 1,
-              indent: 20,
-              endIndent: 20), // Divisor mais visível
+          const Divider(height: 40, thickness: 1, indent: 20, endIndent: 20),
 
           // --- Botão de Logout ---
           Center(
@@ -368,16 +353,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 backgroundColor: Colors.redAccent[100]?.withOpacity(0.8),
                 foregroundColor: Colors.red[900],
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 30, vertical: 12), // Aumenta um pouco o padding
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                 shape: RoundedRectangleBorder(
-                  // Bordas arredondadas
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 20), // Espaço no final
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -399,7 +383,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(label,
                     style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                 const SizedBox(height: 2),
-                // Usa SelectableText se o valor for curto, senão Text normal para evitar overflow estranho
                 value.length < 100
                     ? SelectableText(value,
                         style: Theme.of(context).textTheme.bodyLarge)
@@ -407,8 +390,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          // Opcional: Ícone de editar ao lado de cada campo
-          // IconButton(icon: Icon(Icons.edit_outlined, size: 16), onPressed: () { /* Abrir edição para este campo */ })
         ],
       ),
     );

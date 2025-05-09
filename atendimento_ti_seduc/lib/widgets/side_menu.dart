@@ -3,12 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/theme/app_theme.dart';
+// Certifique-se que este import está correto para a sua estrutura de pastas
+import '../profile_screen.dart'; // Usado por SideMenu.perfilScreenIndex
+// Removido import duplicado de profile_screen.dart
 
 class MenuItemData {
   final IconData icon;
   final String title;
-  final int index;
-  final bool isAdminOnly;
+  final int index; // Este é o índice "canônico" que MainNavigationScreen espera
+  final bool
+      isAdminOnly; // Usado internamente no SideMenu para lógica de construção
   final VoidCallback? customNavigation;
 
   MenuItemData({
@@ -31,9 +35,11 @@ class SideMenu extends StatefulWidget {
   final ValueChanged<String>? onSearchQueryChanged;
   final String initialSearchQuery;
 
+  // Estes são os índices "canônicos" que MainNavigationScreen espera
+  // para estas telas específicas, independentemente de quem está logado.
+  // MainNavigationScreen fará o mapeamento para sua lista _userScreens se necessário.
   static const int perfilScreenIndex = 3;
-  static const int tutorialScreenIndex =
-      6; // Corresponde ao índice da tela de Tutoriais
+  static const int tutorialScreenIndex = 6;
 
   const SideMenu({
     super.key,
@@ -79,7 +85,7 @@ class _SideMenuState extends State<SideMenu> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isAdminUser != widget.isAdminUser ||
         oldWidget.userRole != widget.userRole) {
-      _updateMenuItems(); // Atualiza os itens se a role ou status de admin mudar
+      _updateMenuItems();
     }
     if (widget.initialSearchQuery != oldWidget.initialSearchQuery &&
         widget.initialSearchQuery != _searchController.text) {
@@ -98,34 +104,46 @@ class _SideMenuState extends State<SideMenu> {
   }
 
   void _updateMenuItems() {
+    // Lista base de itens que podem aparecer no NavigationRail principal
     _navigationRailItems = [
       MenuItemData(icon: Icons.list_alt_rounded, title: 'Chamados', index: 0),
-      // MODIFICADO: "Novo Chamado" (index 1) sempre visível.
-      // O controle de acesso é feito na MainNavigationScreen ao tentar navegar.
       MenuItemData(
           icon: Icons.add_comment_outlined, title: 'Novo Chamado', index: 1),
-      MenuItemData(
-          icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2),
-      MenuItemData(
-          icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5),
     ];
 
+    // Adiciona Agenda APENAS se for admin
+    if (widget.isAdminUser) {
+      _navigationRailItems.add(MenuItemData(
+          icon: Icons.calendar_month_outlined, title: 'Agenda', index: 2));
+    }
+
+    // O Perfil (index 3) é um botão separado, não entra no NavigationRail.destinations diretamente.
+    // Ele chama onDestinationSelected com SideMenu.perfilScreenIndex.
+
+    // Adiciona Gerenciar Usuários APENAS se for admin
     if (widget.isAdminUser) {
       _navigationRailItems.add(MenuItemData(
           icon: Icons.manage_accounts_outlined,
           title: 'Gerenciar Usuários',
-          index: 4, // Índice da UserManagementScreen
-          isAdminOnly: true));
+          index: 4));
     }
 
-    // Opcional: Reordenar para garantir a ordem visual caso a adição seja complexa.
-    // _navigationRailItems.sort((a, b) => a.index.compareTo(b.index));
+    // Adiciona Chamados Arquivados (o índice 5 é o canônico para admin)
+    // MainNavigationScreen mapeará para o índice correto de _userScreens se necessário.
+    _navigationRailItems.add(MenuItemData(
+        icon: Icons.archive_outlined, title: 'Chamados Arquivados', index: 5));
 
+    // Ordena os itens pela propriedade 'index' para garantir a ordem visual
+    // caso a lógica de adição condicional os coloque fora de ordem.
+    _navigationRailItems.sort((a, b) => a.index.compareTo(b.index));
+
+    // Itens do rodapé (Tutoriais)
+    // O SideMenu.tutorialScreenIndex (6) é o índice canônico.
     _footerItems = [
       MenuItemData(
         icon: Icons.video_library_rounded,
         title: 'Tutoriais',
-        index: SideMenu.tutorialScreenIndex, // Índice 6
+        index: SideMenu.tutorialScreenIndex, // Usa o índice canônico (6)
         customNavigation: null,
       ),
     ];
@@ -205,7 +223,7 @@ class _SideMenuState extends State<SideMenu> {
           fit: BoxFit.contain,
           alignment: Alignment.centerLeft,
           child: Image.asset(
-            'assets/images/seu_logo.png',
+            'assets/images/seu_logo.png', // Substitua pelo caminho do seu logo
             errorBuilder: (c, e, s) => Container(
               height: _maxLogoContainerHeight,
               alignment: Alignment.center,
@@ -236,7 +254,9 @@ class _SideMenuState extends State<SideMenu> {
 
     return InkWell(
       onTap: () {
-        widget.onDestinationSelected(SideMenu.perfilScreenIndex);
+        // Ao clicar na área do perfil, navega para o índice de perfil
+        // MainNavigationScreen mapeará este índice para o correto em _userScreens se necessário
+        widget.onDestinationSelected(SideMenu.perfilScreenIndex); // Envia 3
       },
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -348,8 +368,11 @@ class _SideMenuState extends State<SideMenu> {
   }
 
   Widget _buildCustomMenuItem(BuildContext context, MenuItemData item) {
-    final bool isSelected =
-        widget.selectedIndex == item.index && item.customNavigation == null;
+    // Verifica se este item é o selecionado.
+    // Para Tutoriais, o widget.selectedIndex pode ser SideMenu.tutorialScreenIndex (6)
+    // e item.index também será 6.
+    final bool isSelected = widget.selectedIndex == item.index;
+
     final Color iconColor =
         isSelected ? AppTheme.kWinAccent : AppTheme.kWinSecondaryText;
     final Color textColor =
@@ -373,7 +396,7 @@ class _SideMenuState extends State<SideMenu> {
           if (item.customNavigation != null) {
             item.customNavigation!();
           } else {
-            widget.onDestinationSelected(item.index);
+            widget.onDestinationSelected(item.index); // Envia o índice canônico
           }
         },
         style: TextButton.styleFrom(
@@ -398,7 +421,8 @@ class _SideMenuState extends State<SideMenu> {
             if (item.customNavigation != null) {
               item.customNavigation!();
             } else {
-              widget.onDestinationSelected(item.index);
+              widget
+                  .onDestinationSelected(item.index); // Envia o índice canônico
             }
           },
           padding: const EdgeInsets.all(12),
@@ -457,12 +481,18 @@ class _SideMenuState extends State<SideMenu> {
 
   @override
   Widget build(BuildContext context) {
+    // Determina o índice selecionado para o NavigationRail
+    // com base nos itens que estão *realmente* em _navigationRailItems.
     int railSelectedIndex = -1;
-
-    if (widget.selectedIndex != SideMenu.perfilScreenIndex &&
-        widget.selectedIndex != SideMenu.tutorialScreenIndex) {
-      railSelectedIndex = _navigationRailItems
-          .indexWhere((item) => item.index == widget.selectedIndex);
+    // Apenas itens de _navigationRailItems podem ser selecionados no NavigationRail
+    // Perfil e Tutoriais são tratados por botões/handlers separados.
+    var itemInRail = _navigationRailItems.firstWhere(
+        (item) => item.index == widget.selectedIndex,
+        orElse: () =>
+            MenuItemData(icon: Icons.error, title: '', index: -99) // Dummy
+        );
+    if (itemInRail.index != -99) {
+      railSelectedIndex = _navigationRailItems.indexOf(itemInRail);
     }
 
     return Container(
@@ -495,16 +525,19 @@ class _SideMenuState extends State<SideMenu> {
           ),
           _buildLogoSection(context),
           _buildSearchField(context),
-          _buildUserProfileSection(context),
+          _buildUserProfileSection(
+              context), // Este chama onDestinationSelected com índice 3
           const Divider(height: 1, thickness: 1, color: AppTheme.kWinDivider),
           Expanded(
             child: NavigationRail(
               selectedIndex: railSelectedIndex >= 0 ? railSelectedIndex : null,
               onDestinationSelected: (selectedIndexInRail) {
+                // selectedIndexInRail é o índice DENTRO da lista _navigationRailItems
                 if (selectedIndexInRail >= 0 &&
                     selectedIndexInRail < _navigationRailItems.length) {
                   final selectedItem =
                       _navigationRailItems[selectedIndexInRail];
+                  // Passa o índice "canônico" do item para o MainNavigationScreen
                   widget.onDestinationSelected(selectedItem.index);
                 }
               },
@@ -512,7 +545,8 @@ class _SideMenuState extends State<SideMenu> {
               backgroundColor: Colors.transparent,
               minWidth: _collapsedWidth,
               minExtendedWidth: _expandedWidth,
-              labelType: NavigationRailLabelType.none,
+              labelType: NavigationRailLabelType
+                  .none, // Os labels são mostrados no tooltip ou quando expandido
               selectedIconTheme:
                   const IconThemeData(color: AppTheme.kWinAccent, size: 24),
               unselectedIconTheme: const IconThemeData(
@@ -522,10 +556,14 @@ class _SideMenuState extends State<SideMenu> {
               indicatorShape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6.0)),
               destinations: _navigationRailItems.map((item) {
+                // Os itens aqui são apenas os de _navigationRailItems
                 return NavigationRailDestination(
-                  icon: Tooltip(message: item.title, child: Icon(item.icon)),
-                  selectedIcon:
-                      Tooltip(message: item.title, child: Icon(item.icon)),
+                  icon: Tooltip(
+                      message: _isExpanded ? '' : item.title,
+                      child: Icon(item.icon)),
+                  selectedIcon: Tooltip(
+                      message: _isExpanded ? '' : item.title,
+                      child: Icon(item.icon)),
                   label: Text(item.title,
                       overflow: TextOverflow.ellipsis, maxLines: 1),
                   padding:
@@ -539,9 +577,10 @@ class _SideMenuState extends State<SideMenu> {
                 horizontal: _isExpanded ? 8.0 : 0, vertical: 8.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: _footerItems
-                  .map((item) => _buildCustomMenuItem(context, item))
-                  .toList(),
+              children:
+                  _footerItems // _footerItems agora contém apenas Tutoriais
+                      .map((item) => _buildCustomMenuItem(context, item))
+                      .toList(),
             ),
           ),
           if (widget.onCheckForUpdates != null && kReleaseMode)

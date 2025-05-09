@@ -53,7 +53,7 @@ const String kFieldObservacaoCargo = 'observacao_cargo';
 // --- CAMPOS ESPECÍFICOS SUPERINTENDÊNCIA ---
 const String kFieldSetorSuper = 'setor_superintendencia';
 const String kFieldCidadeSuperintendencia = 'cidade_superintendencia';
-
+const String kFieldUserSetor = 'setor_superintendencia';
 // --- CAMPO UNIFICADO PARA LÓGICA DE VISUALIZAÇÃO INSTITUCIONAL ---
 const String kFieldUnidadeOrganizacionalChamado =
     'unidadeOrganizacionalChamado';
@@ -80,7 +80,7 @@ const String kFieldUserInstituicao = 'institution';
 const String kFieldUserAssinaturaUrl = 'assinatura_url';
 const String kFieldPhone = 'phone'; // <<< ADICIONAR ESTA
 const String kFieldJobTitle = 'jobTitle'; // <<< ADICIONAR ESTA
-
+const String kFieldUserTipoSolicitante = 'tipo_solicitante';
 const String kFieldName = 'name'; // <<< ADICIONAR ESTA (para consistência)
 const String kFieldEmail = 'email'; // <<< ADICIONAR ESTA (para consistência)
 

@@ -74,9 +74,6 @@ class PdfGenerator {
     required Map<String, dynamic> dadosChamado,
     String? adminSignatureUrl,
     String? requesterSignatureUrl,
-    // Estes bytes devem ser carregados no seu código Flutter antes de chamar esta função
-    // Ex: logoGovBytes para FOTO-PERFIL_ROLIM-DE-MOURA.jpg
-    // Ex: logoEmblemBytes para seu_logo.jpg (ChamaTI)
     Uint8List? logoGovBytes,
     Uint8List? logoEmblemBytes,
   }) async {
@@ -108,13 +105,13 @@ class PdfGenerator {
         equipamentoOutroDesc.isNotEmpty) {
       displayEquipamento = "$equipamentoSelecionado: $equipamentoOutroDesc";
     }
+    final String? marcaModelo = dadosChamado[kFieldMarcaModelo] as String?;
+    final String? patrimonio = dadosChamado[kFieldPatrimonio] as String?;
+    final String? conectadoInternet =
+        dadosChamado[kFieldConectadoInternet] as String?;
 
     final String headerNomeGerencia =
         "Gerência de Infraestrutura e Suporte - GIS";
-    final String headerTelefoneGerencia = "(69) 3212-8218";
-    final String headerEnderecoGerencia =
-        dadosChamado['endereco_gerencia_organizacao'] as String? ??
-            "Palácio Rio Madeira - Rio Guaporé - Porto Velho - Rondônia";
 
     final Timestamp? tsDataCriacao =
         dadosChamado[kFieldDataCriacao] as Timestamp?;
@@ -153,16 +150,14 @@ class PdfGenerator {
           dadosChamado[kFieldCidadeSuperintendencia] as String? ?? '--';
     }
 
-    String tituloServico = displayProblema;
-    if (displayEquipamento != 'N/I' && displayEquipamento.isNotEmpty) {
-      tituloServico += " em ${displayEquipamento}";
-    }
-    final String? cidadeChamado = dadosChamado[kFieldCidade] as String?;
-    if (cidadeChamado != null &&
-        cidadeChamado.isNotEmpty &&
-        tipoSolicitante == 'ESCOLA') {
-      tituloServico += " - ${cidadeChamado}";
-    }
+    // String tituloDetalhadoOS = displayProblema; // Não é mais usado diretamente se a seção foi removida
+    // if (displayEquipamento != 'N/I' && displayEquipamento.isNotEmpty) {
+    //     tituloDetalhadoOS += " em ${displayEquipamento}";
+    // }
+    // final String? cidadeChamado = dadosChamado[kFieldCidade] as String?;
+    // if (cidadeChamado != null && cidadeChamado.isNotEmpty && tipoSolicitante == 'ESCOLA') {
+    //     tituloDetalhadoOS += " - ${cidadeChamado}";
+    // }
 
     pw.MemoryImage? adminSignatureImage;
     if (adminSignatureUrl != null && adminSignatureUrl.isNotEmpty) {
@@ -197,17 +192,13 @@ class PdfGenerator {
             List<pw.Widget> widgets = [];
 
             widgets.add(_buildCustomHeader(
-              logoGovBytes:
-                  logoGovBytes, // Passar os bytes da imagem "FOTO-PERFIL_ROLIM-DE-MOURA.jpg"
-              logoEmblemBytes:
-                  logoEmblemBytes, // Passar os bytes da imagem "seu_logo.jpg" (ChamaTI)
+              logoGovBytes: logoGovBytes,
+              logoEmblemBytes: logoEmblemBytes,
               nomeGerencia: headerNomeGerencia,
-              telefoneGerencia: headerTelefoneGerencia,
-              enderecoGerencia: headerEnderecoGerencia,
               osNumero: chamadoId,
               osData: dataOSStr,
             ));
-            widgets.add(pw.SizedBox(height: 12));
+            widgets.add(pw.SizedBox(height: 8));
 
             widgets.add(_buildSectionTitle("DADOS DO CLIENTE"));
             widgets.add(_buildDadosClienteTable(
@@ -220,10 +211,23 @@ class PdfGenerator {
                 valor2: clienteInfoValor2));
             widgets.add(pw.SizedBox(height: 8));
 
-            widgets.add(_buildSectionTitle("DETALHES DA ORDEM DE SERVIÇO"));
-            widgets.add(_buildDetalhesOrdemServicoTable(
-              titulo: tituloServico,
-            ));
+            // Seção "DETALHES DA ORDEM DE SERVIÇO" removida
+            // widgets.add(_buildSectionTitle("DETALHES DA ORDEM DE SERVIÇO"));
+            // widgets.add(
+            //   _buildDetalhesOrdemServicoTable(
+            //     titulo: tituloDetalhadoOS,
+            //   )
+            // );
+            // widgets.add(pw.SizedBox(height: 8));
+
+            widgets
+                .add(_buildSectionTitle("DETALHES DO PROBLEMA E EQUIPAMENTO"));
+            widgets.add(_buildDetalhesProblemaEquipamentoTable(
+                problemaRelatado: displayProblema,
+                equipamento: displayEquipamento,
+                marcaModelo: marcaModelo,
+                patrimonio: patrimonio,
+                conectadoInternet: conectadoInternet));
             widgets.add(pw.SizedBox(height: 12));
 
             final String? solucaoDescricao =
@@ -318,87 +322,91 @@ class PdfGenerator {
     Uint8List? logoGovBytes,
     Uint8List? logoEmblemBytes,
     required String nomeGerencia,
-    required String telefoneGerencia,
-    required String enderecoGerencia,
     required String osNumero,
     required String osData,
   }) {
-    return pw.Column(children: [
-      pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment:
-            pw.CrossAxisAlignment.start, // Alinha o topo dos elementos
-        children: [
-          // Coluna Esquerda: Logos
-          pw.Container(
-            // Container para os logos
-            child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment
-                  .center, // Alinha os logos verticalmente se tiverem alturas diferentes
+    const double logoGovWidth = 95;
+    const double logoGovHeight = 75;
+    const double logoEmblemWidth = 50;
+    const double logoEmblemHeight = 50;
+
+    const double osLabelFontSize = 6.0;
+    const double osIdFontSize = 10.0;
+    const double osDateFontSize = 6.0;
+    const double qrCodeSize = 28.0;
+
+    return pw.Stack(children: [
+      pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+        pw.Text(
+          "Ordem de Serviço",
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          nomeGerencia,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11.5),
+        ),
+        pw.SizedBox(height: 10),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.SizedBox(
+              width: logoGovWidth,
+              height: logoGovHeight,
+              child: logoGovBytes != null
+                  ? pw.Image(pw.MemoryImage(logoGovBytes),
+                      fit: pw.BoxFit.contain)
+                  : pw.Container(
+                      color: PdfColors.grey200,
+                      width: logoGovWidth,
+                      height: logoGovHeight),
+            ),
+            pw.SizedBox(
+              width: logoEmblemWidth,
+              height: logoEmblemHeight,
+              child: logoEmblemBytes != null
+                  ? pw.Image(pw.MemoryImage(logoEmblemBytes),
+                      fit: pw.BoxFit.contain)
+                  : pw.Container(
+                      color: PdfColors.grey200,
+                      width: logoEmblemWidth,
+                      height: logoEmblemHeight),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Divider(thickness: 1.2, height: 0, color: PdfColors.black),
+      ]),
+      pw.Positioned(
+          top: 0,
+          right: 0,
+          child: pw.Container(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              mainAxisSize: pw.MainAxisSize.min,
               children: [
-                if (logoGovBytes != null)
-                  pw.Image(pw.MemoryImage(logoGovBytes),
-                      width: 90,
-                      height: 75,
-                      fit: pw.BoxFit.contain), // Ajuste o fit se necessário
-                if (logoGovBytes != null && logoEmblemBytes != null)
-                  pw.SizedBox(width: 2),
-                if (logoEmblemBytes != null)
-                  pw.Image(pw.MemoryImage(logoEmblemBytes),
-                      width: 80,
-                      height: 80,
-                      fit: pw.BoxFit.contain), // Ajuste o fit se necessário
+                pw.Text("OS Nº",
+                    style: pw.TextStyle(fontSize: osLabelFontSize)),
+                pw.Text(osNumero.substring(0, min(6, osNumero.length)),
+                    style: pw.TextStyle(
+                        fontSize: osIdFontSize,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.redAccent700)),
+                pw.Text(osData, style: pw.TextStyle(fontSize: osDateFontSize)),
+                pw.SizedBox(height: 1),
+                pw.BarcodeWidget(
+                    barcode: bw.Barcode.qrCode(),
+                    data: "ID Chamado: $osNumero",
+                    width: qrCodeSize,
+                    height: qrCodeSize,
+                    color: PdfColors.black,
+                    margin: const pw.EdgeInsets.only(top: 1)),
               ],
             ),
-          ),
-          // Coluna Central: Informações da Gerência (Alinhado à esquerda)
-          pw.Expanded(
-              flex: 3, // Ajuste o flex conforme necessário para o espaçamento
-              child: pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 10), // Espaçamento horizontal
-                child: pw.Column(
-                  crossAxisAlignment:
-                      pw.CrossAxisAlignment.start, // Alinhamento à esquerda
-                  children: [
-                    pw.Text(nomeGerencia,
-                        style: pw.TextStyle(
-                            fontWeight: pw.FontWeight.bold, fontSize: 10.5)),
-                    pw.SizedBox(height: 2), // Espaço entre nome e telefone
-                    pw.Text(telefoneGerencia,
-                        style: const pw.TextStyle(fontSize: 8.5)),
-                    pw.SizedBox(height: 1), // Espaço entre telefone e endereço
-                    pw.Text(enderecoGerencia,
-                        style: const pw.TextStyle(fontSize: 7.5),
-                        textAlign: pw.TextAlign.left), // Alinhamento à esquerda
-                  ],
-                ),
-              )),
-          // Coluna Direita: OS, Data, QR Code
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text("OS Nº", style: const pw.TextStyle(fontSize: 9)),
-              pw.Text(osNumero.substring(0, min(6, osNumero.length)),
-                  style: pw.TextStyle(
-                      fontSize: 17,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.redAccent700)),
-              pw.Text(osData, style: const pw.TextStyle(fontSize: 8.5)),
-              pw.SizedBox(height: 3),
-              pw.BarcodeWidget(
-                  barcode: bw.Barcode.qrCode(),
-                  data: "ID Chamado: $osNumero",
-                  width: 42,
-                  height: 42,
-                  color: PdfColors.black,
-                  margin: const pw.EdgeInsets.only(top: 2)),
-            ],
-          ),
-        ],
-      ),
-      pw.SizedBox(height: 6),
-      pw.Divider(thickness: 1.2, height: 0, color: PdfColors.black),
+          )),
     ]);
   }
 
@@ -512,21 +520,62 @@ class PdfGenerator {
     );
   }
 
+  // Função _buildDetalhesOrdemServicoTable agora está vazia ou pode ser removida
   static pw.Widget _buildDetalhesOrdemServicoTable({
     required String titulo,
   }) {
+    // A seção "DETALHES DA ORDEM DE SERVIÇO" foi removida conforme solicitado.
+    // Se precisar reintroduzir com outros campos, pode adicionar TableRows aqui.
+    // Por agora, retorna um container vazio para não quebrar se for chamada.
+    // No build principal, a chamada a esta função e seu título foram comentados/removidos.
+    return pw.SizedBox.shrink();
+  }
+
+  static pw.Widget _buildDetalhesProblemaEquipamentoTable({
+    required String problemaRelatado,
+    required String equipamento,
+    String? marcaModelo,
+    String? patrimonio,
+    String? conectadoInternet,
+  }) {
+    final List<pw.TableRow> rows = [];
+
+    rows.add(pw.TableRow(children: [
+      _buildCell('Problema Relatado:', isLabel: true),
+      _buildCell(problemaRelatado),
+    ]));
+
+    rows.add(pw.TableRow(children: [
+      _buildCell('Equipamento:', isLabel: true),
+      _buildCell(equipamento),
+    ]));
+
+    if (marcaModelo != null && marcaModelo.isNotEmpty) {
+      rows.add(pw.TableRow(children: [
+        _buildCell('Marca/Modelo:', isLabel: true),
+        _buildCell(marcaModelo),
+      ]));
+    }
+    if (patrimonio != null && patrimonio.isNotEmpty) {
+      rows.add(pw.TableRow(children: [
+        _buildCell('Patrimônio:', isLabel: true),
+        _buildCell(patrimonio),
+      ]));
+    }
+    if (conectadoInternet != null && conectadoInternet.isNotEmpty) {
+      rows.add(pw.TableRow(children: [
+        _buildCell('Possui Internet?:', isLabel: true),
+        _buildCell(conectadoInternet),
+      ]));
+    }
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.7),
       columnWidths: const <int, pw.TableColumnWidth>{
-        0: pw.FixedColumnWidth(70),
+        0: pw.FixedColumnWidth(110),
         1: pw.FlexColumnWidth(),
       },
-      children: [
-        pw.TableRow(children: [
-          _buildCell('Título:', isLabel: true),
-          _buildCell(titulo),
-        ]),
-      ],
+      children: rows,
     );
   }
 
